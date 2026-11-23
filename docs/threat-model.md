@@ -34,6 +34,7 @@ Draft for v1. Review at each milestone.
 | Unauthorized access to the web app | Until sign-in ships (milestone 8): bind to localhost and reach it through a private network or a reverse proxy with sign-in. Then OIDC sign-in |
 | Cross-site requests from other pages in the same browser | Every write needs the `X-FlipDial-Request` header and a matching `Origin`; strict Content Security Policy; no cookies are used yet |
 | Local database holds contact data (a copy of the address book, extraction results) | Keep the data folder on an encrypted volume; it is excluded from the repo; contacts can be re-synced from CardDAV |
+| Merge history keeps full copies of both contacts for undo | Stored only in the local database, alongside the contacts copy; same protection as the data folder |
 | Original scans downloaded through the web app | Served only from the card's own folder by fixed name; card IDs are validated; sent as downloads, never rendered inline |
 | Over-broad file access by the worker | Worker account can only write the inbox and archive folders |
 | Personal data in logs | Logs identify contacts by UID only; card text and model output never logged; debug mode expires |

@@ -34,7 +34,7 @@ Scraping LinkedIn or any other site, cloud processing by default, sales pipeline
 | 3 | CardDAV (done) | Approved items are written to and read from a CardDAV server; round-trip tests pass |
 | 4 | Wall + detail (done) | Browse, filter, star, flip, edit |
 | 5 | Dial (done) | Drag, scroll, keyboard, search-to-dial, reduced motion |
-| 6 | Duplicates + merge | Ranked duplicate queue, merge with undo |
+| 6 | Duplicates + merge (done) | Ranked duplicate queue, merge with undo |
 | 7 | Import / export | vCard, CSV, LinkedIn export in; vCard, CSV, backup archive out |
 | 8 | Hardening + v1 | Auth, audit log, threat model review, signed release with SBOM, and every item in the [release checklist](release-checklist.md), including the accuracy gate |
 

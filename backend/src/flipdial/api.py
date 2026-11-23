@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, StringConstraints
 
-from flipdial import contacts, db
+from flipdial import contacts, db, duplicates
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
@@ -250,3 +250,101 @@ def card_original(card_id: str, role: Literal["front", "back", "scan"], s: Setti
         filename=matches[0].name,
         headers={"Cache-Control": "private, no-store"},
     )
+
+
+# -- duplicates and merging -----------------------------------------------------------
+
+
+def _reviewed(body: ContactIn, **extra) -> ReviewedContact:
+    data = body.model_dump()
+    data["socials"] = [(x["platform"], x["handle"]) for x in data["socials"]]
+    return ReviewedContact(**data, **extra)
+
+
+def _merge_error(exc: duplicates.MergeError) -> HTTPException:
+    code = str(exc)
+    return HTTPException(404 if code in ("not_found", "unknown_card") else 409, code)
+
+
+class PairIn(BaseModel):
+    uid_a: Short = Field(min_length=1)
+    uid_b: Short = Field(min_length=1)
+
+
+class MergeIn(BaseModel):
+    keep_uid: Short = Field(min_length=1)
+    drop_uid: Short = Field(min_length=1)
+    contact: ContactIn
+
+
+@router.get("/duplicates")
+def list_duplicates(s: SettingsDep) -> dict:
+    pairs = duplicates.find_duplicates(s)
+    return {"pairs": pairs, "count": len(pairs)}
+
+
+@router.post("/duplicates/dismiss")
+def dismiss_duplicate(body: PairIn, s: SettingsDep) -> dict:
+    duplicates.dismiss_pair(s, body.uid_a, body.uid_b)
+    return {"ok": True}
+
+
+@router.post("/merge")
+def merge_contacts(body: MergeIn, s: SettingsDep, client: ClientDep) -> dict:
+    try:
+        view, merge_id = duplicates.merge(
+            s, client, body.keep_uid, body.drop_uid, _reviewed(body.contact, source="merged")
+        )
+    except duplicates.MergeError as exc:
+        raise _merge_error(exc) from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    return {"contact": view.as_dict(), "merge_id": merge_id}
+
+
+@router.post("/merge/{merge_id}/undo")
+def undo_merge(merge_id: int, s: SettingsDep, client: ClientDep) -> dict:
+    try:
+        return {"restored": duplicates.undo_merge(s, client, merge_id)}
+    except duplicates.MergeError as exc:
+        raise _merge_error(exc) from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+
+
+@router.get("/merges")
+def merges(s: SettingsDep) -> dict:
+    return {"merges": duplicates.recent_merges(s)}
+
+
+@router.get("/review/{card_id}/matches")
+def review_matches(card_id: str, s: SettingsDep) -> dict:
+    _card_id(card_id)
+    with db.session(s.db_path) as conn:
+        row = conn.execute(
+            "SELECT fields_json FROM extractions WHERE card_id = ? ORDER BY rowid DESC LIMIT 1",
+            (card_id,),
+        ).fetchone()
+    if row is None:
+        return {"matches": []}
+    f = json.loads(row["fields_json"])
+    probe = contacts.ContactView(
+        uid="",
+        full_name=f.get("full_name", {}).get("value", ""),
+        organization=f.get("organization", {}).get("value", ""),
+        emails=[e.get("value", "") for e in f.get("emails", [])],
+        phones=[p.get("value", "") for p in f.get("phones", [])],
+    )
+    return {"matches": duplicates.matches_for_fields(s, probe)}
+
+
+@router.post("/review/{card_id}/attach/{uid}")
+def attach(card_id: str, uid: str, body: ContactIn, s: SettingsDep, client: ClientDep) -> dict:
+    _card_id(card_id)
+    try:
+        view = duplicates.attach_scan(s, client, card_id, uid, _reviewed(body, source="scan"))
+    except duplicates.MergeError as exc:
+        raise _merge_error(exc) from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    return view.as_dict()

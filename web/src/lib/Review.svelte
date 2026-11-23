@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, describe, type ContactInput, type ReviewItem } from './api'
+  import { api, describe, REASONS, type ContactInput, type Match, type ReviewItem } from './api'
   import ContactForm from './ContactForm.svelte'
 
   let { onchange }: { onchange?: () => void } = $props()
@@ -10,6 +10,7 @@
   let showBack = $state(false)
   let busy = $state(false)
   let error = $state('')
+  let matches = $state<Match[]>([])
 
   const ready = $derived(items.filter((i) => i.status === 'review'))
   const waiting = $derived(items.filter((i) => i.status !== 'review'))
@@ -53,23 +54,50 @@
       next.event = lastEvent // keep the deck while working through a stack
       form = next
       showBack = false
+      matches = []
+      const id = current.card_id
+      api
+        .matches(id)
+        .then((r) => {
+          if (current?.card_id === id) matches = r.matches
+        })
+        .catch(() => (matches = []))
     } else {
       form = null
     }
   })
+
+  function cleaned(f: ContactInput): ContactInput {
+    return {
+      ...f,
+      emails: f.emails.filter(Boolean),
+      phones: f.phones.filter(Boolean),
+      websites: f.websites.filter(Boolean),
+    }
+  }
+
+  async function attach(uid: string) {
+    if (!current || !form) return
+    busy = true
+    try {
+      lastEvent = form.event
+      await api.attach(current.card_id, uid, cleaned(form))
+      await load()
+      if (index >= ready.length) index = Math.max(0, ready.length - 1)
+      onchange?.()
+    } catch (e) {
+      error = describe(e)
+    } finally {
+      busy = false
+    }
+  }
 
   async function approve() {
     if (!current || !form) return
     busy = true
     try {
       lastEvent = form.event
-      const cleaned = {
-        ...form,
-        emails: form.emails.filter(Boolean),
-        phones: form.phones.filter(Boolean),
-        websites: form.websites.filter(Boolean),
-      }
-      await api.approve(current.card_id, cleaned)
+      await api.approve(current.card_id, cleaned(form))
       await load()
       if (index >= ready.length) index = Math.max(0, ready.length - 1)
       onchange?.()
@@ -120,11 +148,22 @@
         <p class="pos">{index + 1} of {ready.length}</p>
       </section>
       <section class="details" aria-label="Contact details">
+        {#each matches as m (m.contact.uid)}
+          <div class="match" role="note">
+            <p>
+              Looks like <strong>{m.contact.full_name}</strong>, already in your contacts
+              ({m.reasons.map((r) => REASONS[r] ?? r).join(', ').toLowerCase()}).
+            </p>
+            <button type="button" class="primary small" onclick={() => attach(m.contact.uid)} disabled={busy}>
+              Add this scan to {m.contact.full_name}
+            </button>
+          </div>
+        {/each}
         <ContactForm bind:value={form} flags={current.flags} idPrefix="review" />
         <div class="buttons">
           <button type="button" class="secondary" onclick={dismiss} disabled={busy}>Dismiss</button>
           <button type="button" class="primary" onclick={approve} disabled={busy || !form.full_name.trim()}>
-            {busy ? 'Saving…' : 'Approve and save'}
+            {busy ? 'Saving…' : matches.length ? 'Save as a new contact' : 'Approve and save'}
           </button>
         </div>
       </section>
@@ -238,6 +277,27 @@
     border: 1px solid var(--line);
     background: var(--graphite);
     color: var(--bone);
+  }
+  .match {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--amber);
+    background: #2a241a;
+  }
+  .match p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .primary.small {
+    flex: none;
+    align-self: flex-start;
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 14px;
   }
   button:disabled {
     opacity: 0.6;

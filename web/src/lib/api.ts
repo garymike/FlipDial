@@ -62,6 +62,28 @@ export type ContactInput = Omit<Contact, 'uid' | 'categories' | 'source' | 'card
   tags: string[]
 }
 
+export interface DuplicatePair {
+  score: number
+  reasons: string[]
+  a: Contact
+  b: Contact
+}
+
+export interface MergeRecord {
+  id: number
+  keep_uid: string
+  drop_uid: string
+  drop_name: string
+  created_at: string
+  undone: boolean
+}
+
+export interface Match {
+  score: number
+  reasons: string[]
+  contact: Contact
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -119,9 +141,28 @@ export const api = {
   approve: (cardId: string, input: ContactInput) =>
     call<Contact & { uid: string }>('POST', `/api/review/${cardId}/approve`, input),
   dismiss: (cardId: string) => call('POST', `/api/review/${cardId}/dismiss`),
+  duplicates: () => call<{ pairs: DuplicatePair[]; count: number }>('GET', '/api/duplicates'),
+  notDuplicates: (uid_a: string, uid_b: string) =>
+    call('POST', '/api/duplicates/dismiss', { uid_a, uid_b }),
+  merge: (keep_uid: string, drop_uid: string, contact: ContactInput) =>
+    call<{ contact: Contact; merge_id: number }>('POST', '/api/merge', { keep_uid, drop_uid, contact }),
+  undoMerge: (id: number) => call<{ restored: string[] }>('POST', `/api/merge/${id}/undo`),
+  merges: () => call<{ merges: MergeRecord[] }>('GET', '/api/merges'),
+  matches: (cardId: string) => call<{ matches: Match[] }>('GET', `/api/review/${cardId}/matches`),
+  attach: (cardId: string, uid: string, input: ContactInput) =>
+    call<Contact>('POST', `/api/review/${cardId}/attach/${encodeURIComponent(uid)}`, input),
   image: (cardId: string, side: 'front' | 'back' | 'thumb') => `/api/cards/${cardId}/image/${side}`,
   original: (cardId: string, role: 'front' | 'back' | 'scan') =>
     `/api/cards/${cardId}/original/${role}`,
+}
+
+/** Plain-language reasons two contacts look alike. */
+export const REASONS: Record<string, string> = {
+  same_email: 'Same email',
+  same_phone: 'Same phone',
+  same_name: 'Same name',
+  similar_name: 'Similar name',
+  same_company: 'Same company',
 }
 
 /** Plain-language messages for error codes. */
@@ -135,6 +176,8 @@ export function describe(err: unknown): string {
     not_in_review: 'This card was already handled.',
     csrf_check_failed: 'The request was blocked. Reload the page and try again.',
     network: 'FlipDial could not be reached.',
+    already_undone: 'That merge was already undone.',
+    same_contact: 'Pick two different contacts.',
   }
   return messages[code] ?? `Something went wrong (${code}).`
 }

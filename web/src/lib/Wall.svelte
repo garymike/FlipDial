@@ -14,6 +14,11 @@
   let error = $state('')
   let syncing = $state(false)
   let flipped = $state<Record<string, boolean>>({})
+  let dupes = $state(0)
+
+  $effect(() => {
+    api.duplicates().then((d) => (dupes = d.count)).catch(() => (dupes = 0))
+  })
 
   async function load() {
     try {
@@ -83,6 +88,12 @@
         </button>
       {/each}
     </section>
+    {#if dupes}
+      <section class="panel">
+        <h2>Cleanup</h2>
+        <a class="cleanup" href={href({ name: 'duplicates' })}>{dupes} possible duplicate{dupes === 1 ? '' : 's'}</a>
+      </section>
+    {/if}
     <section class="panel">
       <h2>Sync</h2>
       <div class="row"><span class="badge" aria-hidden="true">S</span><span>Contacts server</span></div>
@@ -218,6 +229,9 @@
     color: #d6d1c9;
     font-size: 10px;
     font-weight: 700;
+  }
+  .cleanup {
+    font-size: 14px;
   }
   .secondary {
     min-height: 40px;

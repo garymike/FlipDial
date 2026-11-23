@@ -2,6 +2,7 @@
   import { api } from './lib/api'
   import ContactDetail from './lib/ContactDetail.svelte'
   import Dial from './lib/Dial.svelte'
+  import Duplicates from './lib/Duplicates.svelte'
   import Review from './lib/Review.svelte'
   import { href, router } from './lib/router.svelte'
   import Wall from './lib/Wall.svelte'
@@ -51,6 +52,8 @@
   <Wall {query} />
 {:else if router.route.name === 'dial'}
   <Dial {query} />
+{:else if router.route.name === 'duplicates'}
+  <Duplicates />
 {:else if router.route.name === 'review'}
   <Review onchange={refreshCount} />
 {:else if router.route.name === 'contact'}

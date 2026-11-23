@@ -61,6 +61,25 @@ MIGRATIONS: list[str] = [
         updated_at TEXT NOT NULL
     );
     """,
+    # 5: duplicate decisions and merge history (for undo)
+    """
+    CREATE TABLE duplicate_decisions (
+        uid_a      TEXT NOT NULL,
+        uid_b      TEXT NOT NULL,
+        decision   TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (uid_a, uid_b)
+    );
+    CREATE TABLE merges (
+        id          INTEGER PRIMARY KEY,
+        keep_uid    TEXT NOT NULL,
+        keep_before TEXT NOT NULL,
+        drop_uid    TEXT NOT NULL,
+        drop_vcard  TEXT NOT NULL,
+        created_at  TEXT NOT NULL,
+        undone_at   TEXT
+    );
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")
