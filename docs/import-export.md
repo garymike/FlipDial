@@ -40,7 +40,7 @@ A backup is one zip file:
 | `flipdial.db` | FlipDial's history: review queue, extraction results, merges and imports |
 | `archive/` | Every original scan, the crops, and each card's manifest |
 
-The backup holds all your contacts and scans. Store it somewhere private and encrypted.
+The backup holds all your contacts and scans. Store it somewhere private and encrypted. Forgetting a contact later does not change backups you already have: delete or replace old backups if someone asks to be removed.
 
 ### Restore
 

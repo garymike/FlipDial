@@ -1,5 +1,6 @@
 <script lang="ts">
   // Import contacts (vCard, CSV, LinkedIn export), undo an import, and export or back up.
+  import { href } from './router.svelte'
   import { api, ApiError, describe, REASONS, type ImportField, type ImportPreview, type ImportRecord } from './api'
 
   const MAX_BYTES = 10 * 1024 * 1024
@@ -158,7 +159,10 @@
 
 <div class="wrap">
   <h1>Import and export</h1>
-  <p class="lead">Bring contacts in from other apps, or take everything with you. Imports can be undone.</p>
+  <p class="lead">
+    Bring contacts in from other apps, or take everything with you. Imports can be undone.
+    Every import and export is recorded in the <a href={href({ name: 'activity' })}>activity log</a>.
+  </p>
 
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if notice}

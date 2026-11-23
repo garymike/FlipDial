@@ -36,7 +36,7 @@ Scraping LinkedIn or any other site, cloud processing by default, sales pipeline
 | 5 | Dial (done) | Drag, scroll, keyboard, search-to-dial, reduced motion |
 | 6 | Duplicates + merge (done) | Ranked duplicate queue, merge with undo |
 | 7 | Import / export (done) | vCard, CSV, LinkedIn export in; vCard, CSV, backup archive out |
-| 8 | Hardening + v1 | Auth, audit log, threat model review, signed release with SBOM, and every item in the [release checklist](release-checklist.md), including the accuracy gate |
+| 8 | Hardening + v1 (built; release gate open) | Auth, audit log, threat model review, signed release with SBOM, and every item in the [release checklist](release-checklist.md), including the accuracy gate |
 
 ## Repo layout
 

@@ -10,6 +10,7 @@ flipdial import FILE          import a .vcf or .csv file (LinkedIn's Connections
 flipdial export --out FILE    export contacts as .vcf or .csv (by the file's extension)
 flipdial backup --out FILE    write a full backup zip (contacts, scans, database)
 flipdial restore FILE         restore a backup zip into an empty data folder
+flipdial audit verify         check the audit log has not been altered
 """
 
 from __future__ import annotations
@@ -48,6 +49,8 @@ def main(argv: list[str] | None = None) -> None:
     bak.add_argument("--out", type=Path, required=True)
     res = sub.add_parser("restore", help="restore a backup zip into an empty data folder")
     res.add_argument("file", type=Path)
+    aud = sub.add_parser("audit", help="audit log tools")
+    aud.add_argument("action", choices=["verify"])
     args = parser.parse_args(argv)
 
     settings = get_settings()
@@ -91,6 +94,15 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(evaluate(Path(args.testset), make_reader(settings)), indent=2))
         return
 
+    if args.command == "audit":
+        from flipdial import audit
+
+        result = audit.verify(settings)
+        print(json.dumps(result))
+        if not result["ok"]:
+            sys.exit(1)
+        return
+
     if args.command in {"import", "export", "backup", "restore"}:
         _transfer(args, settings)
         return
@@ -99,11 +111,17 @@ def main(argv: list[str] | None = None) -> None:
 
     from flipdial.app import create_app
 
-    uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_config=None)
+    uvicorn.run(
+        create_app(settings),
+        host=settings.host,
+        port=settings.port,
+        log_config=None,
+        proxy_headers=False,  # the sign-in proxy check needs the real peer address
+    )
 
 
 def _transfer(args: argparse.Namespace, settings) -> None:
-    from flipdial import contacts
+    from flipdial import audit, contacts
     from flipdial.carddav.client import CardDAVClient, CardDAVError
     from flipdial.transfer import backup, importer
 
@@ -123,6 +141,14 @@ def _transfer(args: argparse.Namespace, settings) -> None:
                     deck=args.deck,
                     include_duplicates=args.include_duplicates,
                 )
+                audit.record(
+                    settings,
+                    "cli",
+                    "import",
+                    str(result["import_id"]),
+                    format=result["format"],
+                    **result["counts"],
+                )
                 print(json.dumps(result))
         elif args.command == "export":
             if args.out.suffix.lower() not in (".vcf", ".csv"):
@@ -131,6 +157,8 @@ def _transfer(args: argparse.Namespace, settings) -> None:
             fn = backup.export_csv if args.out.suffix.lower() == ".csv" else backup.export_vcf
             text, n = fn(settings)
             args.out.write_text(text, encoding="utf-8")
+            action = "export.csv" if args.out.suffix.lower() == ".csv" else "export.vcard"
+            audit.record(settings, "cli", action, contacts=n)
             print(f"Exported {n} contacts.")
         elif args.command == "backup":
             if settings.carddav_url:
@@ -139,9 +167,12 @@ def _transfer(args: argparse.Namespace, settings) -> None:
                 except CardDAVError as exc:
                     print(f"Warning: could not refresh contacts ({exc}); using the local copy.")
             manifest = backup.create_backup(settings, args.out)
+            audit.record(settings, "cli", "export.backup", **manifest["counts"])
             print(json.dumps(manifest["counts"]))
         else:
-            print(json.dumps(backup.restore_backup(settings, args.file)))
+            result = backup.restore_backup(settings, args.file)
+            audit.record(settings, "cli", "restore", **result["counts"])
+            print(json.dumps(result))
     except (importer.TransferError, backup.BackupError, CardDAVError) as exc:
         sys.exit(f"{args.command} failed: {exc}")
 

@@ -5,6 +5,7 @@
   import Duplicates from './lib/Duplicates.svelte'
   import Review from './lib/Review.svelte'
   import Transfer from './lib/Transfer.svelte'
+  import Activity from './lib/Activity.svelte'
   import { href, router } from './lib/router.svelte'
   import Wall from './lib/Wall.svelte'
 
@@ -22,6 +23,19 @@
   $effect(() => {
     refreshCount()
   })
+
+  let me = $state<{ user: string; mode: string } | null>(null)
+  $effect(() => {
+    api.me().then((m) => (me = m)).catch(() => (me = null))
+  })
+
+  async function signOut() {
+    try {
+      await api.logout()
+    } finally {
+      location.assign('/auth/signed-out')
+    }
+  }
 
   const views = [
     { name: 'wall', label: 'Wall' },
@@ -47,6 +61,9 @@
   <a class="review" href={href({ name: 'review' })} aria-current={router.route.name === 'review' ? 'page' : undefined}>
     Review {#if reviewCount}<span class="pill">{reviewCount}</span>{/if}
   </a>
+  {#if me && me.mode === 'oidc'}
+    <button type="button" class="signout" title={`Signed in as ${me.user}`} onclick={signOut}>Sign out</button>
+  {/if}
 </header>
 
 {#if router.route.name === 'wall'}
@@ -55,6 +72,8 @@
   <Dial {query} />
 {:else if router.route.name === 'duplicates'}
   <Duplicates />
+{:else if router.route.name === 'activity'}
+  <Activity />
 {:else if router.route.name === 'transfer'}
   <Transfer />
 {:else if router.route.name === 'review'}
@@ -149,6 +168,17 @@
   }
   .review[aria-current='page'] {
     border-color: var(--amber);
+  }
+  .signout {
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ash);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
   }
   .pill {
     padding: 1px 8px;

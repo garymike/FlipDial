@@ -1,4 +1,4 @@
-// Minimal hash router: #/wall, #/dial, #/map, #/review, #/duplicates, #/transfer, #/contact/<uid>
+// Minimal hash router: #/wall, #/dial, #/map, #/review, #/duplicates, #/transfer, #/activity, #/contact/<uid>
 
 export type Route =
   | { name: 'wall' }
@@ -7,6 +7,7 @@ export type Route =
   | { name: 'review' }
   | { name: 'duplicates' }
   | { name: 'transfer' }
+  | { name: 'activity' }
   | { name: 'contact'; uid: string }
 
 function parse(hash: string): Route {
@@ -22,6 +23,8 @@ function parse(hash: string): Route {
       return { name: 'duplicates' }
     case 'transfer':
       return { name: 'transfer' }
+    case 'activity':
+      return { name: 'activity' }
     case 'contact':
       if (parts[1]) return { name: 'contact', uid: decodeURIComponent(parts[1]) }
       return { name: 'wall' }

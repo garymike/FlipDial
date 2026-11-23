@@ -65,6 +65,20 @@
     }
   }
 
+  let confirming = $state(false)
+  let forgetting = $state(false)
+  async function forgetContact() {
+    if (!contact) return
+    forgetting = true
+    try {
+      await api.forget(contact.uid)
+      location.hash = '#/wall'
+    } catch (e) {
+      error = describe(e)
+      forgetting = false
+    }
+  }
+
   const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`)
 </script>
 
@@ -127,6 +141,23 @@
           <div class="panel">
             <span class="badge" aria-hidden="true">S</span> Saved to your contacts server
           </div>
+          {#if confirming}
+            <div class="forget" role="group" aria-label="Forget this contact">
+              <p>
+                This removes {contact.full_name} from your contacts server and deletes their scans
+                and history from FlipDial. It cannot be undone. Backups you already downloaded still
+                include them.
+              </p>
+              <div class="buttons">
+                <button type="button" class="secondary" onclick={() => (confirming = false)}>Keep</button>
+                <button type="button" class="danger" onclick={forgetContact} disabled={forgetting}>
+                  {forgetting ? 'Forgetting…' : 'Forget forever'}
+                </button>
+              </div>
+            </div>
+          {:else}
+            <button type="button" class="link-danger" onclick={() => (confirming = true)}>Forget this contact…</button>
+          {/if}
         {/if}
       </section>
     </div>
@@ -269,6 +300,43 @@
     border: 1px solid var(--line);
     font-size: 10px;
     font-weight: 700;
+  }
+  .forget {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 12px;
+    background: #3a2422;
+    border: 1px solid #6b3a35;
+  }
+  .forget p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .danger {
+    min-height: 44px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 10px;
+    background: #e5776b;
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .link-danger {
+    align-self: flex-start;
+    min-height: 40px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #e5776b;
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
   }
   .buttons {
     display: flex;

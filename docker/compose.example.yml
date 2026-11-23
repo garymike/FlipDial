@@ -6,8 +6,12 @@ services:
       dockerfile: docker/Dockerfile
     restart: unless-stopped
     env_file: ../.env
+    environment:
+      # Without sign-in, FlipDial refuses to listen on all addresses unless told the port
+      # is local only. Remove this once FLIPDIAL_AUTH_MODE is oidc or proxy.
+      FLIPDIAL_ALLOW_NO_AUTH: "true"
     ports:
-      - "127.0.0.1:8080:8080"   # localhost only; put a reverse proxy with sign-in in front
+      - "127.0.0.1:8080:8080"   # localhost only, unless sign-in is set up
     volumes:
       - ./data:/data
     read_only: true

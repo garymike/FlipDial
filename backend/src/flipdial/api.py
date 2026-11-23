@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints
 from starlette.background import BackgroundTask
 
-from flipdial import contacts, db, duplicates
+from flipdial import audit, contacts, db, duplicates, forget
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
@@ -78,7 +78,12 @@ def client_dep(request: Request) -> CardDAVClient:
         raise HTTPException(503, exc.code) from exc
 
 
+def actor_dep(request: Request) -> str:
+    return getattr(request.state, "user", None) or "local"
+
+
 SettingsDep = Annotated[Settings, Depends(settings_dep)]
+ActorDep = Annotated[str, Depends(actor_dep)]
 ClientDep = Annotated[CardDAVClient, Depends(client_dep)]
 router = APIRouter(prefix="/api")
 
@@ -145,20 +150,39 @@ def get_contact(uid: str, s: SettingsDep) -> dict:
 
 
 @router.patch("/contacts/{uid}")
-def patch_contact(uid: str, body: ContactPatch, s: SettingsDep, client: ClientDep) -> dict:
+def patch_contact(
+    uid: str, body: ContactPatch, s: SettingsDep, client: ClientDep, actor: ActorDep
+) -> dict:
     changes = body.model_dump(exclude_none=True)
     try:
-        return contacts.update_contact(s, client, uid, changes).as_dict()
+        out = contacts.update_contact(s, client, uid, changes).as_dict()
+        audit.record(s, actor, "contact.edit", uid, fields=sorted(changes))
+        return out
     except KeyError as exc:
         raise HTTPException(404, "not_found") from exc
     except CardDAVError as exc:
         raise _dav_errors(exc) from exc
 
 
-@router.post("/sync")
-def sync(s: SettingsDep, client: ClientDep) -> dict:
+@router.delete("/contacts/{uid}")
+def forget_contact(uid: str, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
+    """Forget this contact everywhere FlipDial keeps them. Cannot be undone."""
     try:
-        return contacts.sync(s, client)
+        counts = forget.forget(s, client, uid)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    audit.record(s, actor, "contact.forget", uid, **counts)
+    return {"forgotten": uid} | counts
+
+
+@router.post("/sync")
+def sync(s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
+    try:
+        counts = contacts.sync(s, client)
+        audit.record(s, actor, "contacts.sync", **counts)
+        return counts
     except CardDAVError as exc:
         raise _dav_errors(exc) from exc
 
@@ -192,7 +216,9 @@ def review_queue(s: SettingsDep) -> dict:
 
 
 @router.post("/review/{card_id}/approve")
-def approve(card_id: str, body: ContactIn, s: SettingsDep, client: ClientDep) -> dict:
+def approve(
+    card_id: str, body: ContactIn, s: SettingsDep, client: ClientDep, actor: ActorDep
+) -> dict:
     _card_id(card_id)
     data = body.model_dump()
     data["socials"] = [(x["platform"], x["handle"]) for x in data["socials"]]
@@ -209,11 +235,12 @@ def approve(card_id: str, body: ContactIn, s: SettingsDep, client: ClientDep) ->
         raise HTTPException(409 if str(exc) == "not_in_review" else 404, str(exc)) from exc
     except CardDAVError as exc:
         raise _dav_errors(exc) from exc
+    audit.record(s, actor, "card.approve", card_id, vcard_uid=uid)
     return contacts.view(card).as_dict() | {"uid": uid}
 
 
 @router.post("/review/{card_id}/dismiss")
-def dismiss(card_id: str, s: SettingsDep) -> dict:
+def dismiss(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
     _card_id(card_id)
     with db.session(s.db_path) as conn:
         n = conn.execute(
@@ -222,6 +249,7 @@ def dismiss(card_id: str, s: SettingsDep) -> dict:
         ).rowcount
     if not n:
         raise HTTPException(404, "not_found")
+    audit.record(s, actor, "card.dismiss", card_id)
     return {"card_id": card_id, "status": "dismissed"}
 
 
@@ -290,13 +318,14 @@ def list_duplicates(s: SettingsDep) -> dict:
 
 
 @router.post("/duplicates/dismiss")
-def dismiss_duplicate(body: PairIn, s: SettingsDep) -> dict:
+def dismiss_duplicate(body: PairIn, s: SettingsDep, actor: ActorDep) -> dict:
     duplicates.dismiss_pair(s, body.uid_a, body.uid_b)
+    audit.record(s, actor, "duplicate.not_same", body.uid_a, other=body.uid_b)
     return {"ok": True}
 
 
 @router.post("/merge")
-def merge_contacts(body: MergeIn, s: SettingsDep, client: ClientDep) -> dict:
+def merge_contacts(body: MergeIn, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
     try:
         view, merge_id = duplicates.merge(
             s, client, body.keep_uid, body.drop_uid, _reviewed(body.contact, source="merged")
@@ -305,13 +334,16 @@ def merge_contacts(body: MergeIn, s: SettingsDep, client: ClientDep) -> dict:
         raise _merge_error(exc) from exc
     except CardDAVError as exc:
         raise _dav_errors(exc) from exc
+    audit.record(s, actor, "contact.merge", body.keep_uid, dropped=body.drop_uid, merge_id=merge_id)
     return {"contact": view.as_dict(), "merge_id": merge_id}
 
 
 @router.post("/merge/{merge_id}/undo")
-def undo_merge(merge_id: int, s: SettingsDep, client: ClientDep) -> dict:
+def undo_merge(merge_id: int, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
     try:
-        return {"restored": duplicates.undo_merge(s, client, merge_id)}
+        restored = duplicates.undo_merge(s, client, merge_id)
+        audit.record(s, actor, "contact.merge_undo", str(merge_id), restored=restored)
+        return {"restored": restored}
     except duplicates.MergeError as exc:
         raise _merge_error(exc) from exc
     except CardDAVError as exc:
@@ -345,7 +377,9 @@ def review_matches(card_id: str, s: SettingsDep) -> dict:
 
 
 @router.post("/review/{card_id}/attach/{uid}")
-def attach(card_id: str, uid: str, body: ContactIn, s: SettingsDep, client: ClientDep) -> dict:
+def attach(
+    card_id: str, uid: str, body: ContactIn, s: SettingsDep, client: ClientDep, actor: ActorDep
+) -> dict:
     _card_id(card_id)
     try:
         view = duplicates.attach_scan(s, client, card_id, uid, _reviewed(body, source="scan"))
@@ -353,6 +387,7 @@ def attach(card_id: str, uid: str, body: ContactIn, s: SettingsDep, client: Clie
         raise _merge_error(exc) from exc
     except CardDAVError as exc:
         raise _dav_errors(exc) from exc
+    audit.record(s, actor, "card.attach", card_id, vcard_uid=uid)
     return view.as_dict()
 
 
@@ -398,11 +433,20 @@ def import_preview(body: ImportIn, s: SettingsDep) -> dict:
 
 
 @router.post("/import")
-def import_contacts(body: ImportIn, s: SettingsDep, client: ClientDep) -> dict:
+def import_contacts(body: ImportIn, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
     try:
-        return importer.run_import(
+        result = importer.run_import(
             s, client, body.text, body.kind, body.mapping, body.deck, body.include_duplicates
         )
+        audit.record(
+            s,
+            actor,
+            "import",
+            str(result["import_id"]),
+            format=result["format"],
+            **result["counts"],
+        )
+        return result
     except importer.TransferError as exc:
         raise _transfer_error(exc) from exc
     except CardDAVError as exc:
@@ -415,9 +459,11 @@ def imports(s: SettingsDep) -> dict:
 
 
 @router.post("/imports/{import_id}/undo")
-def undo_import(import_id: int, s: SettingsDep, client: ClientDep) -> dict:
+def undo_import(import_id: int, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
     try:
-        return importer.undo_import(s, client, import_id)
+        result = importer.undo_import(s, client, import_id)
+        audit.record(s, actor, "import.undo", str(import_id), **result)
+        return result
     except importer.TransferError as exc:
         code = str(exc)
         raise HTTPException(409 if code == "already_undone" else 404, code) from exc
@@ -443,27 +489,36 @@ def _download(content: str, media: str, name: str, count: int) -> Response:
 
 @router.get("/export/contacts.vcf")
 def export_vcf(
-    s: SettingsDep, deck: Annotated[str, Query(max_length=80)] = "", starred: bool = False
+    s: SettingsDep,
+    actor: ActorDep,
+    deck: Annotated[str, Query(max_length=80)] = "",
+    starred: bool = False,
 ) -> Response:
     text, n = backup.export_vcf(s, deck, starred)
+    audit.record(s, actor, "export.vcard", contacts=n, filtered=bool(deck or starred))
     return _download(text, "text/vcard; charset=utf-8", f"flipdial-contacts-{_stamp()}.vcf", n)
 
 
 @router.get("/export/contacts.csv")
 def export_csv(
-    s: SettingsDep, deck: Annotated[str, Query(max_length=80)] = "", starred: bool = False
+    s: SettingsDep,
+    actor: ActorDep,
+    deck: Annotated[str, Query(max_length=80)] = "",
+    starred: bool = False,
 ) -> Response:
     text, n = backup.export_csv(s, deck, starred)
+    audit.record(s, actor, "export.csv", contacts=n, filtered=bool(deck or starred))
     return _download(text, "text/csv; charset=utf-8", f"flipdial-contacts-{_stamp()}.csv", n)
 
 
 @router.get("/export/backup")
-def export_backup(s: SettingsDep) -> FileResponse:
+def export_backup(s: SettingsDep, actor: ActorDep) -> FileResponse:
     s.data_dir.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix=".backup-", dir=s.data_dir))
     dest = tmp / f"flipdial-backup-{_stamp()}.zip"
     try:
-        backup.create_backup(s, dest)
+        manifest = backup.create_backup(s, dest)
+        audit.record(s, actor, "export.backup", **manifest["counts"])
     except Exception:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
@@ -474,3 +529,16 @@ def export_backup(s: SettingsDep) -> FileResponse:
         headers={"Cache-Control": "private, no-store"},
         background=BackgroundTask(shutil.rmtree, tmp, ignore_errors=True),
     )
+
+
+# -- audit log ------------------------------------------------------------------------
+
+
+@router.get("/audit")
+def audit_log(s: SettingsDep, before: int | None = None) -> dict:
+    return {"entries": audit.recent(s, 100, before)}
+
+
+@router.get("/audit/verify")
+def audit_verify(s: SettingsDep) -> dict:
+    return audit.verify(s)

@@ -13,7 +13,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
 RUN useradd --system --uid 10001 --home-dir /nonexistent flipdial
 WORKDIR /app
 COPY backend/ ./backend/
-RUN pip install --no-cache-dir ./backend
+# Install exactly the locked, hash-checked dependencies, then FlipDial itself.
+RUN pip install --no-cache-dir uv==0.11.32 \
+ && uv export --project backend --frozen --no-dev --no-emit-project -o /tmp/requirements.txt \
+ && pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt \
+ && pip install --no-cache-dir --no-deps ./backend \
+ && pip uninstall -y uv && rm /tmp/requirements.txt
 COPY --from=web /web/dist ./web
 RUN mkdir -p /data && chown flipdial /data
 USER flipdial

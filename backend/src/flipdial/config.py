@@ -14,7 +14,7 @@ from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _is_local_host(host: str) -> bool:
+def is_local_host(host: str) -> bool:
     """True for loopback, private-network and link-local hosts."""
     if host in {"localhost", ""} or host.endswith((".local", ".lan", ".internal", ".home.arpa")):
         return True
@@ -50,6 +50,22 @@ class Settings(BaseSettings):
     max_pdf_pages: int = 50
     auto_crop: bool = True
 
+    # Sign-in. none: no sign-in (localhost only). oidc: sign in with your identity provider.
+    # proxy: a reverse proxy that already signs people in passes the user in a header.
+    auth_mode: Literal["none", "oidc", "proxy"] = "none"
+    allow_no_auth: bool = False  # run without sign-in on a non-localhost address anyway
+    public_url: str | None = None  # how browsers reach FlipDial, e.g. https://flipdial.home.arpa
+    auth_allowed_users: str = ""  # comma-separated emails or subject IDs; empty allows nobody
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: SecretStr | None = None
+    oidc_scopes: str = "openid email profile"
+    session_idle_hours: float = 12.0
+    session_max_days: float = 7.0
+    proxy_user_header: str = "Remote-User"
+    trusted_proxies: str = "127.0.0.1/32,::1/128"  # only these addresses may set the header
+    cookie_secure: bool | None = None  # default: on when public_url uses https
+
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_format: Literal["json", "text"] = "json"
@@ -83,12 +99,60 @@ class Settings(BaseSettings):
         if self.db_path is None:
             self.db_path = self.data_dir / "flipdial.db"
         host = urlparse(self.model_url).hostname or ""
-        if not self.allow_remote_model and not _is_local_host(host):
+        if not self.allow_remote_model and not is_local_host(host):
             raise ValueError(
                 "model_url points outside the local network. Card images would leave your "
                 "network. Set FLIPDIAL_ALLOW_REMOTE_MODEL=true only if you intend that."
             )
+        self._check_auth()
         return self
+
+    def _check_auth(self) -> None:
+        loopback = self.host in {"127.0.0.1", "::1", "localhost"}
+        if self.auth_mode == "none" and not loopback and not self.allow_no_auth:
+            raise ValueError(
+                f"FlipDial is set to listen on {self.host} with no sign-in. Set "
+                "FLIPDIAL_AUTH_MODE to oidc or proxy, or set FLIPDIAL_ALLOW_NO_AUTH=true if "
+                "the port is only reachable from this machine (for example a container "
+                "published on 127.0.0.1)."
+            )
+        if self.auth_mode == "oidc":
+            missing = [
+                name
+                for name in ("oidc_issuer", "oidc_client_id", "public_url")
+                if not getattr(self, name)
+            ]
+            if missing:
+                raise ValueError(
+                    "Sign-in needs " + ", ".join(f"FLIPDIAL_{m.upper()}" for m in missing)
+                )
+            for name in ("oidc_issuer", "public_url"):
+                u = urlparse(getattr(self, name))
+                if u.scheme != "https" and not (
+                    u.scheme == "http" and is_local_host(u.hostname or "")
+                ):
+                    raise ValueError(f"FLIPDIAL_{name.upper()} must use https")
+        if self.auth_mode in ("oidc", "proxy"):
+            from ipaddress import ip_network
+
+            try:
+                [ip_network(x.strip()) for x in self.trusted_proxies.split(",") if x.strip()]
+            except ValueError as exc:
+                raise ValueError("FLIPDIAL_TRUSTED_PROXIES must be IP addresses or ranges") from exc
+        if self.auth_mode == "oidc" and not self.allowed_users:
+            raise ValueError(
+                "Set FLIPDIAL_AUTH_ALLOWED_USERS to the emails or subject IDs allowed to sign in"
+            )
+
+    @property
+    def allowed_users(self) -> set[str]:
+        return {x.strip().casefold() for x in self.auth_allowed_users.split(",") if x.strip()}
+
+    @property
+    def secure_cookies(self) -> bool:
+        if self.cookie_secure is not None:
+            return self.cookie_secure
+        return bool(self.public_url and self.public_url.startswith("https://"))
 
 
 def get_settings() -> Settings:

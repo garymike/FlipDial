@@ -96,6 +96,40 @@ MIGRATIONS: list[str] = [
         PRIMARY KEY (import_id, uid)
     );
     """,
+    # 7: sign-in sessions and logins in progress (tokens are stored hashed)
+    """
+    CREATE TABLE sessions (
+        token_hash TEXT PRIMARY KEY,
+        user       TEXT NOT NULL,
+        created_at REAL NOT NULL,
+        last_seen  REAL NOT NULL,
+        expires_at REAL NOT NULL
+    );
+    CREATE TABLE logins (
+        state      TEXT PRIMARY KEY,
+        nonce      TEXT NOT NULL,
+        verifier   TEXT NOT NULL,
+        next       TEXT NOT NULL,
+        created_at REAL NOT NULL
+    );
+    """,
+    # 8: audit log. Append-only, and each entry carries a hash of the one before it.
+    """
+    CREATE TABLE audit (
+        id          INTEGER PRIMARY KEY,
+        ts          TEXT NOT NULL,
+        actor       TEXT NOT NULL,
+        action      TEXT NOT NULL,
+        target      TEXT NOT NULL,
+        detail_json TEXT NOT NULL,
+        prev_hash   TEXT NOT NULL,
+        hash        TEXT NOT NULL
+    );
+    CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit
+    BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
+    CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit
+    BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

@@ -102,6 +102,7 @@
         {syncing ? 'Syncing…' : 'Sync now'}
       </button>
       <a class="cleanup" href={href({ name: 'transfer' })}>Import, export and backup</a>
+      <a class="cleanup" href={href({ name: 'activity' })}>Activity log</a>
     </section>
   </aside>
 

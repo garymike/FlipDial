@@ -141,3 +141,23 @@ def test_input_validation(api, dav_settings, make_card):
 
 def test_openapi_and_docs_hidden(api):
     assert api.get("/openapi.json").status_code == 404
+
+
+def test_forget_removes_every_trace(api, dav_settings, make_card):
+    card_id = _scan_and_read(dav_settings, make_card, seed=7)
+    uid = api.post(
+        f"/api/review/{card_id}/approve", json=_body(full_name="Fay Forget"), headers=H
+    ).json()["uid"]
+    assert (dav_settings.archive_dir / card_id).is_dir()
+
+    r = api.delete(f"/api/contacts/{uid}", headers=H)
+    assert r.status_code == 200 and r.json()["scans"] == 1
+    assert not (dav_settings.archive_dir / card_id).exists()
+    assert api.get(f"/api/contacts/{uid}").status_code == 404
+    assert api.get(f"/api/cards/{card_id}/image/front").status_code == 404
+    api.post("/api/sync", headers=H)  # gone from the server too
+    assert api.get(f"/api/contacts/{uid}").status_code == 404
+    entries = api.get("/api/audit").json()["entries"]
+    assert any(e["action"] == "contact.forget" and e["target"] == uid for e in entries)
+    assert "Fay" not in str(api.get("/api/audit").json())
+    assert api.delete(f"/api/contacts/{uid}", headers=H).status_code == 404

@@ -132,6 +132,15 @@ export interface ImportRecord {
   undone: boolean
 }
 
+export interface AuditEntry {
+  id: number
+  ts: string
+  actor: string
+  action: string
+  target: string
+  detail: Record<string, unknown>
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -151,6 +160,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'same-origin',
   })
+  if (res.status === 401) {
+    // Signed out or session expired: go to sign-in and come back to this screen.
+    location.assign(`/auth/login?next=${encodeURIComponent(location.hash || '#/wall')}`)
+    throw new ApiError(401, 'sign_in_required')
+  }
   if (!res.ok) {
     let code = `http_${res.status}`
     try {
@@ -206,6 +220,14 @@ export const api = {
   undoImport: (id: number) => call<{ removed: number; kept_edited: number }>('POST', `/api/imports/${id}/undo`),
   exportUrl: (kind: 'vcf' | 'csv' | 'backup') =>
     kind === 'backup' ? '/api/export/backup' : `/api/export/contacts.${kind}`,
+  forget: (uid: string) =>
+    call<{ forgotten: string; scans: number }>('DELETE', `/api/contacts/${encodeURIComponent(uid)}`),
+  me: () => call<{ user: string; mode: 'none' | 'oidc' | 'proxy' }>('GET', '/api/me'),
+  logout: () => call<{ signed_out: boolean }>('POST', '/api/logout'),
+  audit: (before?: number) =>
+    call<{ entries: AuditEntry[] }>('GET', `/api/audit${before ? `?before=${before}` : ''}`),
+  auditVerify: () =>
+    call<{ ok: boolean; entries: number; broken_at: number | null; head: string }>('GET', '/api/audit/verify'),
   image: (cardId: string, side: 'front' | 'back' | 'thumb') => `/api/cards/${cardId}/image/${side}`,
   original: (cardId: string, role: 'front' | 'back' | 'scan') =>
     `/api/cards/${cardId}/original/${role}`,
