@@ -1,0 +1,19 @@
+# Example only. Copy and adjust; keep real values in .env, never in this file.
+services:
+  flipdial:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    env_file: ../.env
+    ports:
+      - "127.0.0.1:8080:8080"   # localhost only; put a reverse proxy with sign-in in front
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

@@ -1,0 +1,31 @@
+# Personal data: never commit
+data/
+inbox/
+archive/
+exports/
+backups/
+private/
+*.local.*
+.env
+.env.*
+!config/*.example.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+web/dist/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
