@@ -50,6 +50,7 @@ More detail in [docs/architecture.md](docs/architecture.md).
 |---|---|
 | [Build plan](docs/build-plan.md) | Phases, milestones, scope |
 | [Architecture](docs/architecture.md) | Components and data flow |
+| [Ingest](docs/ingest.md) | Scanner setup, pairing modes, what gets refused |
 | [Data model](docs/data-model.md) | vCard fields and FlipDial extensions |
 | [Threat model](docs/threat-model.md) | Assets, threats, mitigations |
 | [Contributing](CONTRIBUTING.md) | Setup and the no-private-data rule |

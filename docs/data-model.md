@@ -40,12 +40,13 @@ Per-field provenance (which source set each value, and when) and extraction conf
 
 ```
 archive/<card-id>/
-  front.orig.<ext>    original, never modified
-  back.orig.<ext>     original, never modified
-  front.crop.jpg      derived
-  back.crop.jpg       derived
+  front.orig.<ext>    original image, never modified
+  back.orig.<ext>     original image, never modified
+  scan.orig.pdf       or: the original PDF the card came from (pages listed in the manifest)
+  front.crop.jpg      derived, no photo metadata
+  back.crop.jpg       derived, no photo metadata
   thumb.jpg           derived
-  manifest.json       card-id, vCard UID, hashes of originals, timestamps
+  manifest.json       card ID, page numbers, SHA-256 of originals, crop results, vCard UID
 ```
 
 ## Schema changes

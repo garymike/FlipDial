@@ -8,9 +8,14 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.32",
     "pydantic-settings>=2.6",
+    "pillow>=11",
+    "numpy>=2.1",
+    "opencv-python-headless>=4.10",
+    "pypdfium2>=4.30",
 ]
 
 [project.optional-dependencies]
+heif = ["pillow-heif>=0.20"]
 dev = [
     "pytest>=8.3",
     "httpx>=0.28",

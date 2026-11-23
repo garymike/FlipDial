@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     inbox_dir: Path | None = None
     archive_dir: Path | None = None
+    rejected_dir: Path | None = None
+    db_path: Path | None = None
+
+    # Ingest
+    ingest_mode: Literal["auto", "duplex", "single", "named"] = "auto"
+    settle_seconds: float = 5.0  # a file must be unchanged this long before it is read
+    pair_timeout_seconds: float = 120.0  # duplex: wait this long for a missing back
+    poll_seconds: float = 3.0
+    max_file_mb: int = 50
+    max_pixels: int = 60_000_000
+    max_pdf_pages: int = 50
+    auto_crop: bool = True
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -59,6 +71,10 @@ class Settings(BaseSettings):
             self.inbox_dir = self.data_dir / "inbox"
         if self.archive_dir is None:
             self.archive_dir = self.data_dir / "archive"
+        if self.rejected_dir is None:
+            self.rejected_dir = self.data_dir / "rejected"
+        if self.db_path is None:
+            self.db_path = self.data_dir / "flipdial.db"
         host = urlparse(self.model_url).hostname or ""
         if not self.allow_remote_model and not _is_local_host(host):
             raise ValueError(
