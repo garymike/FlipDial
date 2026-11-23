@@ -1,3 +1,5 @@
+<p><img src="web/public/favicon.svg" width="72" height="72" alt="FlipDial icon"></p>
+
 # FlipDial
 
 **A self-hosted, visual contact manager for the business cards you collect.**
