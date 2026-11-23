@@ -36,7 +36,7 @@ Scraping LinkedIn or any other site, cloud processing by default, sales pipeline
 | 5 | Dial | Drag, scroll, keyboard, search-to-dial, reduced motion |
 | 6 | Duplicates + merge | Ranked duplicate queue, merge with undo |
 | 7 | Import / export | vCard, CSV, LinkedIn export in; vCard, CSV, backup archive out |
-| 8 | Hardening + v1 | Auth, audit log, threat model review, signed release with SBOM |
+| 8 | Hardening + v1 | Auth, audit log, threat model review, signed release with SBOM, and every item in the [release checklist](release-checklist.md), including the accuracy gate |
 
 ## Repo layout
 
@@ -48,6 +48,10 @@ docker/         Container build files and example compose
 docs/           Plan, architecture, data model, threat model
 demo/           Fake demo data only
 ```
+
+## Accuracy testing
+
+Run `flipdial eval` on the private test set after any change to extraction (instructions, schema, validation, or the recommended model) and keep the counts-only report with the change. v1 does not ship until the accuracy gate in the [release checklist](release-checklist.md) passes.
 
 ## Rules that apply to every milestone
 

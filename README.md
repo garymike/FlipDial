@@ -54,6 +54,7 @@ More detail in [docs/architecture.md](docs/architecture.md).
 | [Reading cards](docs/extraction.md) | Fields, checks, flags, accuracy testing |
 | [Data model](docs/data-model.md) | vCard fields and FlipDial extensions |
 | [Threat model](docs/threat-model.md) | Assets, threats, mitigations |
+| [Release checklist](docs/release-checklist.md) | What must pass before v1, including accuracy targets |
 | [Contributing](CONTRIBUTING.md) | Setup and the no-private-data rule |
 | [Security](SECURITY.md) | Reporting vulnerabilities |
 
