@@ -8,8 +8,8 @@ Scan, review, dial through, and sync to any CardDAV server.
 ## What it does
 
 - **Keeps the card.** The original front and back scans are stored untouched, so the art on a card is never lost.
-- **Reads it locally.** A local vision model (Ollama by default) extracts name, title, company, email, phone and links. Nothing leaves your network unless you turn that on.
-- **You review before anything is saved.** Low-confidence fields are flagged; nothing is written silently.
+- **Reads it on your own hardware.** Name, title, company, email, phone and links are read from the card on a machine you control. Nothing leaves your network unless you turn that on.
+- **You review before anything is saved.** Fields that may be wrong are flagged, and nothing is saved without your OK.
 - **Syncs with standards.** Contacts are written as vCards to any CardDAV server (Synology Contacts, Nextcloud, Radicale, Baïkal and others).
 - **Three ways to browse:**
   - **Wall:** every contact as a grid of cards
@@ -20,19 +20,27 @@ Scan, review, dial through, and sync to any CardDAV server.
 
 ## How it fits together
 
-```
-scanner / phone  ──▶  inbox folder  ──▶  ingest + extraction  ──▶  review queue
-                                                                       │
-                       Wall · Dial · Map  ◀──  FlipDial web  ◀──────────┤
-                                                                       ▼
-                                                          CardDAV server (your contacts)
+```mermaid
+flowchart LR
+    A["Scanner or phone"] -->|saves images| B["Inbox folder"]
+    B --> C["Read and crop<br/>each card"]
+    C --> D["Review queue"]
+    D -->|you approve| E["Your contacts<br/>(CardDAV server)"]
+    C -->|originals kept| F["Card archive"]
+    E --> G["FlipDial<br/>Wall, Dial, Map"]
+    F --> G
 ```
 
-Any scanner that can save to a folder works. See [docs/architecture.md](docs/architecture.md).
+1. Scan cards with any scanner or phone that can save to a folder.
+2. FlipDial straightens each card, keeps the original images, and reads the contact details.
+3. You check the details in the review queue.
+4. Approved contacts are saved to your contacts server, and you browse them in FlipDial.
+
+More detail in [docs/architecture.md](docs/architecture.md).
 
 ## Principles
 
-- **Local first.** No cloud model, no telemetry, no CDN.
+- **Local first.** No cloud services, no tracking, no outside downloads.
 - **Your data stays yours.** Standard vCard and CardDAV, plus full export of contacts and original scans.
 - **Card text is untrusted input.** See [docs/threat-model.md](docs/threat-model.md).
 
