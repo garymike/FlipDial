@@ -32,3 +32,4 @@ Thumbs.db
 
 # Tooling output
 web/.svelte-check/
+web/dist-demo/

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400">
+<rect width="700" height="400" fill="#f1e6d2"/>
+<rect width="210" height="400" fill="#b5442c"/>
+<text x="105" y="230" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="92" font-weight="700" fill="#f1e6d2">L</text>
+<text x="250" y="120" font-family="Helvetica, Arial, sans-serif" font-size="38" font-weight="700" fill="#2a1d17">Bram Okonkwo-Lind</text>
+<text x="250" y="160" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#b5442c">FOUNDER</text>
+<text x="250" y="196" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#2a1d17">Lindworth Letterpress</text>
+<text x="250" y="270" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#2a1d17">bram@lindworth.example</text>
+<text x="250" y="300" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#2a1d17">(773) 555-0118</text>
+<text x="250" y="330" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#2a1d17">lindworth.example</text>
+</svg>

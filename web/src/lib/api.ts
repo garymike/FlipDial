@@ -150,7 +150,23 @@ export class ApiError extends Error {
   }
 }
 
+/** True in the GitHub Pages demo build, where an in-browser stand-in replaces the server. */
+export const DEMO = import.meta.env.MODE === 'demo'
+
+const urls = {
+  image: (cardId: string, side: 'front' | 'back' | 'thumb') => `/api/cards/${cardId}/image/${side}`,
+  original: (cardId: string, role: 'front' | 'back' | 'scan') => `/api/cards/${cardId}/original/${role}`,
+  exportUrl: (kind: 'vcf' | 'csv' | 'backup') =>
+    kind === 'backup' ? '/api/export/backup' : `/api/export/contacts.${kind}`,
+}
+
+/** Demo mode swaps in its own image and download addresses. */
+export function setUrls(next: typeof urls): void {
+  Object.assign(urls, next)
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (DEMO) return (await (await import('./demo')).handle(method, path, body)) as T
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (method !== 'GET') headers['X-FlipDial-Request'] = '1'
   if (body !== undefined) headers['Content-Type'] = 'application/json'
@@ -218,8 +234,7 @@ export const api = {
     call<{ import_id: number; format: string; counts: ImportRecord['counts'] }>('POST', '/api/import', o),
   imports: () => call<{ imports: ImportRecord[] }>('GET', '/api/imports'),
   undoImport: (id: number) => call<{ removed: number; kept_edited: number }>('POST', `/api/imports/${id}/undo`),
-  exportUrl: (kind: 'vcf' | 'csv' | 'backup') =>
-    kind === 'backup' ? '/api/export/backup' : `/api/export/contacts.${kind}`,
+  exportUrl: (kind: 'vcf' | 'csv' | 'backup') => urls.exportUrl(kind),
   forget: (uid: string) =>
     call<{ forgotten: string; scans: number }>('DELETE', `/api/contacts/${encodeURIComponent(uid)}`),
   me: () => call<{ user: string; mode: 'none' | 'oidc' | 'proxy' }>('GET', '/api/me'),
@@ -228,9 +243,8 @@ export const api = {
     call<{ entries: AuditEntry[] }>('GET', `/api/audit${before ? `?before=${before}` : ''}`),
   auditVerify: () =>
     call<{ ok: boolean; entries: number; broken_at: number | null; head: string }>('GET', '/api/audit/verify'),
-  image: (cardId: string, side: 'front' | 'back' | 'thumb') => `/api/cards/${cardId}/image/${side}`,
-  original: (cardId: string, role: 'front' | 'back' | 'scan') =>
-    `/api/cards/${cardId}/original/${role}`,
+  image: (cardId: string, side: 'front' | 'back' | 'thumb') => urls.image(cardId, side),
+  original: (cardId: string, role: 'front' | 'back' | 'scan') => urls.original(cardId, role),
 }
 
 /** Plain-language reasons two contacts look alike. */
@@ -260,6 +274,7 @@ export function describe(err: unknown): string {
     too_many_cards: 'That file has too many contacts (10,000 limit).',
     no_contacts_found: 'No contacts were found in that file.',
     empty_file: 'That file is empty.',
+    demo_readonly: 'That is turned off in the demo. Install FlipDial to use it with your own contacts.',
     bad_mapping: 'The column choices do not match the file. Pick the file again.',
   }
   return messages[code] ?? `Something went wrong (${code}).`

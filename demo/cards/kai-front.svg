@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400">
+<rect width="700" height="400" fill="#f7fafc"/>
+<text x="60" y="96" font-family="Helvetica, Arial, sans-serif" font-size="18" letter-spacing="4" fill="#4a5568">TIDEPOOL SECURITY</text>
+<text x="60" y="250" font-family="Helvetica, Arial, sans-serif" font-size="34" fill="#1a365d">Kailani Reyes</text>
+<text x="60" y="284" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#4a5568">Threat Researcher</text>
+<text x="640" y="234" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#4a5568">kai@tidepool.example</text>
+<text x="640" y="262" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#4a5568">(773) 555-0111</text>
+<text x="640" y="290" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="16" fill="#4a5568">tidepool.example</text>
+</svg>

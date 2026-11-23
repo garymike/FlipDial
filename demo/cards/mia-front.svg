@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400">
+<rect width="700" height="400" fill="#e3f2fd"/>
+<circle cx="350.0" cy="100" r="46" fill="none" stroke="#0d47a1" stroke-width="4"/>
+<text x="350.0" y="114" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="38" fill="#0d47a1">OR</text>
+<text x="350.0" y="208" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="36" fill="#0d47a1">Mia Okafor</text>
+<text x="350.0" y="244" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" letter-spacing="3" fill="#0d47a1">COMMUNITY LEAD · OPEN ROWING COLLECTIVE</text>
+<text x="350.0" y="320" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#0d47a1">mia@openrowing.example   ·   (708) 555-0172</text>
+<text x="350.0" y="352" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#0d47a1">openrowing.example</text>
+</svg>

@@ -3,6 +3,8 @@
 # FlipDial
 
 **A self-hosted, visual contact manager for the business cards you collect.**
+
+**[Try the live demo](https://garymike.github.io/FlipDial/)** with invented people. It runs entirely in your browser, and nothing you do there is saved.
 Scan, review, dial through, and sync to any CardDAV server.
 
 > Status: pre-release. Every v1 feature is built; v1 ships once the [release checklist](docs/release-checklist.md) passes, including accuracy testing on real cards.

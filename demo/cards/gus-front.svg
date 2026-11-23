@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400">
+<rect width="700" height="400" fill="#eef0fb"/>
+<rect width="210" height="400" fill="#3a4cb1"/>
+<text x="105" y="230" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="92" font-weight="700" fill="#eef0fb">F</text>
+<text x="250" y="120" font-family="Helvetica, Arial, sans-serif" font-size="38" font-weight="700" fill="#141a3f">Gustavo Ilunga</text>
+<text x="250" y="160" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#3a4cb1">INDUSTRIAL DESIGNER</text>
+<text x="250" y="196" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#141a3f">Formwell Studio</text>
+<text x="250" y="270" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#141a3f">gus@formwell.example</text>
+<text x="250" y="300" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#141a3f">(312) 555-0124</text>
+<text x="250" y="330" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#141a3f">formwell.example</text>
+</svg>

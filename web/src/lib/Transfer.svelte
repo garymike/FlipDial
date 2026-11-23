@@ -1,7 +1,7 @@
 <script lang="ts">
   // Import contacts (vCard, CSV, LinkedIn export), undo an import, and export or back up.
   import { href } from './router.svelte'
-  import { api, ApiError, describe, REASONS, type ImportField, type ImportPreview, type ImportRecord } from './api'
+  import { api, ApiError, DEMO, describe, REASONS, type ImportField, type ImportPreview, type ImportRecord } from './api'
 
   const MAX_BYTES = 10 * 1024 * 1024
   const FORMATS: Record<string, string> = {
@@ -164,6 +164,7 @@
     Every import and export is recorded in the <a href={href({ name: 'activity' })}>activity log</a>.
   </p>
 
+  {#if DEMO}<p class="notice">Importing, exporting and backups are turned off in the demo, since it runs entirely in your browser.</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if notice}
     <div class="notice" role="status">
@@ -180,7 +181,7 @@
       request your data under Settings, Data privacy, then upload <code>Connections.csv</code>.
     </p>
     <label class="file">
-      <input type="file" accept=".vcf,.vcard,.csv,text/vcard,text/csv" onchange={choose} disabled={busy} />
+      <input type="file" accept=".vcf,.vcard,.csv,text/vcard,text/csv" onchange={choose} disabled={busy || DEMO} />
       <span>{fileName || 'Choose a file'}</span>
     </label>
 
@@ -274,7 +275,7 @@
   <section class="panel">
     <h2>Export</h2>
     <p class="hint">Exports include every contact on your contacts server, with or without a scan.</p>
-    <div class="exports">
+    <div class="exports" class:off={DEMO} aria-disabled={DEMO}>
       <a class="secondary" href={api.exportUrl('vcf')} download>vCard (.vcf)</a>
       <a class="secondary" href={api.exportUrl('csv')} download>Spreadsheet (.csv)</a>
     </div>
@@ -287,7 +288,7 @@
       imports). Each file is checked against a list of fingerprints when you restore it with
       <code>flipdial restore</code>. Keep it somewhere private: it holds all your contacts.
     </p>
-    <div class="exports">
+    <div class="exports" class:off={DEMO} aria-disabled={DEMO}>
       <a class="primary" href={api.exportUrl('backup')} download>Download backup</a>
     </div>
   </section>
@@ -503,6 +504,10 @@
   }
   .buttons {
     justify-content: flex-end;
+  }
+  .off {
+    opacity: 0.45;
+    pointer-events: none;
   }
   .primary,
   .secondary {

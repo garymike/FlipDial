@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400">
+<rect width="700" height="400" fill="#14161a"/>
+<rect x="60" y="70" width="70" height="6" fill="#e8a33d"/>
+<text x="60" y="140" font-family="Helvetica, Arial, sans-serif" font-size="40" font-weight="700" fill="#ece8e1">Devika Rao</text>
+<text x="60" y="178" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#e8a33d">Printmaker</text>
+<text x="60" y="206" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#ece8e1" opacity="0.8">Ink &amp; Iron Press</text>
+<text x="60" y="272" font-family="Courier New, monospace" font-size="18" fill="#ece8e1">devika@inkandiron.example</text>
+<text x="60" y="302" font-family="Courier New, monospace" font-size="18" fill="#ece8e1">(708) 555-0103</text>
+<text x="60" y="332" font-family="Courier New, monospace" font-size="18" fill="#ece8e1">inkandiron.example</text>
+</svg>

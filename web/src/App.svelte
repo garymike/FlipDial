@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api } from './lib/api'
+  import { api, DEMO } from './lib/api'
   import ContactDetail from './lib/ContactDetail.svelte'
   import Dial from './lib/Dial.svelte'
   import Duplicates from './lib/Duplicates.svelte'
@@ -44,9 +44,15 @@
   ] as const
 </script>
 
+{#if DEMO}
+  <p class="demo-banner">
+    Demo with invented people. Changes reset when you reload.
+    <a href="https://github.com/garymike/FlipDial">Get FlipDial on GitHub</a>
+  </p>
+{/if}
 <header>
   <a class="brand" href={href({ name: 'wall' })} aria-label="FlipDial home">
-    <img src="/favicon.svg" alt="" width="30" height="30" />
+    <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="30" height="30" />
     <span>Flip<span class="accent">Dial</span></span>
   </a>
   <label class="search">
@@ -88,6 +94,19 @@
 {/if}
 
 <style>
+  .demo-banner {
+    margin: 0;
+    padding: 8px 16px;
+    background: var(--amber);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .demo-banner a {
+    color: var(--ink);
+    margin-left: 6px;
+  }
   header {
     display: flex;
     flex-wrap: wrap;

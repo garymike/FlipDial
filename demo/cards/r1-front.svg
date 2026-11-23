@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400">
+<rect width="700" height="400" fill="#2e2a24"/>
+<rect x="28" y="28" width="644" height="344" fill="none" stroke="#d4af37" stroke-width="2"/>
+<text x="70" y="140" font-family="Georgia, 'Times New Roman', serif" font-size="46" font-style="italic" fill="#d4af37">Rosa Vintergaard</text>
+<text x="70" y="182" font-family="Georgia, 'Times New Roman', serif" font-size="22" fill="#efe6d2">Jewelry Artist · Vinter Metals</text>
+<text x="70" y="260" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#efe6d2">rosa@vintermetals.example</text>
+<text x="70" y="292" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#efe6d2">(312) 555-0109</text>
+</svg>

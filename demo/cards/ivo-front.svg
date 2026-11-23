@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400">
+<rect width="700" height="400" fill="#5a3d2b"/>
+<circle cx="350.0" cy="100" r="46" fill="none" stroke="#f0e3cf" stroke-width="4"/>
+<text x="350.0" y="114" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="38" fill="#f0e3cf">BD</text>
+<text x="350.0" y="208" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="36" fill="#f0e3cf">Ivo Brandt</text>
+<text x="350.0" y="244" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" letter-spacing="3" fill="#f0e3cf">FURNITURE MAKER · BRANDT &amp; DAUGHTERS</text>
+<text x="350.0" y="320" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#f0e3cf">ivo@brandtdaughters.example   ·   (708) 555-0137</text>
+<text x="350.0" y="352" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#f0e3cf">brandtdaughters.example</text>
+</svg>

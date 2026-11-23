@@ -1,0 +1,515 @@
+{
+  "contacts": [
+    {
+      "uid": "demo-ada",
+      "full_name": "Ada Quillfeather",
+      "title": "Glass Artist",
+      "organization": "Quillfeather Glassworks",
+      "emails": [
+        "ada@quillfeather.example"
+      ],
+      "phones": [
+        "(312) 555-0142"
+      ],
+      "websites": [
+        "quillfeather.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "Art Fair 2026"
+      ],
+      "event": "Art Fair 2026",
+      "met_on": "2026-05-16",
+      "starred": true,
+      "source": "scan",
+      "card_id": "ada",
+      "has_back": true
+    },
+    {
+      "uid": "demo-bram",
+      "full_name": "Bram Okonkwo-Lind",
+      "title": "Founder",
+      "organization": "Lindworth Letterpress",
+      "emails": [
+        "bram@lindworth.example"
+      ],
+      "phones": [
+        "(773) 555-0118"
+      ],
+      "websites": [
+        "lindworth.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "Art Fair 2026"
+      ],
+      "event": "Art Fair 2026",
+      "met_on": "2026-05-16",
+      "starred": false,
+      "source": "scan",
+      "card_id": "bram",
+      "has_back": false
+    },
+    {
+      "uid": "demo-celia",
+      "full_name": "Celia Marchetti",
+      "title": "Ceramicist",
+      "organization": "Studio Terra Nuova",
+      "emails": [
+        "celia@terranuova.example"
+      ],
+      "phones": [
+        "(312) 555-0177"
+      ],
+      "websites": [
+        "terranuova.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "Art Fair 2026"
+      ],
+      "event": "Art Fair 2026",
+      "met_on": "2026-05-17",
+      "starred": true,
+      "source": "scan",
+      "card_id": "celia",
+      "has_back": true
+    },
+    {
+      "uid": "demo-dev",
+      "full_name": "Devika Rao",
+      "title": "Printmaker",
+      "organization": "Ink & Iron Press",
+      "emails": [
+        "devika@inkandiron.example"
+      ],
+      "phones": [
+        "(708) 555-0103"
+      ],
+      "websites": [
+        "inkandiron.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "Art Fair 2026"
+      ],
+      "event": "Art Fair 2026",
+      "met_on": "2026-05-17",
+      "starred": false,
+      "source": "scan",
+      "card_id": "dev",
+      "has_back": false
+    },
+    {
+      "uid": "demo-eli",
+      "full_name": "Elias Strand",
+      "title": "Gallery Director",
+      "organization": "North Pier Gallery",
+      "emails": [
+        "elias@northpier.example"
+      ],
+      "phones": [
+        "(312) 555-0156"
+      ],
+      "websites": [
+        "northpier.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "Art Fair 2026"
+      ],
+      "event": "Art Fair 2026",
+      "met_on": "2026-05-18",
+      "starred": false,
+      "source": "scan",
+      "card_id": "eli",
+      "has_back": true
+    },
+    {
+      "uid": "demo-fen",
+      "full_name": "Fenna de Wit",
+      "title": "Textile Designer",
+      "organization": "Wovenhouse",
+      "emails": [
+        "fenna@wovenhouse.example"
+      ],
+      "phones": [
+        "(773) 555-0181"
+      ],
+      "websites": [
+        "wovenhouse.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "Design Week 2026"
+      ],
+      "event": "Design Week 2026",
+      "met_on": "2026-09-22",
+      "starred": true,
+      "source": "scan",
+      "card_id": "fen",
+      "has_back": false
+    },
+    {
+      "uid": "demo-gus",
+      "full_name": "Gustavo Ilunga",
+      "title": "Industrial Designer",
+      "organization": "Formwell Studio",
+      "emails": [
+        "gus@formwell.example"
+      ],
+      "phones": [
+        "(312) 555-0124"
+      ],
+      "websites": [
+        "formwell.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "Design Week 2026"
+      ],
+      "event": "Design Week 2026",
+      "met_on": "2026-09-22",
+      "starred": false,
+      "source": "scan",
+      "card_id": "gus",
+      "has_back": false
+    },
+    {
+      "uid": "demo-hana",
+      "full_name": "Hana Kowalczyk",
+      "title": "Type Designer",
+      "organization": "Kerning Field Foundry",
+      "emails": [
+        "hana@kerningfield.example"
+      ],
+      "phones": [
+        "(773) 555-0169"
+      ],
+      "websites": [
+        "kerningfield.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "Design Week 2026"
+      ],
+      "event": "Design Week 2026",
+      "met_on": "2026-09-23",
+      "starred": false,
+      "source": "scan",
+      "card_id": "hana",
+      "has_back": true
+    },
+    {
+      "uid": "demo-ivo",
+      "full_name": "Ivo Brandt",
+      "title": "Furniture Maker",
+      "organization": "Brandt & Daughters",
+      "emails": [
+        "ivo@brandtdaughters.example"
+      ],
+      "phones": [
+        "(708) 555-0137"
+      ],
+      "websites": [
+        "brandtdaughters.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "Design Week 2026"
+      ],
+      "event": "Design Week 2026",
+      "met_on": "2026-09-24",
+      "starred": false,
+      "source": "scan",
+      "card_id": "ivo",
+      "has_back": false
+    },
+    {
+      "uid": "demo-jun",
+      "full_name": "Jun Takeda-Moss",
+      "title": "Security Architect",
+      "organization": "Bastion Labs",
+      "emails": [
+        "jun@bastionlabs.example"
+      ],
+      "phones": [
+        "(312) 555-0193"
+      ],
+      "websites": [
+        "bastionlabs.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "SecCon 2026"
+      ],
+      "event": "SecCon 2026",
+      "met_on": "2026-10-08",
+      "starred": true,
+      "source": "scan",
+      "card_id": "jun",
+      "has_back": true
+    },
+    {
+      "uid": "demo-kai",
+      "full_name": "Kailani Reyes",
+      "title": "Threat Researcher",
+      "organization": "Tidepool Security",
+      "emails": [
+        "kai@tidepool.example"
+      ],
+      "phones": [
+        "(773) 555-0111"
+      ],
+      "websites": [
+        "tidepool.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "SecCon 2026"
+      ],
+      "event": "SecCon 2026",
+      "met_on": "2026-10-08",
+      "starred": false,
+      "source": "scan",
+      "card_id": "kai",
+      "has_back": false
+    },
+    {
+      "uid": "demo-lev",
+      "full_name": "Lev Arkhipov",
+      "title": "CTO",
+      "organization": "Quorum Ledger",
+      "emails": [
+        "lev@quorumledger.example"
+      ],
+      "phones": [
+        "(312) 555-0148"
+      ],
+      "websites": [
+        "quorumledger.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "SecCon 2026"
+      ],
+      "event": "SecCon 2026",
+      "met_on": "2026-10-09",
+      "starred": false,
+      "source": "scan",
+      "card_id": "lev",
+      "has_back": false
+    },
+    {
+      "uid": "demo-mia",
+      "full_name": "Mia Okafor",
+      "title": "Community Lead",
+      "organization": "Open Rowing Collective",
+      "emails": [
+        "mia@openrowing.example"
+      ],
+      "phones": [
+        "(708) 555-0172"
+      ],
+      "websites": [
+        "openrowing.example"
+      ],
+      "socials": [],
+      "address": "",
+      "categories": [
+        "SecCon 2026"
+      ],
+      "event": "SecCon 2026",
+      "met_on": "2026-10-09",
+      "starred": true,
+      "source": "scan",
+      "card_id": "mia",
+      "has_back": true
+    },
+    {
+      "uid": "demo-noor",
+      "full_name": "Noor Haddad",
+      "title": "Producer",
+      "organization": "Low Tide Records",
+      "emails": [
+        "noor@lowtide.example"
+      ],
+      "phones": [
+        "(312) 555-0130"
+      ],
+      "websites": [],
+      "socials": [],
+      "address": "",
+      "categories": [],
+      "event": "",
+      "met_on": "",
+      "starred": true,
+      "source": "google",
+      "card_id": null,
+      "has_back": false
+    },
+    {
+      "uid": "demo-otto",
+      "full_name": "Otto Lindqvist",
+      "title": "Sound Designer",
+      "organization": "Foley & Field",
+      "emails": [],
+      "phones": [
+        "(773) 555-0185"
+      ],
+      "websites": [],
+      "socials": [
+        {
+          "platform": "linkedin",
+          "handle": "https://linkedin.example/in/otto-lindqvist"
+        }
+      ],
+      "address": "",
+      "categories": [],
+      "event": "",
+      "met_on": "2025-03-11",
+      "starred": false,
+      "source": "linkedin",
+      "card_id": null,
+      "has_back": false
+    },
+    {
+      "uid": "demo-pia",
+      "full_name": "Pia Santoro",
+      "title": "Cycling Coach",
+      "organization": "Cadence Club",
+      "emails": [
+        "pia@cadence.example"
+      ],
+      "phones": [],
+      "websites": [],
+      "socials": [],
+      "address": "",
+      "categories": [],
+      "event": "",
+      "met_on": "",
+      "starred": false,
+      "source": "manual",
+      "card_id": null,
+      "has_back": false
+    },
+    {
+      "uid": "demo-ada2",
+      "full_name": "Quillfeather, Ada",
+      "title": "Artist",
+      "organization": "Quillfeather Glass",
+      "emails": [
+        "ada@quillfeather.example"
+      ],
+      "phones": [
+        "312-555-0142"
+      ],
+      "websites": [],
+      "socials": [],
+      "address": "",
+      "categories": [],
+      "event": "",
+      "met_on": "",
+      "starred": false,
+      "source": "manual",
+      "card_id": null,
+      "has_back": false
+    }
+  ],
+  "review": [
+    {
+      "card_id": "r1",
+      "status": "review",
+      "created_at": "2026-11-20T15:04:00Z",
+      "has_back": false,
+      "flags": [
+        "low_confidence:phones"
+      ],
+      "error": null,
+      "fields": {
+        "full_name": {
+          "value": "Rosa Vintergaard",
+          "confidence": 0.97
+        },
+        "title": {
+          "value": "Jewelry Artist",
+          "confidence": 0.97
+        },
+        "organization": {
+          "value": "Vinter Metals",
+          "confidence": 0.97
+        },
+        "emails": [
+          {
+            "value": "rosa@vintermetals.example",
+            "confidence": 0.97
+          }
+        ],
+        "phones": [
+          {
+            "value": "(312) 555-0109",
+            "confidence": 0.42
+          }
+        ],
+        "websites": [],
+        "socials": [],
+        "address": {
+          "value": "",
+          "confidence": 0.97
+        }
+      }
+    },
+    {
+      "card_id": "r2",
+      "status": "review",
+      "created_at": "2026-11-20T15:04:00Z",
+      "has_back": false,
+      "flags": [],
+      "error": null,
+      "fields": {
+        "full_name": {
+          "value": "Sami Al-Rashid",
+          "confidence": 0.97
+        },
+        "title": {
+          "value": "Muralist",
+          "confidence": 0.97
+        },
+        "organization": {
+          "value": "Wallwork Collective",
+          "confidence": 0.97
+        },
+        "emails": [
+          {
+            "value": "sami@wallwork.example",
+            "confidence": 0.97
+          }
+        ],
+        "phones": [
+          {
+            "value": "(773) 555-0164",
+            "confidence": 0.95
+          }
+        ],
+        "websites": [],
+        "socials": [],
+        "address": {
+          "value": "",
+          "confidence": 0.97
+        }
+      }
+    }
+  ]
+}

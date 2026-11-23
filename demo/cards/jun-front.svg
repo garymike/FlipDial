@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400">
+<rect width="700" height="400" fill="#0f1b2d"/>
+<rect x="60" y="70" width="70" height="6" fill="#4fd1c5"/>
+<text x="60" y="140" font-family="Helvetica, Arial, sans-serif" font-size="40" font-weight="700" fill="#e6f1ff">Jun Takeda-Moss</text>
+<text x="60" y="178" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#4fd1c5">Security Architect</text>
+<text x="60" y="206" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#e6f1ff" opacity="0.8">Bastion Labs</text>
+<text x="60" y="272" font-family="Courier New, monospace" font-size="18" fill="#e6f1ff">jun@bastionlabs.example</text>
+<text x="60" y="302" font-family="Courier New, monospace" font-size="18" fill="#e6f1ff">(312) 555-0193</text>
+<text x="60" y="332" font-family="Courier New, monospace" font-size="18" fill="#e6f1ff">bastionlabs.example</text>
+</svg>
