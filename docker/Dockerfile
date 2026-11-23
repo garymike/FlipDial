@@ -1,5 +1,5 @@
 # Build the web app
-FROM node:22-alpine AS web
+FROM node:26-alpine AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -7,7 +7,7 @@ COPY web/ ./
 RUN npm run build
 
 # Runtime
-FROM python:3.13-slim
+FROM python:3.15-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     FLIPDIAL_HOST=0.0.0.0 FLIPDIAL_DATA_DIR=/data
 RUN useradd --system --uid 10001 --home-dir /nonexistent flipdial

@@ -29,9 +29,24 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_cards_status ON cards(status);
     """,
+    # 2: extraction results and retry tracking
+    """
+    ALTER TABLE cards ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE cards ADD COLUMN last_error TEXT;
+    CREATE TABLE extractions (
+        card_id     TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+        created_at  TEXT NOT NULL,
+        reader      TEXT NOT NULL,
+        fields_json TEXT NOT NULL,
+        flags_json  TEXT NOT NULL,
+        dropped     INTEGER NOT NULL DEFAULT 0,
+        seconds     REAL NOT NULL
+    );
+    CREATE INDEX idx_extractions_card ON extractions(card_id);
+    """,
 ]
 
-STATUSES = ("extract_pending", "review", "approved", "dismissed")
+STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")
 
 
 def connect(path: Path) -> sqlite3.Connection:

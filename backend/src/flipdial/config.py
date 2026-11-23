@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     model_name: str = "llama3.2-vision"
     model_api_key: SecretStr | None = None
     allow_remote_model: bool = False
+    model_timeout_seconds: float = 120.0
+    extract_max_attempts: int = 3
 
     @model_validator(mode="after")
     def _defaults_and_guards(self) -> Settings:

@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=2.1",
     "opencv-python-headless>=4.10",
     "pypdfium2>=4.30",
+    "httpx>=0.28",
 ]
 
 [project.optional-dependencies]

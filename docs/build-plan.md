@@ -30,7 +30,7 @@ Scraping LinkedIn or any other site, cloud processing by default, sales pipeline
 |---|---|---|
 | 0 | Scaffold (done) | Repo, docs, CI, config, logging, health endpoint |
 | 1 | Ingest (done) | A dropped image pair becomes a cropped, paired item in the review queue |
-| 2 | Extraction | Items carry schema-validated fields with confidence; accuracy measured on a private test set |
+| 2 | Extraction (done) | Items carry schema-validated fields with confidence; accuracy measured on a private test set |
 | 3 | CardDAV | Approved items are written to and read from a CardDAV server; round-trip tests pass |
 | 4 | Wall + detail | Browse, filter, star, flip, edit |
 | 5 | Dial | Drag, scroll, keyboard, search-to-dial, reduced motion |
