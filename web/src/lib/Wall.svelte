@@ -1,0 +1,368 @@
+<script lang="ts">
+  import { api, describe, type Contact, type ContactList } from './api'
+  import FlipCard from './FlipCard.svelte'
+  import { href } from './router.svelte'
+  import Star from './Star.svelte'
+
+  let { query = '' }: { query?: string } = $props()
+
+  type Scan = 'all' | 'yes' | 'no'
+  let deck = $state('')
+  let starredOnly = $state(false)
+  let scan = $state<Scan>('all')
+  let data = $state<ContactList | null>(null)
+  let error = $state('')
+  let syncing = $state(false)
+  let flipped = $state<Record<string, boolean>>({})
+
+  async function load() {
+    try {
+      data = await api.contacts({ q: query, deck, scan, starred: starredOnly })
+      error = ''
+    } catch (e) {
+      error = describe(e)
+    }
+  }
+
+  $effect(() => {
+    // reload whenever a filter changes
+    void [query, deck, scan, starredOnly]
+    load()
+  })
+
+  async function syncNow() {
+    syncing = true
+    try {
+      await api.sync()
+      await load()
+    } catch (e) {
+      error = describe(e)
+    } finally {
+      syncing = false
+    }
+  }
+
+  async function toggleStar(c: Contact) {
+    const next = !c.starred
+    c.starred = next
+    try {
+      await api.update(c.uid, { starred: next })
+      if (starredOnly && !next) await load()
+    } catch (e) {
+      c.starred = !next
+      error = describe(e)
+    }
+  }
+
+  function pickDeck(name: string, starred = false) {
+    deck = name
+    starredOnly = starred
+  }
+
+  const heading = $derived(starredOnly ? 'Starred' : deck || 'All contacts')
+  const scanOptions: { id: Scan; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'yes', label: 'Has scan' },
+    { id: 'no', label: 'No scan' },
+  ]
+</script>
+
+<div class="layout">
+  <aside>
+    <section>
+      <h2>Decks</h2>
+      <button type="button" class="deck" aria-pressed={!deck && !starredOnly} onclick={() => pickDeck('')}>
+        <span>All contacts</span><span class="n">{data?.total ?? ''}</span>
+      </button>
+      <button type="button" class="deck" aria-pressed={starredOnly} onclick={() => pickDeck('', true)}>
+        <span>Starred</span><span class="n">{data?.starred ?? ''}</span>
+      </button>
+      {#each data?.decks ?? [] as d (d.name)}
+        <button type="button" class="deck" aria-pressed={deck === d.name} onclick={() => pickDeck(d.name)}>
+          <span>{d.name}</span><span class="n">{d.count}</span>
+        </button>
+      {/each}
+    </section>
+    <section class="panel">
+      <h2>Sync</h2>
+      <div class="row"><span class="badge" aria-hidden="true">S</span><span>Contacts server</span></div>
+      <button type="button" class="secondary" onclick={syncNow} disabled={syncing}>
+        {syncing ? 'Syncing…' : 'Sync now'}
+      </button>
+    </section>
+  </aside>
+
+  <main>
+    <div class="toolbar">
+      <h1>{heading} <span class="count">{data?.contacts.length ?? 0} contacts</span></h1>
+      <div class="segmented" role="group" aria-label="Scan filter">
+        {#each scanOptions as o (o.id)}
+          <button type="button" aria-pressed={scan === o.id} onclick={() => (scan = o.id)}>{o.label}</button>
+        {/each}
+      </div>
+    </div>
+
+    {#if error}<p class="error" role="alert">{error}</p>{/if}
+
+    {#if data && data.contacts.length === 0}
+      <p class="empty">No contacts here yet. Scan some cards, then approve them in the review queue.</p>
+    {/if}
+
+    <ul class="grid">
+      {#each data?.contacts ?? [] as c (c.uid)}
+        <li>
+          <button
+            type="button"
+            class="tile"
+            aria-label={`Flip card for ${c.full_name}`}
+            onclick={() => (flipped[c.uid] = !flipped[c.uid])}
+          >
+            <FlipCard contact={c} flipped={!!flipped[c.uid]} />
+          </button>
+          <div class="foot">
+            <div class="who">
+              <a href={href({ name: 'contact', uid: c.uid })}>{c.full_name}</a>
+              <span class="sub">{c.event || 'No event'} · {c.card_id ? 'Scan' : c.source}</span>
+            </div>
+            <div class="actions">
+              <span class="badge" role="img" aria-label="Saved to contacts server" title="Saved to contacts server">S</span>
+              <Star on={c.starred} label={`${c.starred ? 'Unstar' : 'Star'} ${c.full_name}`} onclick={() => toggleStar(c)} />
+            </div>
+          </div>
+        </li>
+      {/each}
+    </ul>
+  </main>
+</div>
+
+<style>
+  .layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    padding: 28px 32px 48px;
+  }
+  aside {
+    flex: 1 1 220px;
+    max-width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  main {
+    flex: 999 1 560px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  h2 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ash);
+    font-weight: 600;
+  }
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .deck {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--bone);
+    font: inherit;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .deck[aria-pressed='true'] {
+    background: #2a2d33;
+    box-shadow: inset 3px 0 0 var(--amber);
+  }
+  .n {
+    color: var(--ash);
+    font-size: 13px;
+  }
+  .panel {
+    gap: 10px;
+    padding: 16px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid #2c2f36;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: #23262c;
+    border: 1px solid var(--line);
+    color: #d6d1c9;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .secondary {
+    min-height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--graphite);
+    color: var(--bone);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 30px;
+    font-weight: 600;
+  }
+  .count {
+    color: var(--ash);
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .segmented {
+    display: flex;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--graphite);
+  }
+  .segmented button {
+    min-height: 36px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #bdb8af;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .segmented button[aria-pressed='true'] {
+    background: #2e3239;
+    color: var(--bone);
+  }
+  .grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 28px 24px;
+  }
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .tile {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .who {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .who a {
+    color: var(--bone);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .who a:hover {
+    text-decoration: underline;
+  }
+  .sub {
+    font-size: 13px;
+    color: var(--ash);
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: -8px -10px 0 0;
+  }
+  .error {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #3a2a1a;
+    color: var(--signal);
+  }
+  .empty {
+    color: var(--ash);
+  }
+  /* Phones: decks become a scrolling row so cards are visible right away. */
+  @media (max-width: 700px) {
+    .layout {
+      gap: 16px;
+      padding: 16px;
+    }
+    aside {
+      max-width: none;
+      flex-basis: 100%;
+      gap: 0;
+    }
+    aside section:first-child {
+      flex-direction: row;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    aside section:first-child h2,
+    .panel {
+      display: none;
+    }
+    .deck {
+      width: auto;
+      flex-shrink: 0;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+    }
+    .deck[aria-pressed='true'] {
+      box-shadow: none;
+      border-color: var(--amber);
+    }
+  }
+</style>

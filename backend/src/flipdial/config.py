@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Server
     host: str = "127.0.0.1"
     port: int = 8080
+    web_dir: Path | None = None  # built web app to serve (web/dist)
 
     # Storage
     data_dir: Path = Path("./data")

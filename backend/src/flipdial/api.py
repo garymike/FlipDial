@@ -1,0 +1,252 @@
+"""HTTP API used by the web app.
+
+Every value returned here is plain data; the web app renders it as text, never as HTML.
+Mutating requests must carry the X-FlipDial-Request header and, when the browser sends an
+Origin, it must match this server (blocks cross-site requests).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field, StringConstraints
+
+from flipdial import contacts, db
+from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
+from flipdial.carddav.contact import ReviewedContact
+from flipdial.carddav.sync import ApproveError, approve_card
+from flipdial.config import Settings
+
+CARD_ID = re.compile(r"^\d{8}T\d{6}-[0-9a-f]{10}$")
+Text = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+Short = Annotated[str, StringConstraints(strip_whitespace=True, max_length=80)]
+
+
+class Social(BaseModel):
+    platform: Short = ""
+    handle: Short = ""
+
+
+class ContactIn(BaseModel):
+    full_name: Text = Field(min_length=1)
+    title: Text = ""
+    organization: Text = ""
+    emails: list[Text] = Field(default_factory=list, max_length=10)
+    phones: list[Text] = Field(default_factory=list, max_length=10)
+    websites: list[Text] = Field(default_factory=list, max_length=10)
+    socials: list[Social] = Field(default_factory=list, max_length=10)
+    address: Text = ""
+    event: Short = ""
+    met_on: Annotated[str, StringConstraints(pattern=r"^(\d{4}-\d{2}-\d{2})?$")] = ""
+    starred: bool = False
+    tags: list[Short] = Field(default_factory=list, max_length=20)
+
+
+class ContactPatch(BaseModel):
+    full_name: Text | None = Field(default=None, min_length=1)
+    title: Text | None = None
+    organization: Text | None = None
+    emails: list[Text] | None = Field(default=None, max_length=10)
+    phones: list[Text] | None = Field(default=None, max_length=10)
+    websites: list[Text] | None = Field(default=None, max_length=10)
+    socials: list[Social] | None = Field(default=None, max_length=10)
+    address: Text | None = None
+    event: Short | None = None
+    met_on: Annotated[str, StringConstraints(pattern=r"^(\d{4}-\d{2}-\d{2})?$")] | None = None
+    starred: bool | None = None
+    tags: list[Short] | None = Field(default=None, max_length=20)
+
+
+def settings_dep(request: Request) -> Settings:
+    return request.app.state.settings
+
+
+def client_dep(request: Request) -> CardDAVClient:
+    try:
+        return request.app.state.carddav_factory()
+    except CardDAVError as exc:
+        raise HTTPException(503, exc.code) from exc
+
+
+SettingsDep = Annotated[Settings, Depends(settings_dep)]
+ClientDep = Annotated[CardDAVClient, Depends(client_dep)]
+router = APIRouter(prefix="/api")
+
+
+def _dav_errors(exc: CardDAVError) -> HTTPException:
+    if isinstance(exc, ConflictError):
+        return HTTPException(409, "changed_elsewhere")
+    return HTTPException(502, exc.code)
+
+
+def _card_id(card_id: str) -> str:
+    if not CARD_ID.match(card_id):
+        raise HTTPException(404, "not_found")
+    return card_id
+
+
+# -- contacts -----------------------------------------------------------------------
+
+
+@router.get("/contacts")
+def list_contacts(
+    s: SettingsDep,
+    q: Annotated[str, Query(max_length=100)] = "",
+    deck: Annotated[str, Query(max_length=80)] = "",
+    scan: Literal["all", "yes", "no"] = "all",
+    starred: bool = False,
+) -> dict:
+    items = contacts.list_contacts(s)
+    needle = q.casefold().strip()
+    out = []
+    for c in items:
+        if deck and c.event != deck and deck not in c.categories:
+            continue
+        if scan == "yes" and not c.card_id or scan == "no" and c.card_id:
+            continue
+        if starred and not c.starred:
+            continue
+        if (
+            needle
+            and needle
+            not in " ".join([c.full_name, c.organization, c.title, *c.emails, c.event]).casefold()
+        ):
+            continue
+        out.append(c.as_dict())
+    decks: dict[str, int] = {}
+    for c in items:
+        if c.event:
+            decks[c.event] = decks.get(c.event, 0) + 1
+    return {
+        "contacts": out,
+        "total": len(items),
+        "starred": sum(c.starred for c in items),
+        "with_scan": sum(bool(c.card_id) for c in items),
+        "decks": [{"name": k, "count": v} for k, v in sorted(decks.items())],
+    }
+
+
+@router.get("/contacts/{uid}")
+def get_contact(uid: str, s: SettingsDep) -> dict:
+    found = contacts.get_contact(s, uid)
+    if found is None:
+        raise HTTPException(404, "not_found")
+    return contacts.view(found[0]).as_dict()
+
+
+@router.patch("/contacts/{uid}")
+def patch_contact(uid: str, body: ContactPatch, s: SettingsDep, client: ClientDep) -> dict:
+    changes = body.model_dump(exclude_none=True)
+    try:
+        return contacts.update_contact(s, client, uid, changes).as_dict()
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+
+
+@router.post("/sync")
+def sync(s: SettingsDep, client: ClientDep) -> dict:
+    try:
+        return contacts.sync(s, client)
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+
+
+# -- review queue -------------------------------------------------------------------
+
+
+@router.get("/review")
+def review_queue(s: SettingsDep) -> dict:
+    with db.session(s.db_path) as conn:
+        rows = conn.execute(
+            "SELECT c.id, c.created_at, c.has_back, c.back_blank, c.status, c.last_error, "
+            "e.fields_json, e.flags_json FROM cards c LEFT JOIN extractions e ON e.rowid = ("
+            "SELECT rowid FROM extractions WHERE card_id = c.id ORDER BY rowid DESC LIMIT 1) "
+            "WHERE c.status IN ('review', 'extract_pending', 'extract_failed') ORDER BY c.id"
+        ).fetchall()
+    items = []
+    for r in rows:
+        items.append(
+            {
+                "card_id": r["id"],
+                "status": r["status"],
+                "created_at": r["created_at"],
+                "has_back": bool(r["has_back"]) and not r["back_blank"],
+                "fields": json.loads(r["fields_json"]) if r["fields_json"] else None,
+                "flags": json.loads(r["flags_json"]) if r["flags_json"] else [],
+                "error": r["last_error"],
+            }
+        )
+    return {"items": items, "ready": sum(i["status"] == "review" for i in items)}
+
+
+@router.post("/review/{card_id}/approve")
+def approve(card_id: str, body: ContactIn, s: SettingsDep, client: ClientDep) -> dict:
+    _card_id(card_id)
+    data = body.model_dump()
+    data["socials"] = [(x["platform"], x["handle"]) for x in data["socials"]]
+    reviewed = ReviewedContact(**data, source="scan", has_scan=True)
+    try:
+        uid = approve_card(s, client, card_id, reviewed)
+        with db.session(s.db_path) as conn:
+            href = conn.execute("SELECT vcard_href FROM cards WHERE id = ?", (card_id,)).fetchone()[
+                0
+            ]
+        card, etag = client.get(href)
+        contacts.store(s, card, href, etag)
+    except ApproveError as exc:
+        raise HTTPException(409 if str(exc) == "not_in_review" else 404, str(exc)) from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    return contacts.view(card).as_dict() | {"uid": uid}
+
+
+@router.post("/review/{card_id}/dismiss")
+def dismiss(card_id: str, s: SettingsDep) -> dict:
+    _card_id(card_id)
+    with db.session(s.db_path) as conn:
+        n = conn.execute(
+            "UPDATE cards SET status = 'dismissed' WHERE id = ? AND status != 'approved'",
+            (card_id,),
+        ).rowcount
+    if not n:
+        raise HTTPException(404, "not_found")
+    return {"card_id": card_id, "status": "dismissed"}
+
+
+# -- images -------------------------------------------------------------------------
+
+DERIVED = {"front": "front.crop.jpg", "back": "back.crop.jpg", "thumb": "thumb.jpg"}
+
+
+@router.get("/cards/{card_id}/image/{name}")
+def card_image(card_id: str, name: str, s: SettingsDep) -> FileResponse:
+    _card_id(card_id)
+    if name not in DERIVED:
+        raise HTTPException(404, "not_found")
+    path = s.archive_dir / card_id / DERIVED[name]
+    if not path.is_file():
+        raise HTTPException(404, "not_found")
+    return FileResponse(
+        path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"}
+    )
+
+
+@router.get("/cards/{card_id}/original/{role}")
+def card_original(card_id: str, role: Literal["front", "back", "scan"], s: SettingsDep):
+    _card_id(card_id)
+    folder = s.archive_dir / card_id
+    matches = sorted(folder.glob(f"{role}.orig.*"))
+    if not matches:
+        raise HTTPException(404, "not_found")
+    return FileResponse(
+        matches[0],
+        media_type="application/octet-stream",
+        filename=matches[0].name,
+        headers={"Cache-Control": "private, no-store"},
+    )

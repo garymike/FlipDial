@@ -38,6 +38,24 @@ flowchart LR
 
 More detail in [docs/architecture.md](docs/architecture.md).
 
+## Try it locally
+
+```sh
+# Backend: API and workers
+cd backend
+uv sync
+cp ../config/flipdial.example.env .env   # then fill in your CardDAV server
+uv run flipdial worker &                 # watch the inbox and read cards
+uv run flipdial                          # API on http://127.0.0.1:8080
+
+# Web app (development)
+cd ../web
+npm install
+npm run dev                              # http://localhost:5173, talks to the API
+```
+
+The Docker image serves the built web app and the API together.
+
 ## Principles
 
 - **Local first.** No cloud services, no tracking, no outside downloads.

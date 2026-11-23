@@ -50,6 +50,17 @@ MIGRATIONS: list[str] = [
     ALTER TABLE cards ADD COLUMN vcard_etag TEXT;
     ALTER TABLE cards ADD COLUMN approved_at TEXT;
     """,
+    # 4: local copy of contacts from the CardDAV server, for fast browsing
+    """
+    CREATE TABLE contacts (
+        uid        TEXT PRIMARY KEY,
+        href       TEXT NOT NULL UNIQUE,
+        etag       TEXT,
+        vcard      TEXT NOT NULL,
+        sort_name  TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

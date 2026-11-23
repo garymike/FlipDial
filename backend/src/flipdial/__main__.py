@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> None:
 
     from flipdial.app import create_app
 
-    uvicorn.run(create_app(), host=settings.host, port=settings.port, log_config=None)
+    uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_config=None)
 
 
 if __name__ == "__main__":

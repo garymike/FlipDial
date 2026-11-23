@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import json
-import socket
-import subprocess
-import sys
-import time
 
 import httpx
 import pytest
+from conftest import USER, _free_port
 from pydantic import SecretStr
 
 from flipdial import db
@@ -17,54 +14,6 @@ from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact, apply, new_card
 from flipdial.carddav.sync import ApproveError, approve_card
 from flipdial.config import Settings
-
-USER = "tester"
-
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-@pytest.fixture(scope="module")
-def radicale(tmp_path_factory):
-    root = tmp_path_factory.mktemp("radicale")
-    port = _free_port()
-    cfg = root / "config"
-    cfg.write_text(
-        f"[server]\nhosts = 127.0.0.1:{port}\n"
-        "[auth]\ntype = none\n"
-        f"[storage]\nfilesystem_folder = {root / 'collections'}\n"
-        "[logging]\nlevel = warning\n"
-    )
-    proc = subprocess.Popen([sys.executable, "-m", "radicale", "--config", str(cfg)])  # noqa: S603
-    base = f"http://127.0.0.1:{port}/"
-    for _ in range(100):
-        try:
-            httpx.get(base, timeout=0.5)
-            break
-        except httpx.HTTPError:
-            time.sleep(0.1)
-    book = f"{base}{USER}/contacts/"
-    mkcol = (
-        '<?xml version="1.0"?><d:mkcol xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">'
-        "<d:set><d:prop><d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>"
-        "<d:displayname>Contacts</d:displayname></d:prop></d:set></d:mkcol>"
-    )
-    r = httpx.request("MKCOL", book, content=mkcol, auth=(USER, "x"))
-    assert r.status_code == 201, r.text
-    yield base
-    proc.terminate()
-    proc.wait(timeout=10)
-
-
-@pytest.fixture
-def dav_settings(settings, radicale):
-    settings.carddav_url = radicale
-    settings.carddav_username = USER
-    settings.carddav_password = SecretStr("x")
-    return settings
 
 
 def contact(name="Ava Example", **kw):

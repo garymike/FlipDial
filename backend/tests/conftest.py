@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import socket
+import subprocess
+import sys
+import time
+
 import cv2
+import httpx
 import numpy as np
 import pytest
 from PIL import Image
+from pydantic import SecretStr
 
 from flipdial.config import Settings
 
@@ -47,3 +54,52 @@ def card_photo(
 @pytest.fixture
 def make_card():
     return card_photo
+
+
+USER = "tester"
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+@pytest.fixture(scope="session")
+def radicale(tmp_path_factory):
+    root = tmp_path_factory.mktemp("radicale")
+    port = _free_port()
+    cfg = root / "config"
+    cfg.write_text(
+        f"[server]\nhosts = 127.0.0.1:{port}\n"
+        "[auth]\ntype = none\n"
+        f"[storage]\nfilesystem_folder = {root / 'collections'}\n"
+        "[logging]\nlevel = warning\n"
+    )
+    proc = subprocess.Popen([sys.executable, "-m", "radicale", "--config", str(cfg)])  # noqa: S603
+    base = f"http://127.0.0.1:{port}/"
+    for _ in range(100):
+        try:
+            httpx.get(base, timeout=0.5)
+            break
+        except httpx.HTTPError:
+            time.sleep(0.1)
+    book = f"{base}{USER}/contacts/"
+    mkcol = (
+        '<?xml version="1.0"?><d:mkcol xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">'
+        "<d:set><d:prop><d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>"
+        "<d:displayname>Contacts</d:displayname></d:prop></d:set></d:mkcol>"
+    )
+    r = httpx.request("MKCOL", book, content=mkcol, auth=(USER, "x"))
+    assert r.status_code == 201, r.text
+    yield base
+    proc.terminate()
+    proc.wait(timeout=10)
+
+
+@pytest.fixture
+def dav_settings(settings, radicale):
+    settings.carddav_url = radicale
+    settings.carddav_username = USER
+    settings.carddav_password = SecretStr("x")
+    return settings

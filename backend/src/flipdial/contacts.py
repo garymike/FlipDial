@@ -1,0 +1,212 @@
+"""Contacts: a local copy of the CardDAV address book, and edits written back to it.
+
+The CardDAV server stays the source of truth. The local copy makes browsing fast and lets
+FlipDial work while the server is briefly unreachable. It is refreshed by `sync()`.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from typing import Any
+
+from flipdial import db
+from flipdial.carddav.client import CardDAVClient, CardDAVError
+from flipdial.carddav.contact import ReviewedContact, apply
+from flipdial.carddav.vcard import VCard, VCardError, split_unescaped, unescape
+from flipdial.config import Settings
+
+log = logging.getLogger("flipdial.contacts")
+
+
+@dataclass
+class ContactView:
+    uid: str
+    full_name: str
+    title: str = ""
+    organization: str = ""
+    emails: list[str] = field(default_factory=list)
+    phones: list[str] = field(default_factory=list)
+    websites: list[str] = field(default_factory=list)
+    socials: list[dict[str, str]] = field(default_factory=list)
+    address: str = ""
+    categories: list[str] = field(default_factory=list)
+    event: str = ""
+    met_on: str = ""
+    starred: bool = False
+    source: str = ""
+    card_id: str | None = None  # set when the contact has a scan
+    has_back: bool = False
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _categories(card: VCard) -> list[str]:
+    out: list[str] = []
+    for p in card.get("CATEGORIES"):
+        out += [unescape(x) for x in split_unescaped(p.value, ",") if x]
+    return out
+
+
+def view(card: VCard) -> ContactView:
+    adr = card.get("ADR")
+    address = ""
+    if adr:
+        parts = [unescape(x) for x in split_unescaped(adr[0].value, ";")]
+        address = ", ".join(x for x in parts if x)
+    socials = [
+        {"platform": dict(p.params).get("TYPE", ""), "handle": p.text()}
+        for p in card.get("SOCIALPROFILE") + card.get("X-SOCIALPROFILE")
+    ]
+    cats = _categories(card)
+    return ContactView(
+        uid=card.uid,
+        full_name=card.first("FN"),
+        title=card.first("TITLE"),
+        organization=unescape(split_unescaped(card.get("ORG")[0].value, ";")[0])
+        if card.get("ORG")
+        else "",
+        emails=[p.text() for p in card.get("EMAIL")],
+        phones=[p.text() for p in card.get("TEL")],
+        websites=[p.text() for p in card.get("URL")],
+        socials=socials,
+        address=address,
+        categories=[c for c in cats if c != "Starred"],
+        event=card.first("X-FLIPDIAL-EVENT"),
+        met_on=card.first("X-FLIPDIAL-MET-ON"),
+        starred="Starred" in cats or card.first("X-FLIPDIAL-STARRED") == "yes",
+        source=card.first("X-FLIPDIAL-SOURCE") or "other",
+        card_id=card.first("X-FLIPDIAL-CARD-ID") or None,
+    )
+
+
+def _sort_name(card: VCard) -> str:
+    return (card.first("FN") or card.first("ORG")).casefold()
+
+
+def store(settings: Settings, card: VCard, href: str, etag: str | None) -> None:
+    with db.session(settings.db_path) as conn:
+        conn.execute(
+            "INSERT INTO contacts (uid, href, etag, vcard, sort_name, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(uid) DO UPDATE SET href = excluded.href, "
+            "etag = excluded.etag, vcard = excluded.vcard, sort_name = excluded.sort_name, "
+            "updated_at = excluded.updated_at",
+            (
+                card.uid,
+                href,
+                etag,
+                card.render(),
+                _sort_name(card),
+                datetime.now(UTC).isoformat(timespec="seconds"),
+            ),
+        )
+
+
+def sync(settings: Settings, client: CardDAVClient) -> dict[str, int]:
+    """Bring the local copy in line with the server. Returns counts only."""
+    remotes = {r.href: r.etag for r in client.list()}
+    with db.session(settings.db_path) as conn:
+        local = {r["href"]: r["etag"] for r in conn.execute("SELECT href, etag FROM contacts")}
+    added = updated = skipped = 0
+    for href, etag in remotes.items():
+        if href in local and etag and local[href] == etag:
+            continue
+        try:
+            card, fresh = client.get(href)
+            if not card.uid:
+                skipped += 1
+                continue
+            store(settings, card, href, fresh or etag)
+        except (CardDAVError, VCardError):
+            skipped += 1
+            continue
+        if href in local:
+            updated += 1
+        else:
+            added += 1
+    gone = [h for h in local if h not in remotes]
+    with db.session(settings.db_path) as conn:
+        conn.executemany("DELETE FROM contacts WHERE href = ?", [(h,) for h in gone])
+    counts = {"added": added, "updated": updated, "removed": len(gone), "skipped": skipped}
+    log.info("contacts synced", extra=counts)
+    return counts
+
+
+def _cards_by_id(settings: Settings) -> dict[str, dict]:
+    with db.session(settings.db_path) as conn:
+        return {
+            r["id"]: dict(r)
+            for r in conn.execute(
+                "SELECT id, has_back, back_blank FROM cards WHERE status = 'approved'"
+            )
+        }
+
+
+def list_contacts(settings: Settings) -> list[ContactView]:
+    cards = _cards_by_id(settings)
+    with db.session(settings.db_path) as conn:
+        rows = conn.execute("SELECT vcard FROM contacts ORDER BY sort_name").fetchall()
+    out = []
+    for r in rows:
+        try:
+            v = view(VCard.parse(r["vcard"]))
+        except VCardError:
+            continue
+        info = cards.get(v.card_id or "")
+        if info is None:
+            v.card_id = None  # scan not on this FlipDial instance
+        else:
+            v.has_back = bool(info["has_back"]) and not info["back_blank"]
+        out.append(v)
+    return out
+
+
+def get_contact(settings: Settings, uid: str) -> tuple[VCard, str, str | None] | None:
+    with db.session(settings.db_path) as conn:
+        row = conn.execute(
+            "SELECT vcard, href, etag FROM contacts WHERE uid = ?", (uid,)
+        ).fetchone()
+    if row is None:
+        return None
+    return VCard.parse(row["vcard"]), row["href"], row["etag"]
+
+
+def to_reviewed(v: ContactView) -> ReviewedContact:
+    return ReviewedContact(
+        full_name=v.full_name,
+        title=v.title,
+        organization=v.organization,
+        emails=list(v.emails),
+        phones=list(v.phones),
+        websites=list(v.websites),
+        socials=[(s["platform"], s["handle"]) for s in v.socials],
+        address=v.address,
+        event=v.event,
+        met_on=v.met_on,
+        starred=v.starred,
+        tags=[c for c in v.categories if c != v.event],
+        source=v.source or "manual",
+        has_scan=bool(v.card_id),
+    )
+
+
+def update_contact(
+    settings: Settings, client: CardDAVClient, uid: str, changes: dict[str, Any]
+) -> ContactView:
+    """Apply changes and write them back using the cached ETag (refuses if changed elsewhere)."""
+    found = get_contact(settings, uid)
+    if found is None:
+        raise KeyError(uid)
+    card, href, etag = found
+    reviewed = to_reviewed(view(card))
+    for key, value in changes.items():
+        if key == "socials":
+            value = [(s.get("platform", ""), s.get("handle", "")) for s in value]
+        setattr(reviewed, key, value)
+    apply(card, reviewed)
+    remote = client.update(href, card, etag)
+    store(settings, card, remote.href, remote.etag)
+    log.info("contact updated", extra={"vcard_uid": uid, "fields": sorted(changes)})
+    return view(card)
