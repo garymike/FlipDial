@@ -84,6 +84,54 @@ export interface Match {
   contact: Contact
 }
 
+export type ImportField =
+  | ''
+  | 'full_name'
+  | 'given_name'
+  | 'family_name'
+  | 'organization'
+  | 'title'
+  | 'email'
+  | 'phone'
+  | 'website'
+  | 'linkedin'
+  | 'address'
+  | 'met_on'
+  | 'tags'
+  | 'note'
+
+export interface ImportOptions {
+  text: string
+  kind?: 'auto' | 'vcf' | 'csv'
+  mapping?: ImportField[]
+  deck?: string
+  include_duplicates?: boolean
+}
+
+export interface ImportCounts {
+  total: number
+  new: number
+  duplicate: number
+  invalid: number
+}
+
+export interface ImportPreview {
+  kind: 'vcf' | 'csv'
+  format: 'vcard' | 'linkedin' | 'google' | 'outlook' | 'csv'
+  headers?: string[]
+  mapping?: ImportField[]
+  counts: ImportCounts
+  rows: { row: number; name: string; organization: string; email: string; status: 'new' | 'duplicate' | 'invalid'; reason: string }[]
+}
+
+export interface ImportRecord {
+  id: number
+  created_at: string
+  format: string
+  counts: ImportCounts & { created: number; skipped: number; failed: number }
+  undone: boolean
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -151,6 +199,13 @@ export const api = {
   matches: (cardId: string) => call<{ matches: Match[] }>('GET', `/api/review/${cardId}/matches`),
   attach: (cardId: string, uid: string, input: ContactInput) =>
     call<Contact>('POST', `/api/review/${cardId}/attach/${encodeURIComponent(uid)}`, input),
+  importPreview: (o: ImportOptions) => call<ImportPreview>('POST', '/api/import/preview', o),
+  importRun: (o: ImportOptions) =>
+    call<{ import_id: number; format: string; counts: ImportRecord['counts'] }>('POST', '/api/import', o),
+  imports: () => call<{ imports: ImportRecord[] }>('GET', '/api/imports'),
+  undoImport: (id: number) => call<{ removed: number; kept_edited: number }>('POST', `/api/imports/${id}/undo`),
+  exportUrl: (kind: 'vcf' | 'csv' | 'backup') =>
+    kind === 'backup' ? '/api/export/backup' : `/api/export/contacts.${kind}`,
   image: (cardId: string, side: 'front' | 'back' | 'thumb') => `/api/cards/${cardId}/image/${side}`,
   original: (cardId: string, role: 'front' | 'back' | 'scan') =>
     `/api/cards/${cardId}/original/${role}`,
@@ -178,6 +233,12 @@ export function describe(err: unknown): string {
     network: 'FlipDial could not be reached.',
     already_undone: 'That merge was already undone.',
     same_contact: 'Pick two different contacts.',
+    file_too_large: 'That file is too large (10 MB limit). Split it and import the parts.',
+    too_many_rows: 'That file has too many rows (10,000 limit).',
+    too_many_cards: 'That file has too many contacts (10,000 limit).',
+    no_contacts_found: 'No contacts were found in that file.',
+    empty_file: 'That file is empty.',
+    bad_mapping: 'The column choices do not match the file. Pick the file again.',
   }
   return messages[code] ?? `Something went wrong (${code}).`
 }

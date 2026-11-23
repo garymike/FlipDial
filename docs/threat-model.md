@@ -36,6 +36,10 @@ Draft for v1. Review at each milestone.
 | Local database holds contact data (a copy of the address book, extraction results) | Keep the data folder on an encrypted volume; it is excluded from the repo; contacts can be re-synced from CardDAV |
 | Merge history keeps full copies of both contacts for undo | Stored only in the local database, alongside the contacts copy; same protection as the data folder |
 | Original scans downloaded through the web app | Served only from the card's own folder by fixed name; card IDs are validated; sent as downloads, never rendered inline |
+| Malicious import files (huge files, odd encodings, crafted CSV or vCard) | 10 MB and 10,000-contact limits; strict parsing; values length-limited; a preview before anything is saved; every import can be undone |
+| Spreadsheet formulas in exported CSV (CSV injection) | Cells starting with `=`, `+`, `-`, `@`, tab or carriage return are prefixed with `'` |
+| Backup archive holds every contact and scan | Downloaded on request only, never cached (`no-store`); temporary files removed after sending; documented as sensitive |
+| Tampered or hostile backup on restore (zip slip, zip bombs, swapped files) | Restore only into an empty folder; every file must be in the manifest with a safe path, matching size and SHA-256; sizes enforced while reading; nothing is put in place unless all checks pass |
 | Over-broad file access by the worker | Worker account can only write the inbox and archive folders |
 | Personal data in logs | Logs identify contacts by UID only; card text and model output never logged; debug mode expires |
 | Unwanted retention | "Forget this contact" removes the vCard, scans, derived files, index entries and graph edges, and records the deletion in the audit log |

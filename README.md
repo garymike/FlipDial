@@ -19,6 +19,7 @@ Scan, review, dial through, and sync to any CardDAV server.
   - **Map:** where you met people
 - **Mixes scanned and unscanned contacts.** Contacts without a scan get a generated "house card" so everything browses the same way.
 - **Finds duplicates** and merges them field by field, with undo.
+- **Imports and exports.** Bring in vCard, Google or Outlook CSV, and your LinkedIn connections export; export vCard or CSV; download a full backup of contacts and scans that restores with fingerprint checks.
 
 ## How it fits together
 
@@ -74,6 +75,7 @@ The Docker image serves the built web app and the API together.
 | [Reading cards](docs/extraction.md) | Fields, checks, flags, accuracy testing |
 | [Contacts server](docs/carddav.md) | CardDAV setup, Synology, what is written and kept |
 | [Duplicates](docs/duplicates.md) | How pairs are found, merging and undo |
+| [Import and export](docs/import-export.md) | vCard, CSV and LinkedIn import, exports, backup and restore |
 | [Data model](docs/data-model.md) | vCard fields and FlipDial extensions |
 | [Threat model](docs/threat-model.md) | Assets, threats, mitigations |
 | [Release checklist](docs/release-checklist.md) | What must pass before v1, including accuracy targets |

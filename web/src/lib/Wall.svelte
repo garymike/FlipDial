@@ -87,6 +87,7 @@
           <span>{d.name}</span><span class="n">{d.count}</span>
         </button>
       {/each}
+      <a class="deck phone-only" href={href({ name: 'transfer' })}>Import and export</a>
     </section>
     {#if dupes}
       <section class="panel">
@@ -100,6 +101,7 @@
       <button type="button" class="secondary" onclick={syncNow} disabled={syncing}>
         {syncing ? 'Syncing…' : 'Sync now'}
       </button>
+      <a class="cleanup" href={href({ name: 'transfer' })}>Import, export and backup</a>
     </section>
   </aside>
 
@@ -347,7 +349,17 @@
     color: var(--ash);
   }
   /* Phones: decks become a scrolling row so cards are visible right away. */
+  .phone-only {
+    display: none;
+  }
   @media (max-width: 700px) {
+    .phone-only {
+      display: flex;
+      align-items: center;
+      color: var(--ash);
+      text-decoration: none;
+      white-space: nowrap;
+    }
     .layout {
       gap: 16px;
       padding: 16px;

@@ -9,17 +9,23 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints
+from starlette.background import BackgroundTask
 
 from flipdial import contacts, db, duplicates
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
 from flipdial.config import Settings
+from flipdial.transfer import backup, importer
 
 CARD_ID = re.compile(r"^\d{8}T\d{6}-[0-9a-f]{10}$")
 Text = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
@@ -348,3 +354,123 @@ def attach(card_id: str, uid: str, body: ContactIn, s: SettingsDep, client: Clie
     except CardDAVError as exc:
         raise _dav_errors(exc) from exc
     return view.as_dict()
+
+
+# -- import and export ----------------------------------------------------------------
+
+FieldName = Literal[
+    "",
+    "full_name",
+    "given_name",
+    "family_name",
+    "organization",
+    "title",
+    "email",
+    "phone",
+    "website",
+    "linkedin",
+    "address",
+    "met_on",
+    "tags",
+    "note",
+]
+
+
+class ImportIn(BaseModel):
+    text: str = Field(min_length=1, max_length=importer.MAX_IMPORT_BYTES)
+    kind: Literal["auto", "vcf", "csv"] = "auto"
+    mapping: list[FieldName] | None = Field(default=None, max_length=200)
+    deck: Short = ""
+    include_duplicates: bool = False
+
+
+def _transfer_error(exc: importer.TransferError) -> HTTPException:
+    code = str(exc)
+    return HTTPException(404 if code == "not_found" else 422, code)
+
+
+@router.post("/import/preview")
+def import_preview(body: ImportIn, s: SettingsDep) -> dict:
+    try:
+        return importer.preview(s, body.text, body.kind, body.mapping, body.deck)
+    except importer.TransferError as exc:
+        raise _transfer_error(exc) from exc
+
+
+@router.post("/import")
+def import_contacts(body: ImportIn, s: SettingsDep, client: ClientDep) -> dict:
+    try:
+        return importer.run_import(
+            s, client, body.text, body.kind, body.mapping, body.deck, body.include_duplicates
+        )
+    except importer.TransferError as exc:
+        raise _transfer_error(exc) from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+
+
+@router.get("/imports")
+def imports(s: SettingsDep) -> dict:
+    return {"imports": importer.recent_imports(s)}
+
+
+@router.post("/imports/{import_id}/undo")
+def undo_import(import_id: int, s: SettingsDep, client: ClientDep) -> dict:
+    try:
+        return importer.undo_import(s, client, import_id)
+    except importer.TransferError as exc:
+        code = str(exc)
+        raise HTTPException(409 if code == "already_undone" else 404, code) from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+
+
+def _stamp() -> str:
+    return datetime.now(UTC).strftime("%Y%m%d")
+
+
+def _download(content: str, media: str, name: str, count: int) -> Response:
+    return Response(
+        content.encode("utf-8"),
+        media_type=media,
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "private, no-store",
+            "X-FlipDial-Count": str(count),
+        },
+    )
+
+
+@router.get("/export/contacts.vcf")
+def export_vcf(
+    s: SettingsDep, deck: Annotated[str, Query(max_length=80)] = "", starred: bool = False
+) -> Response:
+    text, n = backup.export_vcf(s, deck, starred)
+    return _download(text, "text/vcard; charset=utf-8", f"flipdial-contacts-{_stamp()}.vcf", n)
+
+
+@router.get("/export/contacts.csv")
+def export_csv(
+    s: SettingsDep, deck: Annotated[str, Query(max_length=80)] = "", starred: bool = False
+) -> Response:
+    text, n = backup.export_csv(s, deck, starred)
+    return _download(text, "text/csv; charset=utf-8", f"flipdial-contacts-{_stamp()}.csv", n)
+
+
+@router.get("/export/backup")
+def export_backup(s: SettingsDep) -> FileResponse:
+    s.data_dir.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix=".backup-", dir=s.data_dir))
+    dest = tmp / f"flipdial-backup-{_stamp()}.zip"
+    try:
+        backup.create_backup(s, dest)
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    return FileResponse(
+        dest,
+        media_type="application/zip",
+        filename=dest.name,
+        headers={"Cache-Control": "private, no-store"},
+        background=BackgroundTask(shutil.rmtree, tmp, ignore_errors=True),
+    )

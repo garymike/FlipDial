@@ -4,6 +4,7 @@
   import Dial from './lib/Dial.svelte'
   import Duplicates from './lib/Duplicates.svelte'
   import Review from './lib/Review.svelte'
+  import Transfer from './lib/Transfer.svelte'
   import { href, router } from './lib/router.svelte'
   import Wall from './lib/Wall.svelte'
 
@@ -54,6 +55,8 @@
   <Dial {query} />
 {:else if router.route.name === 'duplicates'}
   <Duplicates />
+{:else if router.route.name === 'transfer'}
+  <Transfer />
 {:else if router.route.name === 'review'}
   <Review onchange={refreshCount} />
 {:else if router.route.name === 'contact'}

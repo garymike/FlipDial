@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import socket
 import subprocess
 import sys
@@ -15,6 +16,12 @@ from PIL import Image
 from pydantic import SecretStr
 
 from flipdial.config import Settings
+
+
+@pytest.fixture(autouse=True)
+def _log_everything(caplog):
+    """Emit INFO logs in every test, so a bad `extra=` key fails here and not in production."""
+    caplog.set_level(logging.DEBUG, logger="flipdial")
 
 
 @pytest.fixture

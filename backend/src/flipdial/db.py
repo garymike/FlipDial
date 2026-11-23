@@ -80,6 +80,22 @@ MIGRATIONS: list[str] = [
         undone_at   TEXT
     );
     """,
+    # 6: imports, so each one can be undone
+    """
+    CREATE TABLE imports (
+        id          INTEGER PRIMARY KEY,
+        created_at  TEXT NOT NULL,
+        format      TEXT NOT NULL,
+        counts_json TEXT NOT NULL,
+        undone_at   TEXT
+    );
+    CREATE TABLE import_items (
+        import_id INTEGER NOT NULL REFERENCES imports(id) ON DELETE CASCADE,
+        uid       TEXT NOT NULL,
+        etag      TEXT,
+        PRIMARY KEY (import_id, uid)
+    );
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

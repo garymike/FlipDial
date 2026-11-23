@@ -49,6 +49,10 @@ archive/<card-id>/
   manifest.json       card ID, page numbers, SHA-256 of originals, crop results, vCard UID
 ```
 
+## Local database
+
+FlipDial's SQLite database (`flipdial.db` in the data folder) holds the review queue, extraction results, a local copy of the address book, duplicate decisions, merge history, and import history (which contacts each import created, so it can be undone). It is included in the [full backup](import-export.md#full-backup).
+
 ## Schema changes
 
 The extension schema is versioned. Migrations run on startup and are logged; they never delete original scans.
