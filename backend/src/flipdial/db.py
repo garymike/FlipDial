@@ -44,6 +44,12 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_extractions_card ON extractions(card_id);
     """,
+    # 3: where each approved card lives on the CardDAV server
+    """
+    ALTER TABLE cards ADD COLUMN vcard_href TEXT;
+    ALTER TABLE cards ADD COLUMN vcard_etag TEXT;
+    ALTER TABLE cards ADD COLUMN approved_at TEXT;
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

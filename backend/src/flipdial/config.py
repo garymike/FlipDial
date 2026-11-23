@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     carddav_url: str | None = None
     carddav_username: str | None = None
     carddav_password: SecretStr | None = None
+    carddav_addressbook: str | None = None  # display name or path; default: the first found
+    carddav_verify_tls: bool = True
+    carddav_ca_bundle: Path | None = None  # for servers with their own certificate
+    vcard_version: Literal["3.0", "4.0"] = "3.0"  # 3.0 works with the widest range of apps
 
     # Extraction model
     model_backend: Literal["ollama", "openai_compatible"] = "ollama"

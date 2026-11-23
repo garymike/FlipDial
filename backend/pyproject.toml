@@ -13,6 +13,7 @@ dependencies = [
     "opencv-python-headless>=4.10",
     "pypdfium2>=4.30",
     "httpx>=0.28",
+    "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +22,7 @@ dev = [
     "pytest>=8.3",
     "httpx>=0.28",
     "ruff>=0.8",
+    "radicale>=3.5",
 ]
 
 [project.scripts]

@@ -4,6 +4,7 @@ flipdial                      run the web server (same as `flipdial serve`)
 flipdial ingest [--once]      watch the inbox and archive new scans
 flipdial extract [--once]     read archived cards and queue them for review
 flipdial worker               ingest and extract in one loop
+flipdial carddav check        connect to the CardDAV server and count contacts
 flipdial eval --testset DIR   measure accuracy on a private test set (prints counts only)
 """
 
@@ -28,6 +29,8 @@ def main(argv: list[str] | None = None) -> None:
         p = sub.add_parser(name, help=text)
         p.add_argument("--once", action="store_true", help="run one pass and exit")
     sub.add_parser("worker", help="ingest and extract in one loop")
+    dav = sub.add_parser("carddav", help="CardDAV tools")
+    dav.add_argument("action", choices=["check"], help="check: connect and count contacts")
     ev = sub.add_parser("eval", help="measure accuracy on a private test set")
     ev.add_argument("--testset", type=Path, default=os.environ.get("FLIPDIAL_PRIVATE_TESTSET"))
     args = parser.parse_args(argv)
@@ -50,6 +53,18 @@ def main(argv: list[str] | None = None) -> None:
             worker.run_once()
         else:
             worker.run_forever()
+        return
+
+    if args.command == "carddav":
+        from flipdial.carddav.client import CardDAVClient, CardDAVError
+
+        try:
+            client = CardDAVClient(settings)
+            book = client.address_book()
+            count = len(client.list())
+        except CardDAVError as exc:
+            sys.exit(f"CardDAV check failed: {exc}")
+        print(f"Connected. Address book: {book.name or '(unnamed)'}, contacts: {count}")
         return
 
     if args.command == "eval":

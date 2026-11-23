@@ -52,6 +52,7 @@ More detail in [docs/architecture.md](docs/architecture.md).
 | [Architecture](docs/architecture.md) | Components and data flow |
 | [Ingest](docs/ingest.md) | Scanner setup, pairing modes, what gets refused |
 | [Reading cards](docs/extraction.md) | Fields, checks, flags, accuracy testing |
+| [Contacts server](docs/carddav.md) | CardDAV setup, Synology, what is written and kept |
 | [Data model](docs/data-model.md) | vCard fields and FlipDial extensions |
 | [Threat model](docs/threat-model.md) | Assets, threats, mitigations |
 | [Release checklist](docs/release-checklist.md) | What must pass before v1, including accuracy targets |
