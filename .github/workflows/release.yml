@@ -1,11 +1,21 @@
 name: Release
 
-# Push a tag like v1.0.0 to build, sign and draft a release. The release stays a draft so the
-# accuracy report and known limitations can be added before it is published.
+# Start a release either way:
+#   - Actions > Release > Run workflow, and type the version (for example 0.9.0-rc1). The tag is
+#     created for you on the latest commit of main.
+#   - or push a tag like v1.0.0.
+# The release stays a draft so the accuracy report and known limitations can be added before it
+# is published.
 
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, matching backend/pyproject.toml (for example 0.9.0-rc1 or 1.0.0)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,13 +24,56 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/flipdial
 
 jobs:
+  tag:
+    name: Check version and tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the tag when started from the Run workflow button
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: version
+        name: Version matches the code
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          INPUT: ${{ inputs.version }}
+          PUSHED_TAG: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            [ "$REF" = "refs/heads/main" ] || { echo "Run this from the main branch."; exit 1; }
+            tag="v${INPUT#v}"
+          else
+            tag="$PUSHED_TAG"
+          fi
+          echo "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-(rc|a|b)\.?[0-9]+)?$' \
+            || { echo "Not a valid version: $tag"; exit 1; }
+          want=$(python3 -c "import tomllib;print(tomllib.load(open('backend/pyproject.toml','rb'))['project']['version'])")
+          got=$(echo "$tag" | sed -E 's/^v//; s/[-.]?(rc|a|b)\.?([0-9]+)$/\1\2/')
+          [ "$want" = "$got" ] || { echo "$tag does not match version $want in backend/pyproject.toml"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Create the tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists. Pick a new version."; exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$GITHUB_SHA"
+
   checks:
     name: Checks
+    needs: tag
     uses: ./.github/workflows/ci.yml
 
   image:
     name: Container image
-    needs: checks
+    needs: [tag, checks]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,14 +85,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.tag.outputs.tag }}
           persist-credentials: false
-      - name: Tag matches the package version
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          want=$(python3 -c "import tomllib;print(tomllib.load(open('backend/pyproject.toml','rb'))['project']['version'])")
-          got=$(echo "$TAG" | sed -E 's/^v//; s/[-.]?(rc|a|b)\.?([0-9]+)$/\1\2/')
-          [ "$want" = "$got" ] || { echo "Tag $TAG does not match version $want"; exit 1; }
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
@@ -51,8 +98,8 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ needs.tag.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.tag.outputs.tag }}
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -86,7 +133,7 @@ jobs:
 
   release:
     name: Draft release
-    needs: image
+    needs: [tag, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the draft release
@@ -95,6 +142,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.tag.outputs.tag }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -104,7 +152,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Build Python package and web app
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ needs.tag.outputs.tag }}
         run: |
           mkdir dist
           (cd backend && uv build --out-dir ../dist)
@@ -129,6 +177,7 @@ jobs:
           subject-checksums: dist/SHA256SUMS
       - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
+          tag_name: ${{ needs.tag.outputs.tag }}
           draft: true
           generate_release_notes: true
           files: dist/*

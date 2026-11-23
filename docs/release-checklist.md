@@ -5,7 +5,7 @@ v1 ships when every box below is checked. Copy this list into the release issue 
 ## How a release is made
 
 1. Work through this list in a release issue.
-2. Push a tag such as `v1.0.0`. The release workflow reruns every CI check, builds the container image, signs it with Sigstore (keyless, tied to this repository's workflow), attaches an SBOM and build provenance, builds the Python package and web app, and signs their checksums.
+2. Set the version in `backend/pyproject.toml` (and `web/package.json`) and merge to main. Then go to **Actions → Release → Run workflow** and type the version, for example `1.0.0` (or push a tag `v1.0.0` yourself). The workflow checks the version matches the code, creates the tag, and reruns every CI check, builds the container image, signs it with Sigstore (keyless, tied to this repository's workflow), attaches an SBOM and build provenance, builds the Python package and web app, and signs their checksums.
 3. The workflow leaves a **draft** release. Add the accuracy report, recommended model and known limitations, then publish.
 
 ## 1. Accuracy gate
