@@ -1,0 +1,642 @@
+<script lang="ts">
+  // Dial view: spin through contacts one card at a time.
+  // Drag (with momentum), scroll, arrow keys, A to Z letters and the header search all move it.
+  import { untrack } from 'svelte'
+  import { api, describe, type Contact, type ContactList } from './api'
+  import { letterIndex, mod, nearest, offset, seek, settle, slot } from './dial'
+  import FlipCard from './FlipCard.svelte'
+  import { href } from './router.svelte'
+  import Star from './Star.svelte'
+
+  let { query = '' }: { query?: string } = $props()
+
+  // Drum shape: a tighter drum on narrow screens so the front card stays clear.
+  const narrowQuery = window.matchMedia('(max-width: 700px)')
+  let narrow = $state(narrowQuery.matches)
+  $effect(() => {
+    const update = () => (narrow = narrowQuery.matches)
+    narrowQuery.addEventListener('change', update)
+    return () => narrowQuery.removeEventListener('change', update)
+  })
+  const SPACING = $derived(narrow ? 24 : 17) // degrees between cards
+  const RADIUS = $derived(narrow ? 240 : 420) // drum radius in px
+  const PX_PER_CARD = 70 // drag distance that moves one card
+
+  type Scan = 'all' | 'yes' | 'no'
+  let deck = $state('')
+  let starredOnly = $state(false)
+  let scan = $state<Scan>('all')
+  let data = $state<ContactList | null>(null)
+  let error = $state('')
+
+  let pos = $state(0)
+  let dragging = $state(false)
+  let flipped = $state(false)
+
+  const cards = $derived(data?.contacts ?? [])
+  const n = $derived(Math.max(cards.length, 1))
+  const index = $derived(cards.length ? mod(Math.round(pos), cards.length) : 0)
+  const current = $derived<Contact | null>(cards[index] ?? null)
+  const letters = $derived(letterIndex(cards.map((c) => c.full_name)))
+  const upNext = $derived(
+    cards.length > 1 ? [1, 2, 3].map((k) => cards[mod(index + k, cards.length)]).slice(0, cards.length - 1) : [],
+  )
+
+  async function load() {
+    try {
+      data = await api.contacts({ deck, scan, starred: starredOnly })
+      pos = 0
+      flipped = false
+      error = ''
+    } catch (e) {
+      error = describe(e)
+    }
+  }
+
+  $effect(() => {
+    void [deck, scan, starredOnly]
+    load()
+  })
+
+  // The header search dials to the first match instead of filtering.
+  // Runs only when the query or the card list changes, not on every move.
+  $effect(() => {
+    const i = seek(query, cards)
+    if (i >= 0) untrack(() => goTo(i))
+  })
+
+  function goTo(i: number) {
+    pos = nearest(i, pos, n)
+    flipped = false
+  }
+  function step(k: number) {
+    pos = Math.round(pos) + k
+    flipped = false
+  }
+
+  // -- drag with momentum -------------------------------------------------------------
+  let drag: { y: number; start: number; lastY: number; lastT: number; v: number; moved: boolean; hit: number } | null =
+    null
+
+  function onpointerdown(e: PointerEvent) {
+    const el = (e.target as HTMLElement).closest('[data-i]')
+    drag = { y: e.clientY, start: pos, lastY: e.clientY, lastT: performance.now(), v: 0, moved: false, hit: el ? Number(el.getAttribute('data-i')) : -1 }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  function onpointermove(e: PointerEvent) {
+    if (!drag) return
+    const dy = e.clientY - drag.y
+    if (!drag.moved && Math.abs(dy) < 5) return
+    const now = performance.now()
+    const dt = Math.max(8, now - drag.lastT) // ignore bursts of events a few ms apart
+    drag.v = 0.8 * ((drag.lastY - e.clientY) / PX_PER_CARD / dt) + 0.2 * drag.v
+    drag.lastY = e.clientY
+    drag.lastT = now
+    drag.moved = true
+    dragging = true
+    flipped = false
+    pos = drag.start - dy / PX_PER_CARD
+  }
+
+  function onpointercancel() {
+    // The browser took over the gesture: settle on the nearest card, no throw.
+    if (drag?.moved) pos = Math.round(pos)
+    drag = null
+    dragging = false
+  }
+
+  function onpointerup() {
+    const g = drag
+    drag = null
+    if (!g) return
+    if (!g.moved) {
+      if (g.hit < 0) return
+      if (g.hit === index) flipped = !flipped
+      else goTo(g.hit)
+      return
+    }
+    dragging = false
+    // Held still before letting go: no throw.
+    const still = performance.now() - g.lastT > 90
+    pos = settle(pos, still ? 0 : g.v)
+  }
+
+  // -- wheel (needs a non-passive listener so the page does not scroll) ---------------
+  function wheel(node: HTMLElement) {
+    let acc = 0
+    let last = 0
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      acc += e.deltaY
+      const now = performance.now()
+      if (Math.abs(acc) > 36 && now - last > 70) {
+        step(acc > 0 ? 1 : -1)
+        acc = 0
+        last = now
+      }
+    }
+    node.addEventListener('wheel', handler, { passive: false })
+    return { destroy: () => node.removeEventListener('wheel', handler) }
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    const keys: Record<string, () => void> = {
+      ArrowDown: () => step(1),
+      ArrowRight: () => step(1),
+      ArrowUp: () => step(-1),
+      ArrowLeft: () => step(-1),
+      PageDown: () => step(3),
+      PageUp: () => step(-3),
+      Home: () => goTo(0),
+      End: () => goTo(cards.length - 1),
+      Enter: () => (flipped = !flipped),
+      ' ': () => (flipped = !flipped),
+    }
+    const action = keys[e.key]
+    if (action) {
+      e.preventDefault()
+      action()
+    }
+  }
+
+  async function toggleStar() {
+    if (!current) return
+    const c = current
+    const next = !c.starred
+    c.starred = next
+    try {
+      await api.update(c.uid, { starred: next })
+    } catch (e) {
+      c.starred = !next
+      error = describe(e)
+    }
+  }
+
+  function pickDeck(name: string, starred = false) {
+    deck = name
+    starredOnly = starred
+  }
+
+  const scanOptions: { id: Scan; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'yes', label: 'Has scan' },
+    { id: 'no', label: 'No scan' },
+  ]
+</script>
+
+<div class="page">
+  <div class="filters">
+    <div class="decks" role="group" aria-label="Deck">
+      <button type="button" aria-pressed={!deck && !starredOnly} onclick={() => pickDeck('')}>All contacts</button>
+      <button type="button" aria-pressed={starredOnly} onclick={() => pickDeck('', true)}>Starred</button>
+      {#each data?.decks ?? [] as d (d.name)}
+        <button type="button" aria-pressed={deck === d.name} onclick={() => pickDeck(d.name)}>{d.name}</button>
+      {/each}
+    </div>
+    <div class="segmented" role="group" aria-label="Scan filter">
+      {#each scanOptions as o (o.id)}
+        <button type="button" aria-pressed={scan === o.id} onclick={() => (scan = o.id)}>{o.label}</button>
+      {/each}
+    </div>
+  </div>
+
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
+
+  {#if data && cards.length === 0}
+    <p class="empty">No contacts in this deck.</p>
+  {:else}
+    <div class="layout">
+      <nav class="letters" aria-label="Jump to letter">
+        {#each 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('') as ch (ch)}
+          <button
+            type="button"
+            disabled={!letters.has(ch)}
+            aria-current={current?.full_name.trim().charAt(0).toUpperCase() === ch ? 'true' : undefined}
+            aria-label={`Jump to ${ch}`}
+            onclick={() => goTo(letters.get(ch) ?? 0)}>{ch}</button
+          >
+        {/each}
+      </nav>
+
+      <div class="center">
+        <div
+          class="stage"
+          class:dragging
+          tabindex="0"
+          role="slider"
+          aria-label="Dial"
+          aria-roledescription="dial"
+          aria-valuemin={1}
+          aria-valuemax={cards.length}
+          aria-valuenow={index + 1}
+          aria-valuetext={current ? `${current.full_name}, ${index + 1} of ${cards.length}. Enter flips the card.` : ''}
+          use:wheel
+          {onpointerdown}
+          {onpointermove}
+          {onpointerup}
+          {onpointercancel}
+          ondragstart={(e) => e.preventDefault()}
+          {onkeydown}
+        >
+          <div class="shadow" aria-hidden="true"></div>
+          <div class="drum">
+            {#each cards as c, i (c.uid)}
+              {@const s = slot(offset(i, pos, n), SPACING, RADIUS)}
+              <div
+                class="slot"
+                data-i={i}
+                aria-hidden={i !== index}
+                style:transform={s.transform}
+                style:opacity={s.opacity}
+                style:z-index={s.zIndex}
+                style:pointer-events={s.visible ? 'auto' : 'none'}
+              >
+                <FlipCard contact={c} flipped={i === index && flipped} size="large" />
+                <span class="shade" style:opacity={s.shade}></span>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <div class="controls">
+          <button type="button" class="round" aria-label="Previous card" onclick={() => step(-1)}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12l5-5 5 5" /></svg>
+          </button>
+          <div class="rail">
+            <div class="track" aria-hidden="true">
+              <span class="fill" style:width={`${cards.length > 1 ? (index / (cards.length - 1)) * 100 : 100}%`}></span>
+            </div>
+            <span class="pos" aria-live="polite">{index + 1} / {cards.length}{current ? ` · ${current.full_name}` : ''}</span>
+          </div>
+          <button type="button" class="round" aria-label="Next card" onclick={() => step(1)}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg>
+          </button>
+        </div>
+        <p class="hint">Drag, scroll or use the arrow keys to dial. Click the front card or press Enter to flip it. Type in search to dial to a name.</p>
+      </div>
+
+      {#if current}
+        <aside aria-label="Current contact">
+          <span class="eyebrow">{current.event || 'No event'} · {current.card_id ? 'Scan' : current.source}</span>
+          <div class="who">
+            <div>
+              <div class="name">{current.full_name}</div>
+              <div class="sub">{[current.title, current.organization].filter(Boolean).join(', ')}</div>
+            </div>
+            <Star on={current.starred} label={`${current.starred ? 'Unstar' : 'Star'} ${current.full_name}`} onclick={toggleStar} />
+          </div>
+          <div class="lines">
+            {#each current.emails as e (e)}<a href={`mailto:${e}`}>{e}</a>{/each}
+            {#each current.phones as p (p)}<span>{p}</span>{/each}
+          </div>
+          <a class="open" href={href({ name: 'contact', uid: current.uid })}>Open card</a>
+          {#if upNext.length}
+            <div class="next">
+              <span class="eyebrow">Up next</span>
+              {#each upNext as u (u.uid)}
+                <button type="button" onclick={() => goTo(cards.indexOf(u))}>
+                  <span>{u.full_name}</span><span class="org">{u.organization}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </aside>
+      {/if}
+    </div>
+  {/if}
+</div>
+
+<style>
+  .page {
+    padding: 20px 32px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: radial-gradient(ellipse at 50% 35%, #262a31 0%, transparent 62%);
+  }
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .decks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .decks button {
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--graphite);
+    color: var(--bone);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .decks button[aria-pressed='true'] {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: var(--ink);
+  }
+  .segmented {
+    display: flex;
+    margin-left: auto;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--graphite);
+  }
+  .segmented button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #bdb8af;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .segmented button[aria-pressed='true'] {
+    background: #2e3239;
+    color: var(--bone);
+  }
+  .layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+  .letters {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+  }
+  .letters button {
+    width: 30px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #d6d1c9;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .letters button:disabled {
+    color: #5a5e66;
+    cursor: default;
+  }
+  .letters button[aria-current='true'] {
+    background: var(--amber);
+    color: var(--ink);
+  }
+  .center {
+    flex: 999 1 560px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .stage {
+    position: relative;
+    width: 100%;
+    height: 600px;
+    overflow: hidden; /* keep the cards at the back inside the dial */
+    border-radius: 12px;
+    touch-action: none;
+    user-select: none;
+    cursor: grab;
+    outline: none;
+  }
+  .stage:focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 6px;
+    border-radius: 12px;
+  }
+  .stage.dragging {
+    cursor: grabbing;
+  }
+  .shadow {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(560px, 80%);
+    height: 30px;
+    transform: translate(-50%, 196px);
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    filter: blur(16px);
+  }
+  /* Each card is projected on its own (no shared 3D space), so cards never cut through each other. */
+  .drum {
+    position: absolute;
+    inset: 0;
+    perspective: 1500px;
+    perspective-origin: 50% 42%;
+  }
+  .slot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(560px, 86%);
+    will-change: transform, opacity;
+    transition:
+      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.45s ease;
+  }
+  .dragging .slot {
+    transition: none;
+  }
+  .shade {
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    background: #0b0c0f;
+    pointer-events: none;
+    transition: opacity 0.45s ease;
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .round {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--graphite);
+    color: var(--bone);
+    cursor: pointer;
+  }
+  .rail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 240px;
+  }
+  .track {
+    position: relative;
+    height: 4px;
+    border-radius: 2px;
+    background: #2c2f36;
+  }
+  .fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 2px;
+    background: var(--amber);
+    transition: width 0.4s ease;
+  }
+  .pos {
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: #d6d1c9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hint {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ash);
+    text-align: center;
+  }
+  aside {
+    flex: 1 1 280px;
+    max-width: 340px;
+    align-self: center;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px;
+    border-radius: 14px;
+    background: var(--panel);
+    border: 1px solid #2c2f36;
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ash);
+    font-weight: 600;
+  }
+  .who {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .name {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 600;
+  }
+  .sub {
+    margin-top: 4px;
+    font-size: 14px;
+    color: #d6d1c9;
+  }
+  .lines {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+  .open {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    border-radius: 10px;
+    background: var(--amber);
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .next {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 14px;
+    border-top: 1px solid #2c2f36;
+  }
+  .next button {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--bone);
+    font: inherit;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .next button:hover {
+    background: #23262c;
+  }
+  .org {
+    color: var(--ash);
+    font-size: 13px;
+  }
+  .error {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #3a2a1a;
+    color: var(--signal);
+  }
+  .empty {
+    color: var(--ash);
+  }
+  @media (max-width: 700px) {
+    .page {
+      padding: 16px;
+    }
+    .letters {
+      display: none;
+    }
+    .stage {
+      height: 420px;
+    }
+    .decks {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      flex-basis: 100%;
+      padding-bottom: 4px;
+    }
+    .segmented {
+      margin-left: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .slot,
+    .shade,
+    .fill {
+      transition: none;
+    }
+  }
+</style>

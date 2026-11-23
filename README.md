@@ -13,7 +13,7 @@ Scan, review, dial through, and sync to any CardDAV server.
 - **Syncs with standards.** Contacts are written as vCards to any CardDAV server (Synology Contacts, Nextcloud, Radicale, Baïkal and others).
 - **Three ways to browse:**
   - **Wall:** every contact as a grid of cards
-  - **Dial:** spin through your deck one card at a time
+  - **Dial:** spin through your deck one card at a time. Drag, scroll, use the arrow keys, jump by letter, or type a name to dial straight to it
   - **Map:** where you met people
 - **Mixes scanned and unscanned contacts.** Contacts without a scan get a generated "house card" so everything browses the same way.
 - **Finds duplicates** and merges them field by field, with undo.

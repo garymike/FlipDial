@@ -20,14 +20,14 @@
   <div class="inner" class:flipped>
     <div class="face">
       {#if front}
-        <img src={front} alt={`Front of ${contact.full_name}'s card`} loading="lazy" />
+        <img src={front} alt={`Front of ${contact.full_name}'s card`} loading="lazy" draggable="false" />
       {:else}
         <HouseCard {contact} />
       {/if}
     </div>
     <div class="face backface">
       {#if back}
-        <img src={back} alt={`Back of ${contact.full_name}'s card`} loading="lazy" />
+        <img src={back} alt={`Back of ${contact.full_name}'s card`} loading="lazy" draggable="false" />
       {:else}
         <HouseCard {contact} side="back" />
       {/if}
@@ -69,5 +69,7 @@
     height: 100%;
     object-fit: contain;
     display: block;
+    -webkit-user-drag: none;
+    user-select: none;
   }
 </style>

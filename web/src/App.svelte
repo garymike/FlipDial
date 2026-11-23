@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from './lib/api'
   import ContactDetail from './lib/ContactDetail.svelte'
+  import Dial from './lib/Dial.svelte'
   import Review from './lib/Review.svelte'
   import { href, router } from './lib/router.svelte'
   import Wall from './lib/Wall.svelte'
@@ -34,7 +35,7 @@
   </a>
   <label class="search">
     <span class="sr">Search contacts</span>
-    <input type="search" placeholder="Search names, companies, events" bind:value={query} />
+    <input type="search" placeholder={router.route.name === 'dial' ? 'Dial to a name or company' : 'Search names, companies, events'} bind:value={query} />
   </label>
   <nav aria-label="View">
     {#each views as v (v.name)}
@@ -48,14 +49,16 @@
 
 {#if router.route.name === 'wall'}
   <Wall {query} />
+{:else if router.route.name === 'dial'}
+  <Dial {query} />
 {:else if router.route.name === 'review'}
   <Review onchange={refreshCount} />
 {:else if router.route.name === 'contact'}
   {#key router.route.uid}<ContactDetail uid={router.route.uid} />{/key}
 {:else}
   <main class="soon">
-    <h1>{router.route.name === 'dial' ? 'Dial view' : 'Map view'}</h1>
-    <p>{router.route.name === 'dial' ? 'Coming in milestone 5.' : 'Coming in v2.'}</p>
+    <h1>Map view</h1>
+    <p>Coming in v2.</p>
   </main>
 {/if}
 
