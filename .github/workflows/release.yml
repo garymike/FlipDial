@@ -4,8 +4,9 @@ name: Release
 #   - Actions > Release > Run workflow, and type the version (for example 0.9.0-rc1). The tag is
 #     created for you on the latest commit of main.
 #   - or push a tag like v1.0.0.
-# The release stays a draft so the accuracy report and known limitations can be added before it
-# is published.
+# The notes come from that version's section of CHANGELOG.md, followed by how to verify the
+# signatures. By default the release stays a draft to check before publishing; tick "publish"
+# when running it by hand to publish it straight away. A pushed tag always makes a draft.
 
 on:
   push:
@@ -16,6 +17,11 @@ on:
         description: "Version to release, matching backend/pyproject.toml (for example 0.9.0-rc1 or 1.0.0)"
         required: true
         type: string
+      publish:
+        description: "Publish the release now (otherwise it is left as a draft to check first)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -176,31 +182,42 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: dist/SHA256SUMS
+      - name: Release notes
+        env:
+          TAG: ${{ needs.tag.outputs.tag }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          REPO: ${{ github.repository }}
+        run: |
+          version="${TAG#v}"
+          # This version's section of CHANGELOG.md, without its heading.
+          awk -v head="## $version" '$0 == head {found=1; next} /^## / {if (found) exit} found' \
+            CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "See CHANGELOG.md for what changed." > notes.md
+          fi
+          {
+            echo
+            echo "### Verify this release"
+            echo
+            echo "Container image: \`$IMAGE@$DIGEST\`"
+            echo
+            echo '```sh'
+            echo "cosign verify $IMAGE@$DIGEST \\"
+            echo "  --certificate-identity-regexp '^https://github.com/$REPO/' \\"
+            echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
+            echo
+            echo "cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \\"
+            echo "  --certificate-identity-regexp '^https://github.com/$REPO/' \\"
+            echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
+            echo "sha256sum --check SHA256SUMS"
+            echo '```'
+          } >> notes.md
       - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ needs.tag.outputs.tag }}
-          draft: true
+          # A draft unless "publish" was ticked when it was run by hand.
+          draft: ${{ !(github.event_name == 'workflow_dispatch' && inputs.publish) }}
           prerelease: ${{ contains(needs.tag.outputs.tag, '-') }}
           generate_release_notes: true
           files: dist/*
-          body: |
-            Container image: `${{ env.IMAGE }}@${{ needs.image.outputs.digest }}`
-
-            Verify the image signature:
-
-            ```sh
-            cosign verify ${{ env.IMAGE }}@${{ needs.image.outputs.digest }} \
-              --certificate-identity-regexp '^https://github.com/${{ github.repository }}/' \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com
-            ```
-
-            Verify the files:
-
-            ```sh
-            cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
-              --certificate-identity-regexp '^https://github.com/${{ github.repository }}/' \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com
-            sha256sum --check SHA256SUMS
-            ```
-
-            TODO before publishing: accuracy report (counts only), recommended model, known limitations.
+          body_path: notes.md
