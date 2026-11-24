@@ -305,9 +305,15 @@ def where_saved(settings: Settings) -> dict[str, str]:
     if settings.carddav_url:
         host = (urlparse(settings.carddav_url).hostname or "").lower()
         port = urlparse(settings.carddav_url).port
-        if host.endswith("icloud.com"):
+
+        def under(*domains: str) -> bool:
+            # The domain itself or a subdomain of it, never just a matching tail
+            # ("notgoogle.com" is not Google).
+            return any(host == d or host.endswith("." + d) for d in domains)
+
+        if under("icloud.com"):
             kind = "icloud"
-        elif host.endswith("google.com") or host.endswith("googleapis.com"):
+        elif under("google.com", "googleapis.com"):
             kind = "google"
         elif "synology" in host or "quickconnect" in host or port in (5000, 5001):
             kind = "synology"

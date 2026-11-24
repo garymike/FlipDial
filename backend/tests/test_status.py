@@ -102,6 +102,8 @@ def test_where_saved_names_the_server_and_last_backup(api, dav_settings):
         ("https://www.googleapis.com/carddav/v1/principals/x/lists/default/", "google"),
         ("https://nas.local:5001/carddav/mike/", "synology"),
         ("https://dav.example/", "server"),
+        ("https://notgoogle.com/carddav/", "server"),
+        ("https://icloud.com.attacker.example/", "server"),
     ]:
         s = dav_settings.model_copy(update={"carddav_url": url})
         assert st.where_saved(s)["server_kind"] == kind
