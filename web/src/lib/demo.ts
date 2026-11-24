@@ -74,6 +74,31 @@ function similar(a: Contact, b: Contact): { score: number; reasons: string[] } |
   return score ? { score, reasons } : null
 }
 
+// "Read again" in the demo: a few seconds of pretend reading, then a made-up improvement
+// (a mobile number and a fuller About line) so the review step can be tried.
+const rereads = new Map<string, number>()
+function rereadState(c: Contact) {
+  const at = rereads.get(c.uid)
+  if (!c.card_id || at === undefined) return { status: 'none', card_id: c.card_id ?? '' }
+  if (Date.now() - at < 3000)
+    return { status: 'pending', card_id: c.card_id, progress: { stage: 'reading', seconds: Math.round((Date.now() - at) / 1000), fields: {} } }
+  return {
+    status: 'done',
+    card_id: c.card_id,
+    proposed: {
+      full_name: c.full_name,
+      title: c.title,
+      organization: c.organization,
+      emails: c.emails,
+      phones: [...c.phones, { value: '(555) 010-0199', kind: 'mobile', label: '' }],
+      websites: c.websites,
+      socials: c.socials,
+      addresses: c.addresses,
+      about: c.about ? `${c.about}. Commissions welcome.` : 'Commissions welcome.',
+    },
+  }
+}
+
 // Cards a contact gained by merging, so the demo can show a card history.
 const extraScans = new Map<string, Scan[]>()
 function scansOf(c: Contact): Scan[] {
@@ -170,8 +195,18 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     case 'POST /sync':
       record('contacts.sync', '', { added: 0, updated: 0, removed: 0 })
       return { added: 0, updated: 0, removed: 0, skipped: 0 }
+    case 'POST /contacts':
+      if (seg[2] === 'reread') {
+        const c = find(seg[1])
+        if (!c.card_id) throw new ApiError(409, 'no_scan')
+        rereads.set(c.uid, Date.now())
+        record('contact.reread', c.uid)
+        return { status: 'pending', card_id: c.card_id }
+      }
+      throw new ApiError(404, 'not_found')
     case 'GET /contacts':
       if (seg[2] === 'scans') return { scans: scansOf(find(seg[1])) }
+      if (seg[2] === 'reread') return rereadState(find(seg[1]))
       return seg[1] ? find(seg[1]) : list(url.searchParams)
     case 'PATCH /contacts': {
       const c = find(seg[1])
@@ -190,6 +225,10 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       return c
     }
     case 'DELETE /contacts': {
+      if (seg[2] === 'reread') {
+        rereads.delete(seg[1])
+        return { discarded: true }
+      }
       const c = find(seg[1])
       contacts = contacts.filter((x) => x !== c)
       record('contact.forget', c.uid, { scans: c.card_id ? 1 : 0 })

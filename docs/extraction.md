@@ -104,3 +104,16 @@ flipdial eval --testset /path/to/my-testset
 Aim for the mix in the [release checklist](release-checklist.md): at least 30 cards, including artistic cards, cards with backs, tall or square cards, and a few phone photos.
 
 The report lists, per field, how many values were expected, how many were right, and how many extra values appeared that are not on the card. It never prints names, values or folder names, so it is safe to share.
+
+## Read again (saved contacts)
+
+Open a contact and choose **Read again** to read its card once more with the current model,
+for example after a model or FlipDial update improves reading. The worker reads it in the
+background, then the pane lists only the fields that changed, with the saved value beside
+the new one. For each one you pick **Use new**, **Keep current**, or for emails, phones and
+websites **Add the new ones**. Only what you choose is saved, through a normal edit.
+
+A new reading never clears a field: if the card no longer seems to show something, the saved
+value stays. Notes, the event deck, the star and anything other apps added are never part of
+the comparison. The proposal is kept until you apply or discard it, and "Forget this
+contact" removes it with everything else.
