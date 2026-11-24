@@ -235,6 +235,11 @@ def check(
             ).fetchall()
         )
     failed = counts.get("extract_failed", 0)
+    with db.session(s.db_path) as conn:
+        last = conn.execute(
+            "SELECT last_error_detail FROM cards WHERE status = 'extract_failed' "
+            "AND last_error_detail != '' ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
     items.append(
         _item(
             "queue",
@@ -242,7 +247,12 @@ def check(
             "warn" if failed else "ok",
             f"{counts.get('review', 0)} ready to review, {counts.get('extract_pending', 0)} "
             f"being read, {failed} couldn't be read.",
-            "Fix anything above, then use Read again on the Review page." if failed else "",
+            (
+                (f"Last message from the model: {last[0]} " if last else "")
+                + "Fix anything above, then use Read again on the Review page."
+            )
+            if failed
+            else "",
         )
     )
     worst = (

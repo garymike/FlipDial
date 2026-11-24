@@ -53,16 +53,22 @@ class Extractor:
             result: Extraction = validate(self.reader.read(images))
         except (ModelError, OSError) as exc:
             code = exc.args[0] if isinstance(exc, ModelError) else "image_missing"
+            detail = getattr(exc, "detail", "")
             failed = attempts + 1 >= self.s.extract_max_attempts
             with db.session(self.s.db_path) as conn:
                 conn.execute(
-                    "UPDATE cards SET attempts = attempts + 1, last_error = ?, status = ? "
-                    "WHERE id = ?",
-                    (code, "extract_failed" if failed else "extract_pending", card_id),
+                    "UPDATE cards SET attempts = attempts + 1, last_error = ?, "
+                    "last_error_detail = ?, status = ? WHERE id = ?",
+                    (code, detail, "extract_failed" if failed else "extract_pending", card_id),
                 )
             log.warning(
                 "extraction failed",
-                extra={"card_id": card_id, "reason": code, "attempt": attempts + 1},
+                extra={
+                    "card_id": card_id,
+                    "reason": code,
+                    "model_said": detail,
+                    "attempt": attempts + 1,
+                },
             )
             return False
 
@@ -82,7 +88,8 @@ class Extractor:
                 ),
             )
             conn.execute(
-                "UPDATE cards SET status = 'review', attempts = attempts + 1, last_error = NULL "
+                "UPDATE cards SET status = 'review', attempts = attempts + 1, last_error = NULL, "
+                "last_error_detail = NULL "
                 "WHERE id = ?",
                 (card_id,),
             )

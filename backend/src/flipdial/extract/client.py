@@ -21,7 +21,59 @@ MAX_RESPONSE_BYTES = 64 * 1024
 
 
 class ModelError(Exception):
-    """The model could not be reached or returned something unusable. Message is log-safe."""
+    """The model could not be reached or returned something unusable.
+
+    args[0] is a fixed code. `detail` is the model server's own short error message (for
+    example "model does not support thinking"), shortened and with email and phone-like text
+    masked, so it is safe to show and log.
+    """
+
+    def __init__(self, code: str, detail: str = ""):
+        super().__init__(code)
+        self.detail = detail
+
+
+def _server_message(response: httpx.Response) -> str:
+    from flipdial.logging import redact
+
+    try:
+        body = response.json()
+        msg = body.get("error", "") if isinstance(body, dict) else ""
+        if isinstance(msg, dict):  # OpenAI-style {"error": {"message": ...}}
+            msg = msg.get("message", "")
+    except ValueError:
+        msg = response.text
+    return redact(" ".join(str(msg).split()))[:200]
+
+
+def _one_image(paths: list[Path]) -> str:
+    """Front above back in one JPEG, for models that take a single image per request."""
+    import io
+
+    from PIL import Image
+
+    sides = [Image.open(p).convert("RGB") for p in paths]
+    width = max(i.width for i in sides)
+    sides = [
+        i.resize((width, round(i.height * width / i.width))) if i.width != width else i
+        for i in sides
+    ]
+    gap = 24
+    out = Image.new("RGB", (width, sum(i.height for i in sides) + gap * (len(sides) - 1)), "white")
+    y = 0
+    for i in sides:
+        out.paste(i, (0, y))
+        y += i.height + gap
+    buf = io.BytesIO()
+    out.save(buf, "JPEG", quality=92)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _limits_images(text: str) -> bool:
+    t = text.lower()
+    return "image" in t and any(
+        w in t for w in ("one image", "single", "only", "multiple", "more than")
+    )
 
 
 class Reader(Protocol):
@@ -54,12 +106,17 @@ def _http_error(exc: httpx.HTTPError) -> ModelError:
     if isinstance(exc, httpx.TimeoutException):
         return ModelError("model_timeout")
     if isinstance(exc, httpx.HTTPStatusError):
-        text = exc.response.text[:500].lower()
+        detail = _server_message(exc.response)
+        text = detail.lower()
+        if "architecture" in text or "failed to load" in text or "has terminated" in text:
+            return ModelError("model_cannot_load", detail)  # e.g. dropped by an Ollama update
         if exc.response.status_code == 404 or "not found" in text:
-            return ModelError("model_not_installed")
+            return ModelError("model_not_installed", detail)
         if "image" in text or "vision" in text or "multimodal" in text:
-            return ModelError("model_not_vision")
-        return ModelError("model_error")
+            return ModelError("model_not_vision", detail)
+        return ModelError("model_error", detail)
+    if isinstance(exc, (httpx.RemoteProtocolError, httpx.ReadError)):
+        return ModelError("model_disconnected")
     return ModelError("model_unreachable")
 
 
@@ -84,8 +141,13 @@ class OllamaReader:
         }
         try:
             r = self.http.post(self.url, json=body)
-            if r.status_code == 400 and "think" in r.text.lower():
-                body.pop("think")  # an Ollama version or model without the switch
+            if r.status_code >= 400 and "think" in r.text.lower():
+                body.pop("think")  # a model or Ollama version without the switch
+                r = self.http.post(self.url, json=body)
+            if r.status_code >= 400 and len(images) > 1 and _limits_images(r.text):
+                body["messages"][1]["images"] = [
+                    _one_image(images)
+                ]  # models that take one image per request
                 r = self.http.post(self.url, json=body)
             r.raise_for_status()
             content = r.json()["message"]["content"]

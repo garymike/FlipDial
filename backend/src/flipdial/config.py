@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     # Extraction model
     model_backend: Literal["ollama", "openai_compatible"] = "ollama"
     model_url: str = "http://127.0.0.1:11434"
-    model_name: str = "llama3.2-vision"
+    model_name: str = "qwen3.5:9b"  # vision model; compare others with flipdial eval
     model_api_key: SecretStr | None = None
     allow_remote_model: bool = False
     model_timeout_seconds: float = 120.0

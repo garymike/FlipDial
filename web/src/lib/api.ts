@@ -56,6 +56,7 @@ export interface ReviewItem {
   fields: ReviewFields | null
   flags: string[]
   error: string | null
+  error_detail?: string
 }
 
 export type ContactInput = Omit<Contact, 'uid' | 'categories' | 'source' | 'card_id' | 'has_back'> & {
@@ -286,6 +287,8 @@ export const REASONS: Record<string, string> = {
 /** Why a card couldn't be read, in plain words. */
 export const READ_ERRORS: Record<string, string> = {
   model_unreachable: "Couldn't reach Ollama. Is it running?",
+  model_disconnected: 'Ollama stopped answering partway, often while loading the model. Read again usually works.',
+  model_cannot_load: "Ollama couldn't load this model. Choose another vision model (see the setup check).",
   model_not_installed: "The card-reading model isn't installed in Ollama.",
   model_not_vision: "The chosen model can't read images.",
   model_timeout: 'Reading took too long.',
