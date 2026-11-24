@@ -13,6 +13,7 @@ import {
   type ContactInput,
   type ReviewItem,
   type Scan,
+  type TrashItem,
   type Typed,
 } from './api'
 
@@ -99,6 +100,9 @@ function rereadState(c: Contact) {
   }
 }
 
+// Trash in the demo: kept in memory until the page is reloaded.
+const trashed = new Map<string, { contact: Contact; item: TrashItem }>()
+
 // Cards a contact gained by merging, so the demo can show a card history.
 const extraScans = new Map<string, Scan[]>()
 function scansOf(c: Contact): Scan[] {
@@ -148,6 +152,7 @@ function list(q: URLSearchParams) {
     contacts: out,
     total: contacts.length,
     starred: contacts.filter((c) => c.starred).length,
+    trashed: trashed.size,
     with_scan: contacts.filter((c) => c.card_id).length,
     decks: [...decks].sort().map(([name, count]) => ({ name, count })),
   }
@@ -195,7 +200,31 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     case 'POST /sync':
       record('contacts.sync', '', { added: 0, updated: 0, removed: 0 })
       return { added: 0, updated: 0, removed: 0, skipped: 0 }
+    case 'GET /trash':
+      return { items: [...trashed.values()].map((t) => t.item), days: 30 }
+    case 'DELETE /trash':
+      trashed.delete(seg[1])
+      record('contact.forget', seg[1])
+      return { forgotten: seg[1] }
+    case 'POST /trash': {
+      const t = trashed.get(seg[1])
+      if (!t) throw new ApiError(404, 'not_found')
+      trashed.delete(seg[1])
+      contacts.push(t.contact)
+      record('contact.restore', seg[1])
+      return t.contact
+    }
     case 'POST /contacts':
+      if (seg[2] === 'trash') {
+        const c = find(seg[1])
+        contacts = contacts.filter((x) => x !== c)
+        trashed.set(c.uid, {
+          contact: c,
+          item: { uid: c.uid, full_name: c.full_name, organization: c.organization, card_id: c.card_id, trashed_at: new Date().toISOString(), days_left: 30 },
+        })
+        record('contact.trash', c.uid)
+        return { uid: c.uid, days: 30 }
+      }
       if (seg[2] === 'reread') {
         const c = find(seg[1])
         if (!c.card_id) throw new ApiError(409, 'no_scan')

@@ -6,6 +6,7 @@
   import Transfer from './lib/Transfer.svelte'
   import Activity from './lib/Activity.svelte'
   import Setup from './lib/Setup.svelte'
+  import Trash from './lib/Trash.svelte'
   import { href, router } from './lib/router.svelte'
   import Wall from './lib/Wall.svelte'
 
@@ -196,6 +197,8 @@
   <Duplicates />
 {:else if router.route.name === 'setup'}
   <Setup />
+{:else if router.route.name === 'trash'}
+  <Trash />
 {:else if router.route.name === 'activity'}
   <Activity />
 {:else if router.route.name === 'transfer'}

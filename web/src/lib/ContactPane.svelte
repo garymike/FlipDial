@@ -13,6 +13,7 @@
   } from './api'
   import { changes, patchFor, type Change } from './reread'
   import ContactForm from './ContactForm.svelte'
+  import Confirm from './Confirm.svelte'
   import FlipCard from './FlipCard.svelte'
   import ScanImage from './ScanImage.svelte'
   import Star from './Star.svelte'
@@ -237,18 +238,20 @@
     }
   }
 
-  let forgetting = $state(false)
-  async function forgetContact() {
+  // Trash: off the contacts server now, restorable from Trash for 30 days.
+  let trashing = $state(false)
+  async function moveToTrash() {
     if (!contact) return
-    forgetting = true
+    trashing = true
     try {
-      await api.forget(contact.uid)
-      forgetting = false
+      await api.trash(contact.uid)
       confirming = false
       onforget?.(contact.uid)
     } catch (e) {
       error = describe(e)
-      forgetting = false
+      confirming = false
+    } finally {
+      trashing = false
     }
   }
 
@@ -277,7 +280,18 @@
       </div>
       <div class="headbtns">
         <Star on={contact.starred} label={contact.starred ? 'Unstar' : 'Star'} onclick={toggleStar} />
-        {#if !editing}<button type="button" class="secondary" onclick={startEdit}>Edit</button>{/if}
+        {#if !editing}
+          <button type="button" class="secondary" onclick={startEdit}>Edit</button>
+          <button
+            type="button"
+            class="secondary icon"
+            aria-label={`Move ${contact.full_name} to Trash`}
+            title="Move to Trash"
+            onclick={() => (confirming = true)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg>
+          </button>
+        {/if}
       </div>
     </div>
 
@@ -425,27 +439,24 @@
           {:else}
             <p class="noscan">No card scanned yet. Scan one and it can be attached to this contact.</p>
           {/if}
-          {#if confirming}
-            <div class="forget" role="group" aria-label="Forget this contact">
-              <p>
-                This removes {contact.full_name} from your contacts server and deletes their scans
-                and history from FlipDial. It cannot be undone. Backups you already downloaded still
-                include them.
-              </p>
-              <div class="buttons">
-                <button type="button" class="secondary" onclick={() => (confirming = false)}>Keep</button>
-                <button type="button" class="danger" onclick={forgetContact} disabled={forgetting}>
-                  {forgetting ? 'Forgetting…' : 'Forget forever'}
-                </button>
-              </div>
-            </div>
-          {:else}
-            <button type="button" class="link-danger" onclick={() => (confirming = true)}>Forget this contact…</button>
-          {/if}
         {/if}
       </section>
   {/if}
 </article>
+
+{#if confirming && contact}
+  <Confirm
+    title={`Move ${contact.full_name} to Trash?`}
+    confirmLabel="Move to Trash"
+    danger
+    busy={trashing}
+    onconfirm={moveToTrash}
+    oncancel={() => (confirming = false)}
+  >
+    <p>It's removed from your contacts server now, so your phone and other apps stop showing it.</p>
+    <p>You can restore it from Trash, with its scans, for 30 days. After that it's deleted for good.</p>
+  </Confirm>
+{/if}
 
 <style>
   .multiline {
@@ -710,6 +721,16 @@
     margin: 6px 0 0;
     color: #d6d1c9;
   }
+  .icon {
+    min-width: 44px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .icon:hover {
+    color: #e5776b;
+  }
   .headbtns {
     display: flex;
     align-items: center;
@@ -774,43 +795,6 @@
     border: 1px solid var(--line);
     font-size: 10px;
     font-weight: 700;
-  }
-  .forget {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px;
-    border-radius: 12px;
-    background: #3a2422;
-    border: 1px solid #6b3a35;
-  }
-  .forget p {
-    margin: 0;
-    font-size: 14px;
-    line-height: 1.5;
-  }
-  .danger {
-    min-height: 44px;
-    padding: 0 18px;
-    border: 0;
-    border-radius: 10px;
-    background: #e5776b;
-    color: var(--ink);
-    font: inherit;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .link-danger {
-    align-self: flex-start;
-    min-height: 40px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #e5776b;
-    font: inherit;
-    font-size: 14px;
-    cursor: pointer;
   }
   .buttons {
     display: flex;

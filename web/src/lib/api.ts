@@ -117,11 +117,22 @@ export interface Scan {
   view?: string
 }
 
+/** A contact in Trash: off the contacts server, restorable until days_left runs out. */
+export interface TrashItem {
+  uid: string
+  full_name: string
+  organization: string
+  card_id: string | null
+  trashed_at: string
+  days_left: number
+}
+
 export interface ContactList {
   contacts: Contact[]
   total: number
   starred: number
   with_scan: number
+  trashed?: number
   decks: { name: string; count: number }[]
 }
 
@@ -348,6 +359,10 @@ export const api = {
   reread: (uid: string) => call<RereadState>('POST', `/api/contacts/${encodeURIComponent(uid)}/reread`),
   rereadState: (uid: string) => call<RereadState>('GET', `/api/contacts/${encodeURIComponent(uid)}/reread`),
   rereadDiscard: (uid: string) => call('DELETE', `/api/contacts/${encodeURIComponent(uid)}/reread`),
+  trash: (uid: string) => call<{ uid: string; days: number }>('POST', `/api/contacts/${encodeURIComponent(uid)}/trash`),
+  trashList: () => call<{ items: TrashItem[]; days: number }>('GET', '/api/trash'),
+  restoreTrash: (uid: string) => call<Contact>('POST', `/api/trash/${encodeURIComponent(uid)}/restore`),
+  deleteForever: (uid: string) => call('DELETE', `/api/trash/${encodeURIComponent(uid)}`),
   scans: (uid: string) => call<{ scans: Scan[] }>('GET', `/api/contacts/${encodeURIComponent(uid)}/scans`),
   sync: () => call<Record<string, number>>('POST', '/api/sync'),
   review: () => call<{ items: ReviewItem[]; ready: number }>('GET', '/api/review'),

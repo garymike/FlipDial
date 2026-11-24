@@ -15,6 +15,7 @@ import shutil
 
 from flipdial import contacts, db
 from flipdial.carddav.client import CardDAVClient
+from flipdial.carddav.vcard import VCard
 from flipdial.config import Settings
 
 log = logging.getLogger("flipdial.forget")
@@ -27,7 +28,12 @@ def forget(settings: Settings, client: CardDAVClient, uid: str) -> dict[str, int
         raise KeyError(uid)
     card, href, etag = found
     client.delete(href, etag)  # refuses if the contact changed elsewhere since the last sync
+    return purge_local(settings, uid, card)
 
+
+def purge_local(settings: Settings, uid: str, card: VCard) -> dict[str, int]:
+    """Everything FlipDial keeps about a contact. The server copy is handled by the caller
+    (deleted above, or already gone when the contact was in Trash)."""
     with db.session(settings.db_path) as conn:
         card_ids = {
             r["id"] for r in conn.execute("SELECT id FROM cards WHERE vcard_uid = ?", (uid,))
@@ -47,6 +53,7 @@ def forget(settings: Settings, client: CardDAVClient, uid: str) -> dict[str, int
     with db.session(settings.db_path) as conn:
         conn.executemany("DELETE FROM cards WHERE id = ?", [(c,) for c in card_ids])
         conn.execute("DELETE FROM contacts WHERE uid = ?", (uid,))
+        conn.execute("DELETE FROM trash WHERE uid = ?", (uid,))
         conn.execute("DELETE FROM rereads WHERE uid = ?", (uid,))  # a pending "Read again"
         merges = conn.execute(
             "DELETE FROM merges WHERE keep_uid = ? OR drop_uid = ?", (uid, uid)

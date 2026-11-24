@@ -21,7 +21,18 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from starlette.background import BackgroundTask
 
-from flipdial import audit, cardview, contacts, db, duplicates, forget, reread, status, updates
+from flipdial import (
+    audit,
+    cardview,
+    contacts,
+    db,
+    duplicates,
+    forget,
+    reread,
+    status,
+    trash,
+    updates,
+)
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
@@ -194,6 +205,7 @@ def list_contacts(
         "total": len(items),
         "starred": sum(c.starred for c in items),
         "with_scan": sum(bool(c.card_id) for c in items),
+        "trashed": trash.count(s),
         "decks": [{"name": k, "count": v} for k, v in sorted(decks.items())],
     }
 
@@ -276,6 +288,47 @@ def forget_contact(uid: str, s: SettingsDep, client: ClientDep, actor: ActorDep)
         raise HTTPException(404, "not_found") from exc
     except CardDAVError as exc:
         raise _dav_errors(exc) from exc
+    audit.record(s, actor, "contact.forget", uid, **counts)
+    return {"forgotten": uid} | counts
+
+
+@router.post("/contacts/{uid}/trash")
+def trash_contact(uid: str, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
+    """Move to Trash: off the contacts server now, restorable for 30 days."""
+    try:
+        out = trash.move(s, client, uid)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    audit.record(s, actor, "contact.trash", uid)
+    return out
+
+
+@router.get("/trash")
+def trash_list(s: SettingsDep) -> dict:
+    return {"items": trash.items(s), "days": trash.TRASH_DAYS}
+
+
+@router.post("/trash/{uid}/restore")
+def trash_restore(uid: str, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
+    try:
+        view = trash.restore(s, client, uid)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    audit.record(s, actor, "contact.restore", uid)
+    return view.as_dict()
+
+
+@router.delete("/trash/{uid}")
+def trash_delete_forever(uid: str, s: SettingsDep, actor: ActorDep) -> dict:
+    """Delete forever: the same as forgetting the contact. Cannot be undone."""
+    try:
+        counts = trash.delete_forever(s, uid)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
     audit.record(s, actor, "contact.forget", uid, **counts)
     return {"forgotten": uid} | counts
 

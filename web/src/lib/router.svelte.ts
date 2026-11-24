@@ -1,5 +1,5 @@
 // Minimal hash router: #/wall, #/wall/<uid> (a contact open in the reading pane), #/dial,
-// #/map, #/review, #/duplicates, #/transfer, #/activity, #/setup.
+// #/map, #/review, #/duplicates, #/transfer, #/activity, #/setup, #/trash.
 // #/contact/<uid> is the older contact page link; it opens the Wall's reading pane.
 // An empty hash opens the view used last (Dial at first).
 
@@ -12,6 +12,7 @@ export type Route =
   | { name: 'transfer' }
   | { name: 'activity' }
   | { name: 'setup' }
+  | { name: 'trash' }
 
 const VIEW_KEY = 'flipdial.view'
 
@@ -52,6 +53,8 @@ function parse(hash: string): Route {
       return { name: 'activity' }
     case 'setup':
       return { name: 'setup' }
+    case 'trash':
+      return { name: 'trash' }
     case 'contact':
       if (parts[1]) return { name: 'wall', uid: decodeURIComponent(parts[1]) }
       return { name: 'wall' }
