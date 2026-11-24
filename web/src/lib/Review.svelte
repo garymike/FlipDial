@@ -159,12 +159,45 @@
     }
   }
 
+  // Undo for the last dismissal, the Dismissed list, and reading a card again.
+  let undoId = $state<string | null>(null)
+  let confirmReread = $state(false)
+  let dismissedList = $state<{ card_id: string; created_at: string; label: string }[]>([])
+  let showDismissed = $state(false)
+  let confirmDelete = $state<string | null>(null)
+
+  async function loadDismissed() {
+    try {
+      dismissedList = (await api.dismissedCards()).items
+    } catch {
+      dismissedList = []
+    }
+  }
+  $effect(() => {
+    loadDismissed()
+  })
+
+  async function act(fn: () => Promise<unknown>) {
+    try {
+      await fn()
+      await Promise.all([load(), loadDismissed()])
+      onchange?.()
+    } catch (e) {
+      error = describe(e)
+    }
+  }
+  const restore = (id: string) => act(async () => { await api.restoreCard(id); if (undoId === id) undoId = null })
+  const reread = (id: string) => act(async () => { await api.retry(id); confirmReread = false; if (undoId === id) undoId = null })
+  const remove = (id: string) => act(async () => { await api.deleteCard(id); confirmDelete = null })
+
   async function dismiss() {
     if (!current) return
     busy = true
+    const id = current.card_id
     try {
-      await api.dismiss(current.card_id)
-      await load()
+      await api.dismiss(id)
+      undoId = id
+      await Promise.all([load(), loadDismissed()])
       onchange?.()
     } catch (e) {
       error = describe(e)
@@ -175,6 +208,12 @@
 </script>
 
 <div class="wrap">
+  {#if undoId}
+    <p class="undo" role="status">
+      Card dismissed. <button type="button" class="link" onclick={() => undoId && restore(undoId)}>Undo</button>
+      <button type="button" class="link" aria-label="Close message" onclick={() => (undoId = null)}>×</button>
+    </p>
+  {/if}
   <h1>
     Review
     <span class="count">
@@ -275,14 +314,55 @@
           </div>
         {/each}
         <ContactForm bind:value={form} flags={current.flags} idPrefix="review" />
+        {#if confirmReread}
+          <div class="confirm" role="group" aria-label="Read this card again">
+            <span>Read this card again? Changes you made here are discarded.</span>
+            <button type="button" class="secondary" onclick={() => (confirmReread = false)}>Cancel</button>
+            <button type="button" class="primary" onclick={() => current && reread(current.card_id)}>Read again</button>
+          </div>
+        {/if}
+        {#if !form.full_name.trim() && form.organization.trim()}
+          <p class="hint">No person's name, so this is saved as a company contact.</p>
+        {/if}
         <div class="buttons">
           <button type="button" class="secondary" onclick={dismiss} disabled={busy}>Dismiss</button>
-          <button type="button" class="primary" onclick={approve} disabled={busy || !form.full_name.trim()}>
+          <button type="button" class="secondary" onclick={() => (confirmReread = true)} disabled={busy}>Read again</button>
+          <button type="button" class="primary" onclick={approve} disabled={busy || !(form.full_name.trim() || form.organization.trim())}>
             {busy ? 'Saving…' : matches.length ? 'Save as a new contact' : 'Approve and save'}
           </button>
         </div>
       </section>
     </div>
+  {/if}
+  {#if dismissedList.length}
+    <section class="dismissed">
+      <button type="button" class="link" aria-expanded={showDismissed} onclick={() => (showDismissed = !showDismissed)}>
+        {showDismissed ? 'Hide' : 'Show'} dismissed cards ({dismissedList.length})
+      </button>
+      {#if showDismissed}
+        <ul>
+          {#each dismissedList as d (d.card_id)}
+            <li>
+              <img src={api.image(d.card_id, 'thumb')} alt="Dismissed card" loading="lazy" />
+              <span class="label">{d.label || 'Not read'}</span>
+              {#if confirmDelete === d.card_id}
+                <span class="why">Delete this scan for good? This can't be undone.</span>
+                <div class="row">
+                  <button type="button" class="secondary" onclick={() => (confirmDelete = null)}>Keep</button>
+                  <button type="button" class="danger" onclick={() => remove(d.card_id)}>Delete</button>
+                </div>
+              {:else}
+                <div class="row">
+                  <button type="button" class="secondary" onclick={() => restore(d.card_id)}>Back to review</button>
+                  <button type="button" class="secondary" onclick={() => reread(d.card_id)}>Read again</button>
+                  <button type="button" class="link danger-link" onclick={() => (confirmDelete = d.card_id)}>Delete</button>
+                </div>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
   {/if}
 </div>
 
@@ -551,6 +631,110 @@
     from {
       opacity: 0;
     }
+  }
+  .undo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: #22302a;
+    border: 1px solid #3d5a4b;
+    font-size: 14px;
+  }
+  .confirm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #33301f;
+    border: 1px solid #6a5e2e;
+    font-size: 14px;
+  }
+  .confirm span {
+    flex: 1 1 220px;
+  }
+  .hint {
+    margin: 0;
+    color: var(--ash);
+    font-size: 13px;
+  }
+  .link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--amber);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .dismissed {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #2c2f36;
+  }
+  .dismissed .link {
+    align-self: flex-start;
+  }
+  .dismissed ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 14px;
+  }
+  .dismissed li {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid #2c2f36;
+  }
+  .dismissed img {
+    width: 100%;
+    aspect-ratio: 1.75;
+    object-fit: contain;
+    border-radius: 6px;
+    background: #111;
+  }
+  .dismissed .label {
+    font-size: 14px;
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .row .secondary {
+    white-space: nowrap;
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+  .danger {
+    min-height: 36px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: #e5776b;
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .danger-link {
+    color: #e5776b;
+    font-size: 13px;
   }
   .said {
     color: var(--ash);

@@ -18,7 +18,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from starlette.background import BackgroundTask
 
 from flipdial import audit, contacts, db, duplicates, forget, status, updates
@@ -40,7 +40,7 @@ class Social(BaseModel):
 
 
 class ContactIn(BaseModel):
-    full_name: Text = Field(min_length=1)
+    full_name: Text = ""  # may be empty for a business card; the company name is used
     title: Text = ""
     organization: Text = ""
     emails: list[Text] = Field(default_factory=list, max_length=10)
@@ -54,6 +54,14 @@ class ContactIn(BaseModel):
     met_on: Annotated[str, StringConstraints(pattern=r"^(\d{4}-\d{2}-\d{2})?$")] = ""
     starred: bool = False
     tags: list[Short] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def _name_or_company(self) -> ContactIn:
+        if not self.full_name:
+            if not self.organization:
+                raise ValueError("a name or a company is required")
+            self.full_name = self.organization  # a business card: saved as a company contact
+        return self
 
 
 class ContactPatch(BaseModel):
@@ -303,15 +311,17 @@ def retry_all(s: SettingsDep, actor: ActorDep) -> dict:
 
 @router.post("/review/{card_id}/retry")
 def retry(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
+    """Read a card again: one that failed, is waiting for review, or was dismissed."""
     _card_id(card_id)
     with db.session(s.db_path) as conn:
         n = conn.execute(
             "UPDATE cards SET status = 'extract_pending', attempts = 0, last_error = NULL, "
-            "last_error_detail = NULL WHERE id = ? AND status = 'extract_failed'",
+            "last_error_detail = NULL WHERE id = ? "
+            "AND status IN ('extract_failed', 'review', 'dismissed')",
             (card_id,),
         ).rowcount
     if not n:
-        raise HTTPException(409, "not_failed")
+        raise HTTPException(409, "cannot_reread")  # being read already, or saved
     audit.record(s, actor, "card.retry", card_id, cards=1)
     return {"retrying": 1}
 
@@ -328,6 +338,61 @@ def dismiss(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
         raise HTTPException(404, "not_found")
     audit.record(s, actor, "card.dismiss", card_id)
     return {"card_id": card_id, "status": "dismissed"}
+
+
+@router.get("/review/dismissed")
+def dismissed(s: SettingsDep) -> dict:
+    with db.session(s.db_path) as conn:
+        rows = conn.execute(
+            "SELECT c.id, c.created_at, e.fields_json FROM cards c LEFT JOIN extractions e "
+            "ON e.rowid = (SELECT rowid FROM extractions WHERE card_id = c.id "
+            "ORDER BY rowid DESC LIMIT 1) WHERE c.status = 'dismissed' ORDER BY c.id DESC"
+        ).fetchall()
+    items = []
+    for r in rows:
+        f = json.loads(r["fields_json"]) if r["fields_json"] else {}
+        label = (f.get("full_name") or {}).get("value") or (f.get("organization") or {}).get(
+            "value", ""
+        )
+        items.append({"card_id": r["id"], "created_at": r["created_at"], "label": label})
+    return {"items": items}
+
+
+@router.post("/review/{card_id}/restore")
+def restore(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
+    """Bring a dismissed card back to Review (to be read again if it never was)."""
+    _card_id(card_id)
+    with db.session(s.db_path) as conn:
+        has_read = conn.execute(
+            "SELECT 1 FROM extractions WHERE card_id = ? LIMIT 1", (card_id,)
+        ).fetchone()
+        status = "review" if has_read else "extract_pending"
+        n = conn.execute(
+            "UPDATE cards SET status = ? WHERE id = ? AND status = 'dismissed'", (status, card_id)
+        ).rowcount
+    if not n:
+        raise HTTPException(409, "not_dismissed")
+    audit.record(s, actor, "card.restore", card_id)
+    return {"card_id": card_id, "status": status}
+
+
+@router.delete("/review/{card_id}")
+def delete_card(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
+    """Delete a scan that was never saved as a contact: originals, crops and what was read."""
+    _card_id(card_id)
+    with db.session(s.db_path) as conn:
+        row = conn.execute("SELECT status FROM cards WHERE id = ?", (card_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "not_found")
+    if row["status"] not in ("dismissed", "review", "extract_failed"):
+        raise HTTPException(409, "cannot_delete")  # saved cards: use Forget on the contact
+    folder = s.archive_dir / card_id
+    if folder.is_dir() and folder.resolve().parent == s.archive_dir.resolve():
+        shutil.rmtree(folder)
+    with db.session(s.db_path) as conn:
+        conn.execute("DELETE FROM cards WHERE id = ?", (card_id,))  # extractions cascade
+    audit.record(s, actor, "card.delete", card_id)
+    return {"deleted": card_id}
 
 
 # -- images -------------------------------------------------------------------------

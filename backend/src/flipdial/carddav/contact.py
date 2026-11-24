@@ -27,6 +27,8 @@ MANAGED = (
     "SOCIALPROFILE",
     "X-SOCIALPROFILE",
     "REV",
+    "X-ABSHOWAS",
+    "KIND",
 )
 X = "X-FLIPDIAL-"
 
@@ -79,7 +81,18 @@ def new_uid() -> str:
     return str(uuid.uuid4())
 
 
+def is_company(c: ReviewedContact) -> bool:
+    """A business card with no person's name: the contact is the company itself."""
+    return (
+        not (c.given_name or c.family_name)
+        and bool(c.organization)
+        and c.full_name.strip() == c.organization.strip()
+    )
+
+
 def _name_parts(c: ReviewedContact) -> tuple[str, str]:
+    if is_company(c):
+        return "", ""
     if c.given_name or c.family_name:
         return c.given_name, c.family_name
     parts = c.full_name.split()
@@ -149,6 +162,9 @@ def apply(card: VCard, c: ReviewedContact) -> VCard:
         "STARRED": "yes" if c.starred else "",
     }.items():
         card.set(X + key, value)
+    if is_company(c):
+        # Shown as a company in Apple Contacts and most other apps
+        card.add("KIND" if v4 else "X-ABSHOWAS", "org" if v4 else "COMPANY", raw=True)
     card.add("REV", datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"), raw=True)
     return card
 

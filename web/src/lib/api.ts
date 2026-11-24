@@ -276,6 +276,10 @@ export const api = {
   startUpdate: () => call<{ updating_to: string }>('POST', '/api/update/start'),
   status: () => call<SetupStatus>('GET', '/api/status'),
   retry: (cardId: string) => call<{ retrying: number }>('POST', `/api/review/${cardId}/retry`),
+  dismissedCards: () =>
+    call<{ items: { card_id: string; created_at: string; label: string }[] }>('GET', '/api/review/dismissed'),
+  restoreCard: (cardId: string) => call<{ status: string }>('POST', `/api/review/${cardId}/restore`),
+  deleteCard: (cardId: string) => call<{ deleted: string }>('DELETE', `/api/review/${cardId}`),
   retryAll: () => call<{ retrying: number }>('POST', '/api/review/retry'),
   me: () => call<{ user: string; mode: 'none' | 'oidc' | 'proxy' }>('GET', '/api/me'),
   logout: () => call<{ signed_out: boolean }>('POST', '/api/logout'),
@@ -336,6 +340,9 @@ export function describe(err: unknown): string {
     launch_failed: "The update couldn't be started. Run update.cmd instead.",
     updater_missing: "FlipDial's update script couldn't be found. Run update.cmd instead.",
     not_failed: 'That card is already being read.',
+    cannot_reread: 'That card is already being read, or was already saved.',
+    not_dismissed: 'That card is already back in Review.',
+    cannot_delete: 'Saved cards are removed with Forget on the contact page.',
     bad_mapping: 'The column choices do not match the file. Pick the file again.',
   }
   return messages[code] ?? `Something went wrong (${code}).`
