@@ -38,9 +38,6 @@
   const index = $derived(cards.length ? mod(Math.round(pos), cards.length) : 0)
   const current = $derived<Contact | null>(cards[index] ?? null)
   const letters = $derived(letterIndex(cards.map((c) => c.full_name)))
-  const upNext = $derived(
-    cards.length > 1 ? [1, 2, 3].map((k) => cards[mod(index + k, cards.length)]).slice(0, cards.length - 1) : [],
-  )
 
   // Only the newest request may update the dial. Switching filters quickly sends several,
   // and an older, slower answer must not land on top of the newer one.
@@ -296,16 +293,6 @@
         <aside aria-label="Current contact">
           <span class="eyebrow">{current.event || 'No event'} · {current.card_id ? 'Scan' : current.source}</span>
           <ContactPane uid={current.uid} initial={current} showCard={false} onchange={changed} onforget={forgotten} />
-          {#if upNext.length}
-            <div class="next">
-              <span class="eyebrow">Up next</span>
-              {#each upNext as u (u.uid)}
-                <button type="button" onclick={() => goTo(cards.indexOf(u))}>
-                  <span>{u.full_name}</span><span class="org">{u.organization}</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
         </aside>
       {/if}
     </div>
@@ -555,35 +542,6 @@
     text-transform: uppercase;
     color: var(--ash);
     font-weight: 600;
-  }
-  .next {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding-top: 14px;
-    border-top: 1px solid #2c2f36;
-  }
-  .next button {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    min-height: 36px;
-    padding: 0 10px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--bone);
-    font: inherit;
-    font-size: 14px;
-    text-align: left;
-    cursor: pointer;
-  }
-  .next button:hover {
-    background: #23262c;
-  }
-  .org {
-    color: var(--ash);
-    font-size: 13px;
   }
   .error {
     margin: 0;
