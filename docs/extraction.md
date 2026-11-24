@@ -63,15 +63,15 @@ Keep a set of your own scanned cards in a folder **outside this repository**. Th
 
 ```sh
 # Scanner (duplex JPEGs, front then back). Your raw scans are left untouched.
-flipdial testset make D:\flipdial-testset\raw D:\flipdial-testset\cards
+flipdial testset make C:\flipdial-testset\raw C:\flipdial-testset\cards
 # Phone photos go into the same test set; numbering continues
-flipdial testset make D:\flipdial-testset\phone D:\flipdial-testset\cards --mode single
+flipdial testset make C:\flipdial-testset\phone C:\flipdial-testset\cards --mode single
 ```
 
 This runs the real ingest steps (pairing, blank-back detection, cropping) on a copy of the scans, so the test uses exactly the images the reader sees in normal use. Each card gets a folder with a blank `expected.json`. Fill each one in by hand from the physical card, not from what FlipDial reads, then check your progress:
 
 ```sh
-flipdial testset check D:\flipdial-testset\cards
+flipdial testset check C:\flipdial-testset\cards
 ```
 
 `make` refuses to write inside a git repository, so a test set can't end up committed by accident.
