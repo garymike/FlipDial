@@ -60,7 +60,23 @@ const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').
 export function seek(query: string, cards: Seekable[]): number {
   const q = fold(query.trim())
   if (!q) return -1
-  const tests: ((c: Seekable) => boolean)[] = [
+  for (const test of tests(q)) {
+    const i = cards.findIndex(test)
+    if (i >= 0) return i
+  }
+  return -1
+}
+
+/** How many cards a search matches, by any of the rules `seek` uses. */
+export function countMatches(query: string, cards: Seekable[]): number {
+  const q = fold(query.trim())
+  if (!q) return 0
+  const all = tests(q)
+  return cards.filter((c) => all.some((t) => t(c))).length
+}
+
+function tests(q: string): ((c: Seekable) => boolean)[] {
+  return [
     (c) => fold(c.full_name).startsWith(q) || fold(c.organization).startsWith(q),
     (c) => [c.full_name, c.organization].some((t) => fold(t).split(/[\s\-&.,]+/).some((w) => w.startsWith(q))),
     (c) =>
@@ -68,11 +84,6 @@ export function seek(query: string, cards: Seekable[]): number {
         ...(c.emails ?? []).map((e) => (typeof e === 'string' ? e : e.value))]
         .some((t) => fold(t).includes(q)),
   ]
-  for (const test of tests) {
-    const i = cards.findIndex(test)
-    if (i >= 0) return i
-  }
-  return -1
 }
 
 export interface SlotStyle {

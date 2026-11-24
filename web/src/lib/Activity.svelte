@@ -1,7 +1,7 @@
 <script lang="ts">
   // The audit log: every change, import, export and sign-in, newest first.
   import { api, describe, type AuditEntry } from './api'
-  import { href } from './router.svelte'
+  import { contactHref } from './router.svelte'
 
   const LABELS: Record<string, string> = {
     'contact.edit': 'Edited a contact',
@@ -82,7 +82,7 @@
 
   function link(e: AuditEntry): string | null {
     return e.action.startsWith('contact.') && e.target && !['contact.merge_undo', 'contact.forget'].includes(e.action)
-      ? href({ name: 'contact', uid: e.target })
+      ? contactHref(e.target)
       : null
   }
 </script>

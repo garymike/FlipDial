@@ -1,6 +1,5 @@
 <script lang="ts">
   import { api, DEMO, describe, type UpdateInfo } from './lib/api'
-  import ContactDetail from './lib/ContactDetail.svelte'
   import Dial from './lib/Dial.svelte'
   import Duplicates from './lib/Duplicates.svelte'
   import Review from './lib/Review.svelte'
@@ -109,8 +108,8 @@
   }
 
   const views = [
-    { name: 'wall', label: 'Wall' },
     { name: 'dial', label: 'Dial' },
+    { name: 'wall', label: 'Wall' },
     { name: 'map', label: 'Map' },
   ] as const
 </script>
@@ -122,7 +121,7 @@
   </p>
 {/if}
 <header>
-  <a class="brand" href={href({ name: 'wall' })} aria-label="FlipDial home">
+  <a class="brand" href="#/" aria-label="FlipDial home">
     <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="30" height="30" />
     <span>Flip<span class="accent">Dial</span></span>
   </a>
@@ -190,7 +189,7 @@
 {/if}
 
 {#if router.route.name === 'wall'}
-  <Wall {query} />
+  <Wall {query} open={router.route.uid ?? ''} />
 {:else if router.route.name === 'dial'}
   <Dial {query} />
 {:else if router.route.name === 'duplicates'}
@@ -203,8 +202,6 @@
   <Transfer />
 {:else if router.route.name === 'review'}
   <Review onchange={refreshCount} />
-{:else if router.route.name === 'contact'}
-  {#key router.route.uid}<ContactDetail uid={router.route.uid} />{/key}
 {:else}
   <main class="soon">
     <h1>Map view</h1>

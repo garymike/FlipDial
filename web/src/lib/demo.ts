@@ -12,6 +12,7 @@ import {
   type Contact,
   type ContactInput,
   type ReviewItem,
+  type Scan,
   type Typed,
 } from './api'
 
@@ -71,6 +72,14 @@ function similar(a: Contact, b: Contact): { score: number; reasons: string[] } |
     score = Math.max(score, 0.7)
   }
   return score ? { score, reasons } : null
+}
+
+// Cards a contact gained by merging, so the demo can show a card history.
+const extraScans = new Map<string, Scan[]>()
+function scansOf(c: Contact): Scan[] {
+  const own = c.card_id ? [{ card_id: c.card_id, created_at: '', has_back: c.has_back }] : []
+  const all = [...(extraScans.get(c.uid) ?? []), ...own]
+  return all.filter((x, i) => all.findIndex((y) => y.card_id === x.card_id) === i)
 }
 
 function find(uid: string): Contact {
@@ -162,10 +171,17 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       record('contacts.sync', '', { added: 0, updated: 0, removed: 0 })
       return { added: 0, updated: 0, removed: 0, skipped: 0 }
     case 'GET /contacts':
+      if (seg[2] === 'scans') return { scans: scansOf(find(seg[1])) }
       return seg[1] ? find(seg[1]) : list(url.searchParams)
     case 'PATCH /contacts': {
       const c = find(seg[1])
       const changes = body as Partial<ContactInput>
+      const pick = (changes as { card_id?: string }).card_id
+      if (pick) {
+        const scan = scansOf(c).find((x) => x.card_id === pick)
+        if (!scan) throw new ApiError(409, 'not_this_contacts_card')
+        c.has_back = scan.has_back
+      }
       Object.assign(c, changes)
       if (changes.addresses) c.address = changes.addresses[0] ? addressLine(changes.addresses[0]) : ''
       if (changes.tags || changes.event !== undefined)
@@ -227,9 +243,17 @@ export async function handle(method: string, path: string, body?: unknown): Prom
         record('contact.merge_undo', String(m.id))
         return { restored: [m.keep.uid, m.dropped.uid] }
       }
-      const { keep_uid, drop_uid, contact } = body as { keep_uid: string; drop_uid: string; contact: ContactInput }
+      const { keep_uid, drop_uid, contact, show_card } = body as {
+        keep_uid: string
+        drop_uid: string
+        contact: ContactInput
+        show_card?: string
+      }
       const keep = find(keep_uid), drop = find(drop_uid)
-      const merged = fromInput(contact, { ...keep, card_id: keep.card_id ?? drop.card_id, has_back: keep.has_back || drop.has_back })
+      const both = [...scansOf(keep), ...scansOf(drop)]
+      extraScans.set(keep_uid, both)
+      const shown = both.find((x) => x.card_id === show_card) ?? both[both.length - 1] ?? null
+      const merged = fromInput(contact, { ...keep, card_id: shown?.card_id ?? null, has_back: shown?.has_back ?? false })
       const id = nextId++
       merges.unshift({ id, keep: structuredClone(keep), dropped: structuredClone(drop), undone: false, at: new Date().toISOString() })
       contacts = contacts.filter((c) => c !== drop).map((c) => (c === keep ? merged : c))

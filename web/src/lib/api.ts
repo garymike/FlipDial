@@ -97,6 +97,13 @@ export interface Contact {
   has_back: boolean
 }
 
+/** One card a person gave you. A contact can have several (a new job, a new card). */
+export interface Scan {
+  card_id: string
+  created_at: string
+  has_back: boolean
+}
+
 export interface ContactList {
   contacts: Contact[]
   total: number
@@ -322,8 +329,9 @@ export const api = {
     return call('GET', `/api/contacts${qs ? `?${qs}` : ''}`)
   },
   contact: (uid: string) => call<Contact>('GET', `/api/contacts/${encodeURIComponent(uid)}`),
-  update: (uid: string, changes: Partial<ContactInput>) =>
+  update: (uid: string, changes: Partial<ContactInput> & { card_id?: string }) =>
     call<Contact>('PATCH', `/api/contacts/${encodeURIComponent(uid)}`, changes),
+  scans: (uid: string) => call<{ scans: Scan[] }>('GET', `/api/contacts/${encodeURIComponent(uid)}/scans`),
   sync: () => call<Record<string, number>>('POST', '/api/sync'),
   review: () => call<{ items: ReviewItem[]; ready: number }>('GET', '/api/review'),
   approve: (cardId: string, input: ContactInput) =>
@@ -332,8 +340,8 @@ export const api = {
   duplicates: () => call<{ pairs: DuplicatePair[]; count: number }>('GET', '/api/duplicates'),
   notDuplicates: (uid_a: string, uid_b: string) =>
     call('POST', '/api/duplicates/dismiss', { uid_a, uid_b }),
-  merge: (keep_uid: string, drop_uid: string, contact: ContactInput) =>
-    call<{ contact: Contact; merge_id: number }>('POST', '/api/merge', { keep_uid, drop_uid, contact }),
+  merge: (keep_uid: string, drop_uid: string, contact: ContactInput, show_card = '') =>
+    call<{ contact: Contact; merge_id: number }>('POST', '/api/merge', { keep_uid, drop_uid, contact, show_card }),
   undoMerge: (id: number) => call<{ restored: string[] }>('POST', `/api/merge/${id}/undo`),
   merges: () => call<{ merges: MergeRecord[] }>('GET', '/api/merges'),
   matches: (cardId: string) => call<{ matches: Match[] }>('GET', `/api/review/${cardId}/matches`),
@@ -421,6 +429,7 @@ export function describe(err: unknown): string {
     not_dismissed: 'That card is already back in Review.',
     cannot_delete: 'Saved cards are removed with Forget on the contact page.',
     bad_mapping: 'The column choices do not match the file. Pick the file again.',
+    not_this_contacts_card: "That card isn't linked to this contact.",
     not_found: "That contact isn't in your address book any more. It may have been deleted or merged.",
     unknown_card: "That card isn't in FlipDial any more.",
     changed_on_server: 'This contact was changed on the contacts server. Reload it and try again.',

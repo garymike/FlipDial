@@ -113,6 +113,7 @@ class ContactPatch(BaseModel):
     socials: list[Social] | None = Field(default=None, max_length=10)
     addresses: list[AddressIn] | None = Field(default=None, max_length=5)
     address: Text | None = None  # older form of addresses
+    card_id: Short | None = None  # show another of this contact's scanned cards
     about: Note | None = None
     note: Note | None = None
     event: Short | None = None
@@ -179,7 +180,7 @@ def list_contacts(
             needle
             and needle
             not in " ".join(
-                [c.full_name, c.organization, c.title, *values(c.emails), c.event]
+                [c.full_name, c.organization, c.title, *values(c.emails), c.event, c.about]
             ).casefold()
         ):
             continue
@@ -202,7 +203,15 @@ def get_contact(uid: str, s: SettingsDep) -> dict:
     found = contacts.get_contact(s, uid)
     if found is None:
         raise HTTPException(404, "not_found")
-    return contacts.view(found[0]).as_dict()
+    return contacts.full_view(s, found[0]).as_dict()
+
+
+@router.get("/contacts/{uid}/scans")
+def contact_scans(uid: str, s: SettingsDep) -> dict:
+    """Every card this person has given you, newest first."""
+    if contacts.get_contact(s, uid) is None:
+        raise HTTPException(404, "not_found")
+    return {"scans": contacts.scans_for(s, uid)}
 
 
 @router.patch("/contacts/{uid}")
@@ -217,6 +226,8 @@ def patch_contact(
         return out
     except KeyError as exc:
         raise HTTPException(404, "not_found") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
     except CardDAVError as exc:
         raise _dav_errors(exc) from exc
 
@@ -509,6 +520,7 @@ class MergeIn(BaseModel):
     keep_uid: Short = Field(min_length=1)
     drop_uid: Short = Field(min_length=1)
     contact: ContactIn
+    show_card: Short = ""  # when both have a scan: the card to show (the other is kept too)
 
 
 @router.get("/duplicates")
@@ -528,7 +540,12 @@ def dismiss_duplicate(body: PairIn, s: SettingsDep, actor: ActorDep) -> dict:
 def merge_contacts(body: MergeIn, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
     try:
         view, merge_id = duplicates.merge(
-            s, client, body.keep_uid, body.drop_uid, _reviewed(body.contact, source="merged")
+            s,
+            client,
+            body.keep_uid,
+            body.drop_uid,
+            _reviewed(body.contact, source="merged"),
+            show_card=body.show_card,
         )
     except duplicates.MergeError as exc:
         raise _merge_error(exc) from exc

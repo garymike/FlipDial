@@ -159,6 +159,7 @@ def merge(
     keep_uid: str,
     drop_uid: str,
     result: ReviewedContact,
+    show_card: str = "",
 ) -> tuple[ContactView, int]:
     """Write `result` onto `keep`, delete `drop`, and record both for undo."""
     if keep_uid == drop_uid:
@@ -175,8 +176,12 @@ def merge(
     drop_scan = drop_card.first("X-FLIPDIAL-CARD-ID")
     result.has_scan = bool(keep_scan or drop_scan)
     apply(keep_card, result)
-    if not keep_scan and drop_scan:
-        keep_card.set("X-FLIPDIAL-CARD-ID", drop_scan)
+    # Both scans stay linked to the kept contact; this picks the one it shows. Unless asked,
+    # the newer card wins.
+    scans = [x for x in (keep_scan, drop_scan) if x]
+    shown = show_card if show_card in scans else contacts.newest_card(settings, scans)
+    if shown:
+        keep_card.set("X-FLIPDIAL-CARD-ID", shown)
     merged_from = [v for v in [keep_card.first("X-FLIPDIAL-MERGED-FROM"), drop_uid] if v]
     keep_card.set("X-FLIPDIAL-MERGED-FROM", ",".join(merged_from))
 
@@ -194,7 +199,7 @@ def merge(
         merge_id = cur.lastrowid
     _relink_card(settings, drop_scan, keep_uid)
     log.info("contacts merged", extra={"merge_id": merge_id, "keep": keep_uid, "drop": drop_uid})
-    return contacts.view(keep_card), merge_id
+    return contacts.full_view(settings, keep_card), merge_id
 
 
 def undo_merge(settings: Settings, client: CardDAVClient, merge_id: int) -> list[str]:
