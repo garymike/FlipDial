@@ -386,15 +386,15 @@
     gap: 1px;
   }
   .letters button {
-    width: 30px;
-    height: 22px;
+    width: 36px;
+    height: 24px;
     padding: 0;
     border: 0;
     border-radius: 5px;
     background: transparent;
     color: #d6d1c9;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
   }
@@ -407,7 +407,7 @@
     color: var(--ink);
   }
   .center {
-    flex: 999 1 560px;
+    flex: 2 1 560px; /* the dial about 2/3, the reading pane 1/3 */
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -530,7 +530,7 @@
   }
   aside {
     flex: 1 1 360px;
-    max-width: 440px;
+    max-width: 620px;
     align-self: flex-start;
     position: sticky;
     top: 16px;
