@@ -273,7 +273,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       if (seg[2] === 'reread') return rereadState(find(seg[1]))
       return seg[1] ? withPhone(find(seg[1])) : list(url.searchParams)
     case 'GET /phone':
-      return phoneStatus()
+      return seg[1] === 'inbox' ? { items: [] } : phoneStatus()
     case 'PUT /phone': {
       const { name, state } = body as { name: string; state: 'on' | 'off' | 'follow' }
       if (name === '*') phoneEverything = state === 'on'

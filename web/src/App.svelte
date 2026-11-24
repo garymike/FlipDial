@@ -17,7 +17,8 @@
 
   async function refreshCount() {
     try {
-      reviewCount = (await api.review()).ready
+      const r = await api.review()
+      reviewCount = r.ready + (r.from_phone ?? 0)
     } catch {
       reviewCount = 0
     }

@@ -353,12 +353,60 @@ def phone_sync(body: PhoneSyncIn, s: SettingsDep, client: ClientDep, actor: Acto
         raise HTTPException(409, "phone_sync_off")
     try:
         contacts.sync(s, client)  # the master book as it is now
-        out = phone.run(s, phone.phone_client(s), body.confirm, body.accept_drop)
+        out = phone.run(s, phone.phone_client(s), body.confirm, body.accept_drop, client)
     except CardDAVError as exc:
         raise _dav_errors(exc) from exc
     if body.confirm or body.accept_drop:
         audit.record(s, actor, "phone.confirm", "", accepted_drop=body.accept_drop)
     return {**out, "state": phone.status(s)}
+
+
+@router.get("/phone/inbox")
+def phone_inbox(s: SettingsDep) -> dict:
+    """Contacts added on the phone, and contacts changed in both places."""
+    if not phone_rules.enabled(s):
+        return {"items": []}
+    return {"items": phone.inbox(s)}
+
+
+@router.post("/phone/inbox/{item_id}/{action}")
+def phone_inbox_action(
+    item_id: int,
+    action: Literal["accept", "dismiss"],
+    s: SettingsDep,
+    client: ClientDep,
+    actor: ActorDep,
+) -> dict:
+    """accept: save a phone contact to FlipDial, or use the phone's version.
+    dismiss: leave a phone contact out of FlipDial, or keep FlipDial's version."""
+    if not phone_rules.enabled(s):
+        raise HTTPException(409, "phone_sync_off")
+    fn = phone.accept if action == "accept" else phone.dismiss
+    try:
+        out = fn(s, phone.phone_client(s), client, item_id)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except phone.InboxError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    audit.record(s, actor, f"phone.inbox_{action}", out["uid"])
+    return out
+
+
+@router.post("/phone/undo/{undo_id}")
+def phone_undo(undo_id: int, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
+    """Put a contact back as it was before an edit made on the phone."""
+    try:
+        uid = phone.undo(s, client, undo_id)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except phone.InboxError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    audit.record(s, actor, "phone.undo", uid, undo=undo_id)
+    return {"uid": uid}
 
 
 @router.get("/contacts/{uid}/scans")
@@ -513,7 +561,12 @@ def review_queue(s: SettingsDep) -> dict:
                 ).token(),
             }
         )
-    return {"items": items, "ready": sum(i["status"] == "review" for i in items)}
+    from_phone = phone.waiting_count(s) if phone_rules.enabled(s) else 0
+    return {
+        "items": items,
+        "ready": sum(i["status"] == "review" for i in items),
+        "from_phone": from_phone,  # contacts added on the phone or changed in both places
+    }
 
 
 @router.post("/review/{card_id}/approve")

@@ -8,30 +8,12 @@ from __future__ import annotations
 
 import uuid
 
-import httpx
 import pytest
-from conftest import USER
 from test_api import H
 
 from flipdial import contacts, phone, phone_rules
 from flipdial.carddav.client import CardDAVClient
 from flipdial.carddav.contact import ReviewedContact, new_card
-
-
-@pytest.fixture
-def ps(dav_settings, radicale):
-    """Settings with a fresh phone book."""
-    name = "Phone " + uuid.uuid4().hex[:6]
-    body = (
-        '<?xml version="1.0"?><d:mkcol xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">'
-        "<d:set><d:prop><d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>"
-        f"<d:displayname>{name}</d:displayname></d:prop></d:set></d:mkcol>"
-    )
-    url = f"{radicale}{USER}/{name.replace(' ', '-').lower()}/"
-    assert httpx.request("MKCOL", url, content=body, auth=(USER, "x")).status_code == 201
-    dav_settings.phone_addressbook = name
-    dav_settings.carddav_addressbook = "Contacts"
-    return dav_settings
 
 
 def _people(s, deck: str, n: int) -> list[str]:
@@ -61,7 +43,8 @@ def _deck() -> str:
 
 def test_main_book_never_defaults_to_phone_book(ps):
     ps.carddav_addressbook = None
-    assert CardDAVClient(ps).address_book().name == "Contacts"
+    # Other tests' phone books share this server, so only check it isn't this one.
+    assert CardDAVClient(ps).address_book().name != ps.phone_addressbook
     ps.carddav_addressbook = ps.phone_addressbook
     with pytest.raises(Exception, match="phone_book_is_main_book"):
         CardDAVClient(ps)
