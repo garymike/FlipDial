@@ -25,11 +25,16 @@ Reviewed for v1 (milestones 0 to 8, November 2026). Review again whenever a mile
 7. Browser to the identity provider, and the provider back to FlipDial (sign-in)
 8. Reverse proxy to FlipDial (proxy sign-in mode)
 9. Files the person imports, and backups they restore
+10. Phones to the phone address book, and the phone book back to FlipDial ([phone sync](sync.md), proposed)
 
 ## Threats and mitigations
 
 | Threat | Mitigation |
 |---|---|
+| A phone, or a bug, deletes or empties contacts (proposed phone sync) | The phone has its own account limited to the phone book; deletions on the phone never reach the master book; sync stops on a sudden drop or an unreadable book; large changes need confirmation; removed and changed vCards kept 30 days; backup before bulk changes (see [phone sync](sync.md)) |
+| Crafted contact edits from the phone book (proposed phone sync) | Treated as untrusted input: parsed, length-limited and validated like model output; FlipDial's own fields can't be changed from the phone; new contacts go to Review |
+| Contacts server reached from the internet (proposed phone sync) | Home network only by design: no port forwarding, the wizard never suggests it, and HTTPS with a certificate the phone is given |
+| Lost or stolen phone (proposed phone sync) | It holds only switched-on contacts; changing the phone account's password cuts it off without touching FlipDial's own access |
 | Card text crafted to manipulate the model (prompt injection) | Model gets no tools and no network access; fixed prompt; output must match a strict JSON schema; values are length-limited and validated; a human reviews before saving |
 | Malicious image files (parser exploits, decompression bombs) | Allowlisted formats, size and pixel limits, decoding in the worker process only, maintained image libraries |
 | Path traversal through file names | Server-generated card IDs; original file names never used as paths |

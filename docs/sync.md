@@ -1,0 +1,128 @@
+# Phone sync
+
+Status: proposed. Nothing here is built yet. This page is the spec the code and tests are written against.
+
+FlipDial keeps every contact and card. Your phone only gets the contacts you choose, so its address book stays short. Nothing is connected to your Google or Apple account, and nothing is reachable from the internet: the phone syncs when it is on your home network.
+
+```mermaid
+flowchart LR
+    S["Scans"] --> F["FlipDial"]
+    G["Google export<br/>(vCard, manual)"] -.-> F
+    F <--> M["Master book<br/>every contact"]
+    F <--> P["Phone book<br/>only switched-on"]
+    P <--> I["iPhone<br/>built-in CardDAV"]
+    P <--> A["Android<br/>DAVx5"]
+    F -.-> X["Google Contacts<br/>(vCard, manual)"]
+```
+
+## Address books
+
+Both live on the same CardDAV server: Synology Contacts, Radicale (optional, bundled with FlipDial's Docker setup), Nextcloud or any other.
+
+| Address book | Holds | Who can use it |
+|---|---|---|
+| Master | Every contact, with FlipDial's own fields | FlipDial only |
+| Phone | Copies of switched-on contacts, standard fields only | FlipDial and the phone |
+
+The phone signs in with its own account, which can see the phone book and nothing else. If a phone is lost, change that one password.
+
+## Choosing what goes to the phone
+
+Off by default. Three levels, the most specific wins:
+
+1. **Contact:** On, Off, or "Follow tags" (the default).
+2. **Tag or deck:** On or Off. A contact with any tag that's On goes to the phone, unless the contact itself is set Off.
+3. **Everything:** one switch for all contacts, Off by default.
+
+The reading pane shows whether a contact is on the phone and why ("On: Art Fair 2026 deck"). Before the first sync, and before any change to a tag or the Everything switch, FlipDial shows how many contacts will be added or removed and waits for you to confirm.
+
+## What sync does
+
+FlipDial updates the phone book as soon as you change a contact, and checks it for edits made on the phone once a day (the time is a setting) and when you press **Sync now**. The phone syncs on its own schedule whenever it is on your home network; away from home it simply keeps the contacts it has.
+
+| Change | What happens |
+|---|---|
+| Contact switched on | A copy is added to the phone book |
+| Contact edited in FlipDial | The phone copy is updated |
+| Contact switched off | The phone copy is removed. The contact stays in FlipDial |
+| Edited on the phone | The changed fields are copied to the master contact and shown in Activity |
+| Edited in both places since the last sync | Nothing is overwritten. The contact appears in Review with both versions to choose from |
+| Deleted on the phone | The contact is switched Off for the phone. The master contact is not touched |
+| Added on the phone | It goes to Review as "Added on your phone". It is saved to the master book only if you approve it |
+
+Phone copies carry the standard fields: name and its parts, company, department, title, phones, emails, websites, addresses, socials, nickname, birthday and notes. FlipDial's own fields (deck, star, scans, About) stay in the master book, and the phone cannot change them.
+
+## Safety rules
+
+Each rule has a test.
+
+1. **The master book is never deleted from because of the phone book.** Deleting on the phone only switches the contact off for the phone.
+2. **FlipDial removes only what it added.** Every phone copy is recorded with its UID and version. Other contacts in the phone book are never changed or removed.
+3. **A sudden drop stops sync.** If the master or phone book has far fewer contacts than last time (more than 10, and more than a fifth), or can't be read, sync stops and shows a warning. An empty or unreachable address book never turns into deletions.
+4. **Large changes need you.** The first sync, and any sync that would remove more than 10 contacts, waits for you to confirm the list.
+5. **Never overwrite blind.** Every write sends the version FlipDial last saw. If the server copy changed since, the write is refused and the contact is checked again.
+6. **Phone edits are untrusted input.** They are parsed, length-limited and validated like scanned values. Fields the phone can't change are ignored.
+7. **Removals can be undone.** Before a phone copy is removed or a master contact is changed by a phone edit, the previous vCard is kept for 30 days and can be restored from Activity.
+8. **Backups before bulk changes.** A backup of the master book is taken before the first sync and before any change to more than 10 contacts.
+9. **Everything is logged.** Each change made by sync is in Activity, with where it came from. Logs never contain contact details or passwords.
+
+## Setup wizard
+
+**Setup > Phone sync** does as much as possible itself. The steps:
+
+1. **Check the server.** FlipDial confirms it can reach the contacts server and shows which kind it is.
+2. **Create the phone book.**
+   - Radicale and servers that allow it: FlipDial creates it.
+   - Synology Contacts: if FlipDial can't create it, the wizard shows the three clicks in Synology Contacts and checks again when you're done.
+3. **Create the phone account.**
+   - Bundled Radicale: FlipDial creates the account, limited to the phone book, with a generated password.
+   - Synology: the wizard shows how to add a DSM user and share only the phone book with it, then tests the account.
+4. **Choose what goes to the phone.** Pick tags or decks, see the count, confirm. The first sync runs.
+5. **Add the account to the phone.**
+   - iPhone: open the link the wizard shows (or scan the QR code) and install the profile. It adds the CardDAV account in one step and asks for the password on the phone, so the password is never stored in the file.
+   - Android: install DAVx5, choose "Login with URL and user name", and paste the address and user name the wizard shows.
+6. **Confirm.** The wizard waits until the phone has connected once, then shows it as working.
+
+The profile link works once, only for the signed-in user, and expires after 15 minutes.
+
+### Home network only
+
+By design, the contacts server is reachable only on your home network. Nothing is opened to the internet, and the wizard never suggests port forwarding.
+
+- The phone needs HTTPS it trusts on the home network. A home server usually has its own certificate, so the wizard offers it to the phone: inside the iPhone profile, and as a certificate DAVx5 asks you to accept once on Android.
+- DAVx5 can be limited to your home Wi-Fi, so it doesn't try to sync elsewhere.
+- Away from home, contacts already on the phone keep working. Changes wait until you are back.
+
+Syncing away from home (for example through Tailscale) may come in a later release as an option you turn on.
+
+## Bundled Radicale
+
+An optional service in `docker/compose.yml`, for people with no contacts server.
+
+- Built from the Radicale package on PyPI at a pinned version, with hashes checked. No third-party image.
+- Runs as a non-root user with a read-only filesystem and no added privileges.
+- Passwords stored as bcrypt hashes. Access rules limit each account to its own address books.
+- Reachable only by FlipDial unless you publish its port on your home network for the phone, with a certificate the wizard creates.
+- Data is plain `.vcf` files in the data folder, included in FlipDial's backups.
+
+## Google
+
+No sign-in to Google, by design.
+
+- **Into FlipDial:** export from contacts.google.com as vCard, then Import. Contacts that match are updated, new ones are added, and nothing is deleted.
+- **Out to Google:** **Export changes** makes a vCard of contacts changed since the last export, to import at contacts.google.com. Google may add copies instead of updating; its **Merge & fix** tool combines them.
+
+## Build order
+
+1. Phone book with the on/off rules, sync to it, and safety rules 1 to 5, 8 and 9.
+2. Edits and additions from the phone, with rules 6 and 7.
+3. Setup wizard, including the iPhone profile.
+4. Import that updates matching contacts, and Export changes.
+5. Bundled Radicale.
+
+## To check before building
+
+- Whether Synology Contacts lets FlipDial create an address book over CardDAV, and whether it can share one address book with another DSM user while keeping the master private.
+- How quickly Radicale picks up a new account from its users file.
+- The exact DAVx5 login steps and whether it accepts a link or QR code.
+- How the iPhone handles a home server's own certificate: whether the profile alone is enough, or the user also has to turn on full trust in Settings (General > About > Certificate Trust Settings). The wizard's iPhone steps depend on this.
