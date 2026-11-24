@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, describe, type Contact, type ContactInput } from './api'
+  import { api, cleanInput, describe, kindName, type Contact, type ContactInput } from './api'
   import ContactForm from './ContactForm.svelte'
   import FlipCard from './FlipCard.svelte'
   import { href } from './router.svelte'
@@ -26,11 +26,12 @@
 
   function startEdit() {
     if (!contact) return
-    const { full_name, title, organization, emails, phones, websites, socials, address, about, note, event, met_on, starred } =
+    const { full_name, title, organization, emails, phones, websites, socials, addresses, about, note, event, met_on, starred } =
       contact
     form = {
-      full_name, title, organization, address, about, note, event, met_on, starred,
-      emails: [...emails], phones: [...phones], websites: [...websites],
+      full_name, title, organization, about, note, event, met_on, starred,
+      emails: emails.map((t) => ({ ...t })), phones: phones.map((t) => ({ ...t })), websites: websites.map((t) => ({ ...t })),
+      addresses: addresses.map((a) => ({ ...a })),
       socials: socials.map((s) => ({ ...s })),
       tags: contact.categories.filter((c) => c !== contact?.event),
     }
@@ -41,12 +42,7 @@
     if (!form || !contact) return
     saving = true
     try {
-      contact = await api.update(contact.uid, {
-        ...form,
-        emails: form.emails.filter(Boolean),
-        phones: form.phones.filter(Boolean),
-        websites: form.websites.filter(Boolean),
-      })
+      contact = await api.update(contact.uid, cleanInput(form))
       editing = false
       error = ''
     } catch (e) {
@@ -130,16 +126,25 @@
           </div>
         {:else}
           <dl>
-            {#each contact.emails as e (e)}<dt>Email</dt><dd><a href={`mailto:${e}`}>{e}</a></dd>{/each}
-            {#each contact.phones as p (p)}<dt>Phone</dt><dd><a href={`tel:${p.replace(/[^\d+]/g, '')}`}>{p}</a></dd>{/each}
-            {#each contact.websites as w (w)}
-              <dt>Website</dt><dd><a href={safeUrl(w)} rel="noopener noreferrer" target="_blank">{w}</a></dd>
+            {#each contact.emails as e, i (i)}
+              <dt>Email <span class="kind">{kindName('emails', e)}</span></dt><dd><a href={`mailto:${e.value}`}>{e.value}</a></dd>
+            {/each}
+            {#each contact.phones as p, i (i)}
+              <dt>Phone <span class="kind">{kindName('phones', p)}</span></dt>
+              <dd><a href={`tel:${p.value.replace(/[^\d+]/g, '')}`}>{p.value}</a></dd>
+            {/each}
+            {#each contact.websites as w, i (i)}
+              <dt>Website <span class="kind">{kindName('websites', w)}</span></dt>
+              <dd><a href={safeUrl(w.value)} rel="noopener noreferrer" target="_blank">{w.value}</a></dd>
             {/each}
             {#each contact.socials as s (s.platform + s.handle)}
               <dt>{s.platform || 'Social'}</dt>
               <dd>{#if s.url}<a href={s.url} rel="noopener noreferrer" target="_blank">{s.handle}</a>{:else}{s.handle}{/if}</dd>
             {/each}
-            {#if contact.address}<dt>Address</dt><dd>{contact.address}</dd>{/if}
+            {#each contact.addresses as a, i (i)}
+              <dt>Address <span class="kind">{kindName('addresses', a)}</span></dt>
+              <dd class="multiline">{[a.street, [a.city, [a.region, a.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', '), a.country].filter(Boolean).join('\n')}</dd>
+            {/each}
             {#if contact.about}<dt>About</dt><dd class="multiline">{contact.about}</dd>{/if}
             {#if contact.note}<dt>Notes</dt><dd class="multiline">{contact.note}</dd>{/if}
             <dt>Met at</dt><dd>{contact.event || 'Not set'}</dd>
@@ -266,6 +271,12 @@
     display: grid;
     grid-template-columns: max-content 1fr;
     gap: 10px 20px;
+  }
+  dt .kind {
+    display: block;
+    letter-spacing: 0.04em;
+    color: var(--amber);
+    font-size: 11px;
   }
   dt {
     font-size: 12px;

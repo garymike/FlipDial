@@ -17,6 +17,7 @@ from difflib import SequenceMatcher
 from flipdial import contacts, db
 from flipdial.carddav.client import CardDAVClient, CardDAVError
 from flipdial.carddav.contact import ReviewedContact, apply
+from flipdial.carddav.typed import Typed, values
 from flipdial.carddav.vcard import VCard
 from flipdial.config import Settings
 from flipdial.contacts import ContactView
@@ -69,11 +70,11 @@ class Match:
 def score(a: ContactView, b: ContactView) -> Match:
     reasons: list[str] = []
     best = 0.0
-    if {norm_email(e) for e in a.emails} & {norm_email(e) for e in b.emails}:
+    if {norm_email(e) for e in values(a.emails)} & {norm_email(e) for e in values(b.emails)}:
         reasons.append("same_email")
         best = max(best, 0.95)
-    pa = {norm_phone(p) for p in a.phones} - {""}
-    if pa & ({norm_phone(p) for p in b.phones} - {""}):
+    pa = {norm_phone(p) for p in values(a.phones)} - {""}
+    if pa & ({norm_phone(p) for p in values(b.phones)} - {""}):
         reasons.append("same_phone")
         best = max(best, 0.85)
     na, nb = norm_name(a.full_name), norm_name(b.full_name)
@@ -270,11 +271,13 @@ def attach_scan(
     card, href, etag = found
     existing = contacts.to_reviewed(contacts.view(card))
 
-    def union(a: list[str], b: list[str]) -> list[str]:
+    def union(a: list, b: list) -> list:
+        """Existing values first, so a type set in another app wins."""
         seen, out = set(), []
         for v in a + b:
-            key = v.casefold()
-            if v and key not in seen:
+            text = v if isinstance(v, str) else v.value if isinstance(v, Typed) else v.text()
+            key = text.casefold()
+            if text and key not in seen:
                 seen.add(key)
                 out.append(v)
         return out
@@ -287,7 +290,7 @@ def attach_scan(
         phones=union(existing.phones, reviewed.phones),
         websites=union(existing.websites, reviewed.websites),
         socials=list(dict.fromkeys(existing.socials + reviewed.socials)),
-        address=reviewed.address or existing.address,
+        addresses=union(existing.addresses, reviewed.addresses),
         event=reviewed.event or existing.event,
         met_on=reviewed.met_on or existing.met_on,
         starred=reviewed.starred or existing.starred,

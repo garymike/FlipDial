@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from flipdial.carddav.typed import guess_kind
+
 MAX_ROWS = 10_000
 MAX_COLUMNS = 200
 MAX_CELL = 2_000
@@ -85,7 +87,7 @@ def guess_field(header: str, linkedin: bool = False) -> str:
         return ""
     if "e-mail" in h or "email" in h:
         return "email"
-    if "phone" in h or "mobile" in h or h.startswith("tel"):
+    if "phone" in h or "mobile" in h or "fax" in h or "pager" in h or h.startswith("tel"):
         return "phone"
     if "website" in h:
         return "website"
@@ -167,6 +169,40 @@ def parse_date(value: str) -> str:
     return ""
 
 
+_TYPED = {"email": "EMAIL", "phone": "TEL", "website": "URL"}
+_NUMBERED = re.compile(r"^(.*\d+)\s*-\s*value$", re.IGNORECASE)
+
+
+def row_kinds(row: list[str], headers: list[str], mapping: list[str]) -> dict[str, dict]:
+    """The type of each email, phone and website in a row, keyed by value.
+
+    From a sibling type column (Google: "Phone 1 - Type" next to "Phone 1 - Value") or from
+    the header itself (Outlook: "Mobile Phone", "Business Fax")."""
+    by_header = {h.strip().casefold(): i for i, h in enumerate(headers)}
+    out: dict[str, dict] = {}
+    for i, key in enumerate(mapping):
+        name = _TYPED.get(key)
+        if not name or i >= len(row) or not row[i].strip():
+            continue
+        header = headers[i] if i < len(headers) else ""
+        kind, label = "", ""
+        m = _NUMBERED.match(header.strip())
+        if m:
+            j = by_header.get(f"{m.group(1).strip().casefold()} - type", -1)
+            text = row[j].strip().lstrip("* ").strip() if 0 <= j < len(row) else ""
+            if text:
+                kind = guess_kind(name, text)
+                if not kind and text.casefold() != "other":
+                    kind, label = "custom", text
+                kind = kind or "other"
+        else:
+            kind = guess_kind(name, header)
+        if kind:
+            for v in _split_list(row[i].strip(), key):
+                out.setdefault(v, {"kind": kind, "label": label})
+    return out
+
+
 def row_values(row: list[str], mapping: list[str]) -> dict[str, list[str]]:
     """Collect a row's cells by target field. List fields may come from several columns."""
     out: dict[str, list[str]] = {}
@@ -220,7 +256,7 @@ def write_csv(rows: list[dict]) -> str:
             if isinstance(v, bool):
                 v = "yes" if v else ""
             elif isinstance(v, list):
-                v = " ; ".join(v)
+                v = " ; ".join(x.get("value", "") if isinstance(x, dict) else str(x) for x in v)
             out.append(safe_cell(str(v)))
         w.writerow(out)
     return "﻿" + buf.getvalue()  # BOM so Excel reads UTF-8

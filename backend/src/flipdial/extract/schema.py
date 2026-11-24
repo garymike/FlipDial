@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from flipdial.carddav.typed import clean_kind, guess_kind
 from flipdial.socials import normalize as normalize_social
 
 MAX_TEXT = 200
@@ -51,6 +52,35 @@ class TextField(BaseModel):
     @classmethod
     def _clean(cls, v: Any) -> str:
         return clean_text(v)
+
+
+class TypedField(TextField):
+    kind: str = Field(
+        default="",
+        description=(
+            "What the card labels this value as, in one word: mobile, work, home, main, fax, "
+            "pager, blog or other. Use work when the card shows no label."
+        ),
+    )
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _clean_kind(cls, v: Any) -> str:
+        return clean_text(v, 20).lower()
+
+
+class AddressParts(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    street: str = Field(default="", description="Street lines, suite or PO box.")
+    city: str = ""
+    region: str = Field(default="", description="State, province or region.")
+    postal_code: str = ""
+    country: str = ""
+
+    @field_validator("street", "city", "region", "postal_code", "country", mode="before")
+    @classmethod
+    def _clean(cls, v: Any) -> str:
+        return clean_text(v, 120)
 
 
 class Social(BaseModel):
@@ -95,12 +125,20 @@ class CardFields(BaseModel):
     family_name: TextField = TextField()
     title: TextField = TextField()
     organization: TextField = TextField()
-    emails: list[TextField] = Field(default_factory=list, max_length=MAX_ITEMS)
-    phones: list[TextField] = Field(default_factory=list, max_length=MAX_ITEMS)
-    websites: list[TextField] = Field(default_factory=list, max_length=MAX_ITEMS)
+    emails: list[TypedField] = Field(default_factory=list, max_length=MAX_ITEMS)
+    phones: list[TypedField] = Field(default_factory=list, max_length=MAX_ITEMS)
+    websites: list[TypedField] = Field(default_factory=list, max_length=MAX_ITEMS)
     socials: list[Social] = Field(default_factory=list, max_length=MAX_ITEMS)
     address: TextField = TextField()
+    address_parts: AddressParts = AddressParts()
     about: TextField = TextField()  # printed description: tagline, services
+
+    def address_record(self) -> dict[str, str]:
+        """The address split into parts, or the whole line as the street when it wasn't."""
+        parts = self.address_parts.model_dump()
+        if not any(parts.values()):
+            parts = {"street": self.address.value}
+        return {**parts, "kind": "work"}
 
     @field_validator("text", mode="before")
     @classmethod
@@ -142,6 +180,8 @@ def _coerce(raw: Any) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if isinstance(raw.get("text"), str):
         out["text"] = raw["text"]
+    if isinstance(raw.get("address_parts"), dict):
+        out["address_parts"] = raw["address_parts"]
     for name in _SCALARS:
         v = raw.get(name)
         if isinstance(v, dict):
@@ -167,6 +207,11 @@ def _coerce(raw: Any) -> dict[str, Any]:
     return out
 
 
+def _kind(name: str, f: TypedField) -> str:
+    kind = clean_kind(name, f.kind)[0]
+    return "work_fax" if kind == "fax" else kind  # a fax on a business card is a work fax
+
+
 def validate(raw: dict[str, Any]) -> Extraction:
     """Parse raw model output into a clean Extraction with review flags."""
     fields = CardFields.model_validate(_coerce(raw))
@@ -177,21 +222,21 @@ def validate(raw: dict[str, Any]) -> Extraction:
     for e in fields.emails:
         v = e.value.lower().removeprefix("mailto:")
         if _EMAIL.match(v):
-            emails.append(TextField(value=v, confidence=e.confidence))
+            emails.append(TypedField(value=v, confidence=e.confidence, kind=_kind("EMAIL", e)))
         elif v:
             dropped += 1
     phones = []
     for p in fields.phones:
         v = p.value.removeprefix("tel:")
         if _PHONE_CHARS.match(v) and sum(ch.isdigit() for ch in v) >= 6:
-            phones.append(TextField(value=v, confidence=p.confidence))
+            phones.append(TypedField(value=v, confidence=p.confidence, kind=_kind("TEL", p)))
         elif v:
             dropped += 1
     sites = []
     for s in fields.websites:
         url = _valid_url(s.value)
         if url:
-            sites.append(TextField(value=url, confidence=s.confidence))
+            sites.append(TypedField(value=url, confidence=s.confidence, kind=_kind("URL", s)))
         elif s.value:
             dropped += 1
     socials = []
@@ -235,6 +280,8 @@ def _all_values(fields: CardFields):
     ):
         f: TextField = getattr(fields, name)
         yield name, f.value, f.confidence
+    for part, value in fields.address_parts.model_dump().items():
+        yield f"address_{part}", value, 1.0
     for name in ("emails", "phones", "websites"):
         for f in getattr(fields, name):
             yield name, f.value, f.confidence
@@ -267,6 +314,16 @@ def _site_key(v: str) -> str:
     return re.sub(r"^https?://(www\.)?", "", v.lower()).rstrip("/")
 
 
+def _label_before(name: str, text: str, found: str) -> str:
+    """The type printed just before a value on its line ("M: 555...", "Fax 555..."), or work."""
+    for line in text.splitlines():
+        at = line.find(found)
+        if at >= 0:
+            words = re.findall(r"[A-Za-z]+", line[:at])[-2:]
+            return guess_kind(name, " ".join(words)) or "work"
+    return "work"
+
+
 def _fill_from_transcript(fields: CardFields, flags: set[str]) -> CardFields:
     """Add emails, phones and websites that appear in the card's text but not in a field.
 
@@ -280,7 +337,11 @@ def _fill_from_transcript(fields: CardFields, flags: set[str]) -> CardFields:
     for m in _FIND_EMAIL.findall(text):
         v = m.lower()
         if v not in have and _EMAIL.match(v) and len(emails) < MAX_ITEMS:
-            emails.append(TextField(value=v, confidence=FOUND_CONFIDENCE))
+            emails.append(
+                TypedField(
+                    value=v, confidence=FOUND_CONFIDENCE, kind=_label_before("EMAIL", text, m)
+                )
+            )
             have.add(v)
             flags.add("found_in_text:emails")
     update["emails"] = emails
@@ -293,7 +354,11 @@ def _fill_from_transcript(fields: CardFields, flags: set[str]) -> CardFields:
         digits = sum(ch.isdigit() for ch in v)
         if 7 <= digits <= 15 and not _DATE.match(v) and _digits(v) not in have:
             if _PHONE_CHARS.match(v) and len(phones) < MAX_ITEMS:
-                phones.append(TextField(value=v, confidence=FOUND_CONFIDENCE))
+                phones.append(
+                    TypedField(
+                        value=v, confidence=FOUND_CONFIDENCE, kind=_label_before("TEL", rest, m)
+                    )
+                )
                 have.add(_digits(v))
                 flags.add("found_in_text:phones")
     update["phones"] = phones
@@ -303,7 +368,7 @@ def _fill_from_transcript(fields: CardFields, flags: set[str]) -> CardFields:
     for m in _FIND_SITE.findall(rest):
         url = _valid_url(m.rstrip(".,;"))
         if url and _site_key(url) not in have and len(sites) < MAX_ITEMS:
-            sites.append(TextField(value=url, confidence=FOUND_CONFIDENCE))
+            sites.append(TypedField(value=url, confidence=FOUND_CONFIDENCE, kind="work"))
             have.add(_site_key(url))
             flags.add("found_in_text:websites")
     update["websites"] = sites

@@ -14,6 +14,7 @@ from typing import Any
 from flipdial import db
 from flipdial.carddav.client import CardDAVClient, CardDAVError
 from flipdial.carddav.contact import ReviewedContact, apply
+from flipdial.carddav.typed import read_addresses, read_typed
 from flipdial.carddav.vcard import VCard, VCardError, split_unescaped, unescape
 from flipdial.config import Settings
 from flipdial.socials import normalize as normalize_social
@@ -28,11 +29,13 @@ class ContactView:
     full_name: str
     title: str = ""
     organization: str = ""
-    emails: list[str] = field(default_factory=list)
-    phones: list[str] = field(default_factory=list)
-    websites: list[str] = field(default_factory=list)
+    # Each is {"value", "kind", "label"}: kind is work, home, mobile and so on (see typed.py)
+    emails: list[dict[str, str]] = field(default_factory=list)
+    phones: list[dict[str, str]] = field(default_factory=list)
+    websites: list[dict[str, str]] = field(default_factory=list)
     socials: list[dict[str, str]] = field(default_factory=list)
-    address: str = ""
+    addresses: list[dict[str, str]] = field(default_factory=list)
+    address: str = ""  # the first address on one line, for search and short display
     about: str = ""
     note: str = ""
     categories: list[str] = field(default_factory=list)
@@ -55,11 +58,7 @@ def _categories(card: VCard) -> list[str]:
 
 
 def view(card: VCard) -> ContactView:
-    adr = card.get("ADR")
-    address = ""
-    if adr:
-        parts = [unescape(x) for x in split_unescaped(adr[0].value, ";")]
-        address = ", ".join(x for x in parts if x)
+    addresses = read_addresses(card)
     socials = []
     for p in card.get("SOCIALPROFILE") + card.get("X-SOCIALPROFILE"):
         params = {k.upper(): v for k, v in p.params}
@@ -74,11 +73,12 @@ def view(card: VCard) -> ContactView:
         organization=unescape(split_unescaped(card.get("ORG")[0].value, ";")[0])
         if card.get("ORG")
         else "",
-        emails=[p.text() for p in card.get("EMAIL")],
-        phones=[p.text() for p in card.get("TEL")],
-        websites=[p.text() for p in card.get("URL")],
+        emails=[t.as_dict() for t in read_typed(card, "EMAIL")],
+        phones=[t.as_dict() for t in read_typed(card, "TEL")],
+        websites=[t.as_dict() for t in read_typed(card, "URL")],
         socials=socials,
-        address=address,
+        addresses=[a.as_dict() for a in addresses],
+        address=addresses[0].text() if addresses else "",
         about=card.first("X-FLIPDIAL-ABOUT"),
         note=card.first("NOTE"),
         categories=[c for c in cats if c != "Starred"],
@@ -190,7 +190,7 @@ def to_reviewed(v: ContactView) -> ReviewedContact:
         phones=list(v.phones),
         websites=list(v.websites),
         socials=[(s["platform"], s["handle"]) for s in v.socials],
-        address=v.address,
+        addresses=list(v.addresses),
         about=v.about,
         note=v.note,
         event=v.event,
@@ -215,6 +215,7 @@ def update_contact(
         if key == "socials":
             value = [(s.get("platform", ""), s.get("handle", "")) for s in value]
         setattr(reviewed, key, value)
+    reviewed.__post_init__()  # turn plain values into typed ones
     apply(card, reviewed)
     remote = client.update(href, card, etag)
     store(settings, card, remote.href, remote.etag)

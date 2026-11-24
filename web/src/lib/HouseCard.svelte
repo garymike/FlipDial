@@ -30,9 +30,9 @@
   {:else}
     <div class="org">{contact.organization || contact.full_name}</div>
     <div class="lines">
-      {#each contact.emails.slice(0, 2) as e (e)}<span>{e}</span>{/each}
-      {#each contact.phones.slice(0, 1) as p (p)}<span>{p}</span>{/each}
-      {#each contact.websites.slice(0, 1) as w (w)}<span>{w.replace(/^https?:\/\//, '')}</span>{/each}
+      {#each contact.emails.slice(0, 2) as e, i (i)}<span>{e.value}</span>{/each}
+      {#each contact.phones.slice(0, 1) as p, i (i)}<span>{p.value}</span>{/each}
+      {#each contact.websites.slice(0, 1) as w, i (i)}<span>{w.value.replace(/^https?:\/\//, '')}</span>{/each}
     </div>
   {/if}
 </div>

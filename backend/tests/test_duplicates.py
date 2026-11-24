@@ -88,13 +88,13 @@ def test_find_merge_and_undo(api, dav_settings):
     r = api.post("/api/merge", json={"keep_uid": a, "drop_uid": b, "contact": merged}, headers=H)
     assert r.status_code == 200, r.text
     merge_id = r.json()["merge_id"]
-    assert r.json()["contact"]["phones"] == ["+1 555 0199"]
+    assert [p["value"] for p in r.json()["contact"]["phones"]] == ["+1 555 0199"]
     assert api.get(f"/api/contacts/{b}").status_code == 404
     assert client.href_for(b) not in [x.href for x in client.list()]
 
     u = api.post(f"/api/merge/{merge_id}/undo", headers=H)
     assert u.status_code == 200, u.text
-    assert api.get(f"/api/contacts/{b}").json()["phones"] == ["+1 555 0199"]
+    assert [p["value"] for p in api.get(f"/api/contacts/{b}").json()["phones"]] == ["+1 555 0199"]
     assert api.get(f"/api/contacts/{a}").json()["phones"] == []
     assert api.post(f"/api/merge/{merge_id}/undo", headers=H).status_code == 409
 
@@ -153,5 +153,5 @@ def test_attach_scan_to_existing_contact(api, dav_settings, make_card):
     assert r.status_code == 200, r.text
     got = r.json()
     assert got["card_id"] == card_id and got["title"] == "Managing partner"
-    assert got["emails"] == [email]  # combined without duplicates
+    assert [e["value"] for e in got["emails"]] == [email]  # combined without duplicates
     assert api.post(f"/api/review/{card_id}/attach/{uid}", json=body, headers=H).status_code == 409

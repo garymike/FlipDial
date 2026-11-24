@@ -22,12 +22,16 @@ Steps:
    - title, organization.
    - emails, phones, websites: every one printed. A number labeled WhatsApp, Signal, WeChat
      or similar goes in phones and also in socials with that app as the platform.
+     Give each a "kind" from the label printed next to it: M, Mobile or Cell is mobile;
+     T, Tel, Office or Direct is work; F or Fax is fax; Home is home; Main is main. Use
+     work when there is no label.
    - socials: social and messaging accounts, each with the platform name (Instagram,
      Facebook, X, TikTok, LinkedIn, Bluesky, Threads, Mastodon, YouTube and so on) and the
      handle. When a row of platform icons sits next to one handle, add one entry per icon,
      each with that handle. Recognize platforms from their logos when the name isn't
      written.
-   - address: the full postal address, joining its lines with ", ".
+   - address: the full postal address, joining its lines with ", ". Also split it into
+     address_parts: street, city, region (state or province), postal_code, country.
    - about: any other printed description, such as a tagline or list of services."""
 
 USER = "Read this business card and return the contact details as JSON."

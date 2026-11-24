@@ -1,6 +1,6 @@
 <script lang="ts">
   // Possible duplicates: review each pair, pick the values to keep, merge, and undo if needed.
-  import { api, describe, REASONS, type Contact, type ContactInput, type DuplicatePair, type MergeRecord } from './api'
+  import { api, describe, kindName, REASONS, type Contact, type ContactInput, type DuplicatePair, type MergeRecord } from './api'
   import FlipCard from './FlipCard.svelte'
   import { href } from './router.svelte'
 
@@ -59,7 +59,7 @@
     const lp: Record<string, Record<string, boolean>> = {}
     for (const [key] of lists) {
       lp[key] = {}
-      for (const v of [...p.a[key], ...p.b[key]]) lp[key][v] = true
+      for (const v of [...p.a[key], ...p.b[key]]) lp[key][v.value] = true
     }
     listPick = lp
   }
@@ -68,7 +68,7 @@
     if (!open) return []
     const seen = new Set<string>()
     return [...open.a[key], ...open.b[key]].filter((v) => {
-      const k = v.toLowerCase()
+      const k = v.value.toLowerCase()
       if (seen.has(k)) return false
       seen.add(k)
       return true
@@ -77,7 +77,7 @@
 
   function result(p: DuplicatePair): ContactInput {
     const side = (key: string) => (pick[key] === 'b' ? p.b : p.a) as Contact
-    const chosen = (key: (typeof lists)[number][0]) => valuesFor(key).filter((v) => listPick[key]?.[v])
+    const chosen = (key: (typeof lists)[number][0]) => valuesFor(key).filter((v) => listPick[key]?.[v.value])
     const socials = [...p.a.socials, ...p.b.socials].filter(
       (s, i, all) => all.findIndex((x) => x.handle === s.handle) === i,
     )
@@ -85,7 +85,7 @@
       full_name: side('full_name').full_name,
       title: side('title').title,
       organization: side('organization').organization,
-      address: side('address').address,
+      addresses: side('address').addresses,
       about: side('about').about || p.a.about || p.b.about,
       note: [...new Set([p.a.note, p.b.note].filter(Boolean))].join('\n\n'),
       event: side('event').event,
@@ -168,7 +168,7 @@
             <div class="side">
               <FlipCard contact={c} />
               <a href={href({ name: 'contact', uid: c.uid })}>{c.full_name}</a>
-              <span class="sub">{[c.organization, c.emails[0]].filter(Boolean).join(' · ')}</span>
+              <span class="sub">{[c.organization, c.emails[0]?.value].filter(Boolean).join(' · ')}</span>
             </div>
           {/each}
         </div>
@@ -197,8 +197,8 @@
               {#if valuesFor(key).length}
                 <fieldset>
                   <legend>{label}</legend>
-                  {#each valuesFor(key) as v (v)}
-                    <label><input type="checkbox" bind:checked={listPick[key][v]} /> {v}</label>
+                  {#each valuesFor(key) as v (v.value)}
+                    <label><input type="checkbox" bind:checked={listPick[key][v.value]} /> {v.value} <span class="kind">{kindName(key, v)}</span></label>
                   {/each}
                 </fieldset>
               {/if}
