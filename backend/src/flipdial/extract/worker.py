@@ -45,7 +45,49 @@ class Extractor:
         for row in rows:
             if self._extract(row["id"], bool(row["back_blank"]), row["attempts"]):
                 done.append(row["id"])
+        self._rereads(limit)
         return done
+
+    def _rereads(self, limit: int) -> None:
+        """Saved contacts the person asked to read again. The result is only a proposal."""
+        with db.session(self.s.db_path) as conn:
+            rows = conn.execute(
+                "SELECT r.card_id, c.back_blank FROM rereads r JOIN cards c ON c.id = r.card_id "
+                "WHERE r.status = 'pending' ORDER BY r.requested_at LIMIT ?",
+                (limit,),
+            ).fetchall()
+        for row in rows:
+            self._reread(row["card_id"], bool(row["back_blank"]))
+
+    def _reread(self, card_id: str, back_blank: bool) -> None:
+        images = card_images(self.s.archive_dir, card_id, back_blank)
+        progress = Progress(self.s, card_id)
+        try:
+            if getattr(self.reader, "streams", False):
+                raw = self.reader.read(images, on_progress=progress.text)  # type: ignore[call-arg]
+            else:
+                progress.set_stage("reading")
+                raw = self.reader.read(images)
+            result: Extraction = validate(raw)
+        except (ModelError, OSError) as exc:
+            progress.clear()
+            code = exc.args[0] if isinstance(exc, ModelError) else "image_missing"
+            with db.session(self.s.db_path) as conn:
+                conn.execute(
+                    "UPDATE rereads SET status = 'failed', error = ?, error_detail = ? "
+                    "WHERE card_id = ?",
+                    (code, getattr(exc, "detail", ""), card_id),
+                )
+            log.warning("read again failed", extra={"card_id": card_id, "reason": code})
+            return
+        progress.clear()
+        with db.session(self.s.db_path) as conn:
+            conn.execute(
+                "UPDATE rereads SET status = 'done', fields_json = ?, flags_json = ?, error = NULL "
+                "WHERE card_id = ?",
+                (result.fields.model_dump_json(), json.dumps(result.flags), card_id),
+            )
+        log.info("card read again", extra={"card_id": card_id})
 
     def _extract(self, card_id: str, back_blank: bool, attempts: int) -> bool:
         images = card_images(self.s.archive_dir, card_id, back_blank)

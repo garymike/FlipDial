@@ -139,6 +139,21 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE cards ADD COLUMN progress_json TEXT;
     """,
+    # 11: "Read again" on a saved contact: the card is read once more and the result kept
+    # here as a proposal, until the person applies or discards it. Never written to the
+    # contact by itself.
+    """
+    CREATE TABLE rereads (
+        card_id       TEXT PRIMARY KEY,
+        uid           TEXT NOT NULL,
+        status        TEXT NOT NULL,
+        requested_at  TEXT NOT NULL,
+        fields_json   TEXT,
+        flags_json    TEXT,
+        error         TEXT,
+        error_detail  TEXT
+    );
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

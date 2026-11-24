@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from starlette.background import BackgroundTask
 
-from flipdial import audit, contacts, db, duplicates, forget, status, updates
+from flipdial import audit, contacts, db, duplicates, forget, reread, status, updates
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
@@ -204,6 +204,41 @@ def get_contact(uid: str, s: SettingsDep) -> dict:
     if found is None:
         raise HTTPException(404, "not_found")
     return contacts.full_view(s, found[0]).as_dict()
+
+
+@router.post("/contacts/{uid}/reread")
+def reread_contact(uid: str, s: SettingsDep, actor: ActorDep) -> dict:
+    """Read this contact's card again. The result is a proposal; nothing changes yet."""
+    try:
+        out = reread.request(s, uid)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except reread.RereadError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    audit.record(s, actor, "contact.reread", uid, card_id=out["card_id"])
+    return out
+
+
+@router.get("/contacts/{uid}/reread")
+def reread_state(uid: str, s: SettingsDep) -> dict:
+    try:
+        return reread.state(s, uid)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except reread.RereadError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.delete("/contacts/{uid}/reread")
+def reread_discard(uid: str, s: SettingsDep) -> dict:
+    """Throw away a proposal (after applying the chosen changes, or to ignore it)."""
+    try:
+        reread.discard(s, uid)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except reread.RereadError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"discarded": True}
 
 
 @router.get("/contacts/{uid}/scans")

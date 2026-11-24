@@ -47,6 +47,7 @@ def forget(settings: Settings, client: CardDAVClient, uid: str) -> dict[str, int
     with db.session(settings.db_path) as conn:
         conn.executemany("DELETE FROM cards WHERE id = ?", [(c,) for c in card_ids])
         conn.execute("DELETE FROM contacts WHERE uid = ?", (uid,))
+        conn.execute("DELETE FROM rereads WHERE uid = ?", (uid,))  # a pending "Read again"
         merges = conn.execute(
             "DELETE FROM merges WHERE keep_uid = ? OR drop_uid = ?", (uid, uid)
         ).rowcount

@@ -110,3 +110,14 @@ def dav_settings(settings, radicale):
     settings.carddav_username = USER
     settings.carddav_password = SecretStr("x")
     return settings
+
+
+@pytest.fixture
+def api(dav_settings):
+    """The app's API against the test CardDAV server."""
+    from fastapi.testclient import TestClient
+
+    from flipdial.app import create_app
+    from flipdial.carddav.client import CardDAVClient
+
+    return TestClient(create_app(dav_settings, lambda: CardDAVClient(dav_settings)))

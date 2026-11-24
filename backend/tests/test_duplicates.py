@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
-from fastapi.testclient import TestClient
 from test_extract import FakeReader
 
-from flipdial.app import create_app
 from flipdial.carddav.client import CardDAVClient
 from flipdial.carddav.contact import ReviewedContact, new_card
 from flipdial.contacts import ContactView
@@ -55,11 +52,6 @@ def test_similar_name_alone_is_weak_and_different_people_do_not_match():
 
 
 # -- flows ----------------------------------------------------------------------------
-
-
-@pytest.fixture
-def api(dav_settings):
-    return TestClient(create_app(dav_settings, lambda: CardDAVClient(dav_settings)))
 
 
 def _make(client, name, **kw):

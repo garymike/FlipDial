@@ -1,6 +1,17 @@
 <script lang="ts">
   import { untrack } from 'svelte'
-  import { api, cleanInput, describe, kindName, type Contact, type ContactInput, type Scan } from './api'
+  import {
+    api,
+    cleanInput,
+    describe,
+    kindName,
+    READ_ERRORS,
+    type Contact,
+    type ContactInput,
+    type RereadState,
+    type Scan,
+  } from './api'
+  import { changes, patchFor, type Change } from './reread'
   import ContactForm from './ContactForm.svelte'
   import FlipCard from './FlipCard.svelte'
   import Star from './Star.svelte'
@@ -88,6 +99,79 @@
     } catch (e) {
       error = describe(e)
     }
+  }
+
+  // "Read again": read the card once more and propose what changed. Nothing is saved until
+  // the person applies the changes they pick.
+  let rr = $state<RereadState | null>(null)
+  let picks = $state<Change[]>([])
+  let applying = $state(false)
+  $effect(() => {
+    const id = contact?.uid
+    const hasScan = !!contact?.card_id
+    untrack(() => {
+      rr = null
+      picks = []
+    })
+    if (!id || !hasScan) return
+    api.rereadState(id).then((s) => {
+      if (contact?.uid === id) setReread(s)
+    }).catch(() => {})
+  })
+  function setReread(s: RereadState) {
+    rr = s
+    picks = s.status === 'done' && s.proposed && contact ? changes(contact, s.proposed) : []
+  }
+  // While it reads, check every two seconds.
+  $effect(() => {
+    if (rr?.status !== 'pending' || !contact) return
+    const id = contact.uid
+    const timer = setInterval(() => {
+      api.rereadState(id).then((s) => {
+        if (contact?.uid === id) setReread(s)
+      }).catch(() => {})
+    }, 2000)
+    return () => clearInterval(timer)
+  })
+  async function readAgain() {
+    if (!contact) return
+    try {
+      setReread(await api.reread(contact.uid))
+    } catch (e) {
+      error = describe(e)
+    }
+  }
+  async function dropReread() {
+    if (!contact) return
+    try {
+      await api.rereadDiscard(contact.uid)
+    } catch {
+      /* already gone */
+    }
+    rr = { status: 'none', card_id: rr?.card_id ?? '' }
+    picks = []
+  }
+  async function applyReread() {
+    if (!contact || !rr?.proposed) return
+    applying = true
+    try {
+      const patch = patchFor(contact, rr.proposed, picks)
+      if (Object.keys(patch).length) {
+        contact = await api.update(contact.uid, patch)
+        onchange?.(contact)
+      }
+      await dropReread()
+    } catch (e) {
+      error = describe(e)
+    } finally {
+      applying = false
+    }
+  }
+  const CHOICE_NAMES = { use: 'Use new', add: 'Add the new ones', keep: 'Keep current' } as const
+  const STAGE_NAMES: Record<string, string> = {
+    waiting: 'Starting the model',
+    reading: 'Reading the card',
+    checking: 'Checking what was read',
   }
 
   // A star toggled on the Wall shows here too.
@@ -193,6 +277,52 @@
           <div class="older">
             <span>You're looking at another of their cards.</span>
             <button type="button" class="secondary" onclick={() => viewing && useCard(viewing)}>Show this one on the contact</button>
+          </div>
+        {/if}
+      </section>
+    {/if}
+    {#if contact.card_id && !editing}
+      <section class="reread" aria-label="Read the card again" aria-live="polite">
+        {#if !rr || rr.status === 'none'}
+          <button type="button" class="secondary small" onclick={readAgain}>Read again</button>
+          <span class="hint">Reads the card once more and shows what changed. Nothing is saved until you choose.</span>
+        {:else if rr.status === 'pending'}
+          <span class="dot" aria-hidden="true"></span>
+          <span>{STAGE_NAMES[rr.progress?.stage ?? 'waiting'] ?? 'Reading the card'}…{#if rr.progress?.seconds} {Math.round(rr.progress.seconds)}s{/if}</span>
+          <button type="button" class="link" onclick={dropReread}>Cancel</button>
+        {:else if rr.status === 'failed'}
+          <span class="bad">{READ_ERRORS[rr.error ?? ''] ?? "The card couldn't be read again."}</span>
+          <button type="button" class="secondary small" onclick={readAgain}>Try again</button>
+          <button type="button" class="link" onclick={dropReread}>Dismiss</button>
+        {:else if !picks.length}
+          <span>Read again: nothing new on the card.</span>
+          <button type="button" class="link" onclick={dropReread}>OK</button>
+        {:else}
+          <div class="proposal">
+            <h2>The card reads differently now</h2>
+            <p class="hint">Pick what to use. Your notes, deck and star aren't touched.</p>
+            {#each picks as c, i (c.field)}
+              <fieldset>
+                <legend>{c.label}</legend>
+                <div class="cmp">
+                  <span class="k">Now</span>
+                  <span class="v">{#if c.current.length}{#each c.current as v, j (j)}<span>{v}</span>{/each}{:else}<em>Empty</em>{/if}</span>
+                  <span class="k">Card</span>
+                  <span class="v new">{#each c.proposed as v, j (j)}<span class:added={c.added.includes(v)}>{v}</span>{/each}</span>
+                </div>
+                <div class="choices" role="radiogroup" aria-label={`${c.label}: what to keep`}>
+                  {#each c.choices as ch (ch)}
+                    <label><input type="radio" name={`rr-${c.field}`} value={ch} bind:group={picks[i].choice} /> {CHOICE_NAMES[ch]}</label>
+                  {/each}
+                </div>
+              </fieldset>
+            {/each}
+            <div class="buttons">
+              <button type="button" class="secondary" onclick={dropReread}>Discard</button>
+              <button type="button" class="primary" onclick={applyReread} disabled={applying}>
+                {applying ? 'Saving…' : `Apply ${picks.filter((p) => p.choice !== 'keep').length} change${picks.filter((p) => p.choice !== 'keep').length === 1 ? '' : 's'}`}
+              </button>
+            </div>
           </div>
         {/if}
       </section>
@@ -335,6 +465,108 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+  .reread {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    font-size: 14px;
+  }
+  .reread .hint,
+  .proposal .hint {
+    font-size: 12px;
+    color: var(--ash);
+    margin: 0;
+  }
+  .reread .small {
+    min-height: 36px;
+  }
+  .reread .link {
+    min-height: 36px;
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    color: var(--amber);
+    font: inherit;
+    cursor: pointer;
+  }
+  .reread .bad {
+    color: #e5776b;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--amber);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+  .proposal {
+    flex: 1 1 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid #6a5426;
+    border-radius: 12px;
+    background: #2a2416;
+  }
+  .proposal h2 {
+    margin: 0;
+    font-size: 16px;
+  }
+  .proposal fieldset {
+    margin: 0;
+    padding: 10px 0 0;
+    border: 0;
+    border-top: 1px solid #3a3222;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .proposal legend {
+    padding: 0;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ash);
+  }
+  .cmp {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 12px;
+    font-size: 14px;
+  }
+  .cmp .k {
+    color: var(--ash);
+    font-size: 12px;
+    padding-top: 2px;
+  }
+  .cmp .v {
+    display: flex;
+    flex-direction: column;
+    overflow-wrap: anywhere;
+  }
+  .cmp .new span.added {
+    color: var(--amber);
+  }
+  .choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    font-size: 14px;
+  }
+  .choices label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    cursor: pointer;
   }
   .older {
     display: flex;
