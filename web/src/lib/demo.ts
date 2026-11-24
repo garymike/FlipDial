@@ -153,6 +153,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       return { forgotten: c.uid, scans: c.card_id ? 1 : 0 }
     }
     case 'GET /review': {
+      if (seg[1] === 'dismissed') return { items: [] }
       if (seg[2] === 'matches') {
         const item = review.find((r) => r.card_id === seg[1])
         const probe = { full_name: item?.fields?.full_name.value ?? '', emails: item?.fields?.emails.map((e) => e.value) ?? [], phones: [] } as unknown as Contact

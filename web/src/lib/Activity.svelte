@@ -21,6 +21,8 @@
     restore: 'Restored a backup',
     'update.start': 'Started an update',
     'card.retry': 'Asked to read cards again',
+    'card.restore': 'Brought a dismissed card back',
+    'card.delete': 'Deleted a scan',
     sign_in: 'Signed in',
     sign_out: 'Signed out',
     'sign_in.denied': 'Sign-in refused',

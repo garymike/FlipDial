@@ -134,7 +134,11 @@ def test_input_validation(api, dav_settings, make_card):
     bad_date = _body(met_on="tomorrow")
     assert api.post(f"/api/review/{card_id}/approve", json=bad_date, headers=H).status_code == 422
     assert (
-        api.post(f"/api/review/{card_id}/approve", json=_body(full_name=""), headers=H).status_code
+        api.post(
+            f"/api/review/{card_id}/approve",
+            json=_body(full_name="", organization=""),  # neither a name nor a company
+            headers=H,
+        ).status_code
         == 422
     )
 
@@ -208,3 +212,56 @@ def test_notes_saved_and_not_wiped_by_an_empty_review_note(api, dav_settings, ma
 
     api.patch(f"/api/contacts/{uid}", json={"note": ""}, headers=H)  # cleared on purpose
     assert api.get(f"/api/contacts/{uid}").json()["note"] == ""
+
+
+def test_reread_restore_and_delete_cards(api, dav_settings, make_card):
+    card_id = _scan_and_read(dav_settings, make_card, seed=13)
+    # a card waiting for review can be read again
+    assert api.post(f"/api/review/{card_id}/retry", headers=H).json() == {"retrying": 1}
+    assert api.post(f"/api/review/{card_id}/retry", headers=H).status_code == 409  # already queued
+    from test_extract import GOOD, FakeReader
+
+    from flipdial.extract.worker import Extractor
+
+    Extractor(dav_settings, FakeReader(GOOD)).run_once()
+
+    api.post(f"/api/review/{card_id}/dismiss", headers=H)
+    listed = api.get("/api/review/dismissed").json()["items"]
+    assert any(i["card_id"] == card_id and i["label"] == "Ava Example" for i in listed)
+    assert api.post(f"/api/review/{card_id}/restore", headers=H).json()["status"] == "review"
+    assert api.post(f"/api/review/{card_id}/restore", headers=H).status_code == 409
+
+    api.post(f"/api/review/{card_id}/dismiss", headers=H)
+    assert api.delete(f"/api/review/{card_id}", headers=H).json() == {"deleted": card_id}
+    assert not (dav_settings.archive_dir / card_id).exists()
+    assert api.get(f"/api/cards/{card_id}/image/front").status_code == 404
+    actions = [e["action"] for e in api.get("/api/audit").json()["entries"][:3]]
+    assert actions[0] == "card.delete"
+
+
+def test_saved_cards_cannot_be_deleted_from_review(api, dav_settings, make_card):
+    card_id = _scan_and_read(dav_settings, make_card, seed=14)
+    api.post(f"/api/review/{card_id}/approve", json=_body(full_name="Sam Saved"), headers=H)
+    assert api.delete(f"/api/review/{card_id}", headers=H).status_code == 409
+    assert api.post(f"/api/review/{card_id}/retry", headers=H).status_code == 409
+
+
+def test_business_card_without_a_person_saves_as_a_company(api, dav_settings, make_card):
+    card_id = _scan_and_read(dav_settings, make_card, seed=15)
+    body = _body(
+        full_name="", organization="Glass Garden Gems", emails=["gems@glassgarden.example"]
+    )
+    r = api.post(f"/api/review/{card_id}/approve", json=body, headers=H)
+    assert r.status_code == 200, r.text
+    uid = r.json()["uid"]
+    assert api.get(f"/api/contacts/{uid}").json()["full_name"] == "Glass Garden Gems"
+    from flipdial import contacts
+
+    card, _, _ = contacts.get_contact(dav_settings, uid)
+    assert card.first("X-ABSHOWAS") == "COMPANY" and card.get("N")[0].value.strip(";") == ""
+
+    card2 = _scan_and_read(dav_settings, make_card, seed=16)
+    r = api.post(
+        f"/api/review/{card2}/approve", json=_body(full_name="", organization=""), headers=H
+    )
+    assert r.status_code == 422
