@@ -28,6 +28,9 @@
   }
   $effect(() => {
     load()
+    const again = () => load()
+    window.addEventListener('flipdial:server-changed', again)
+    return () => window.removeEventListener('flipdial:server-changed', again)
   })
 
   async function turnOff() {

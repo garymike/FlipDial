@@ -99,7 +99,14 @@ def main(argv: list[str] | None = None) -> None:
 
             ingestor, extractor = Ingestor(settings), Extractor(settings)
 
+            from flipdial import builtin_server
+
             def phone_pass() -> None:
+                # The built-in contacts server can be turned on or off while this runs.
+                if builtin_server.is_on(settings):
+                    builtin_server.apply(settings)
+                else:
+                    builtin_server.unapply(settings)  # does nothing for a settings-file server
                 phone.tick(settings, lambda: contacts.sync(settings, make_client(settings)))
 
             keep_beating(settings, "worker")

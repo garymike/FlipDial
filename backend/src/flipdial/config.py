@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, PrivateAttr, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -94,6 +94,12 @@ class Settings(BaseSettings):
     # The bundled contacts server's folder (docs/contacts-server.md). When set, the phone
     # setup wizard can create the phone's account itself.
     radicale_dir: Path | None = None
+    _carddav_from_file: bool = PrivateAttr(default=False)
+
+    @property
+    def carddav_from_file(self) -> bool:
+        """Whether the contacts server came from the settings file (not the built-in one)."""
+        return self._carddav_from_file
 
     # Extraction model
     model_backend: Literal["ollama", "openai_compatible"] = "ollama"
@@ -114,6 +120,7 @@ class Settings(BaseSettings):
             self.rejected_dir = self.data_dir / "rejected"
         if self.db_path is None:
             self.db_path = self.data_dir / "flipdial.db"
+        self._carddav_from_file = bool(self.carddav_url)
         host = urlparse(self.model_url).hostname or ""
         if not self.allow_remote_model and not is_local_host(host):
             raise ValueError(
@@ -174,4 +181,6 @@ class Settings(BaseSettings):
 
 
 def get_settings() -> Settings:
-    return Settings()
+    from flipdial import builtin_server
+
+    return builtin_server.apply(Settings())

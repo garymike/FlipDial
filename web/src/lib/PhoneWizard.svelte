@@ -121,8 +121,8 @@
     <p class="detail">Checking the contacts server…</p>
   {:else if !info.server}
     <p class="detail">
-      Phone sync needs a contacts server on your home network, such as Synology Contacts, Nextcloud or Radicale.
-      Add it with FLIPDIAL_CARDDAV_URL, then come back here.
+      Phone sync needs a contacts server on your home network. Turn on FlipDial's built-in one under Contacts server
+      above, or connect your own (such as Synology Contacts or Nextcloud).
     </p>
   {:else if step === 'book' && info.bundled}
     <p class="detail">

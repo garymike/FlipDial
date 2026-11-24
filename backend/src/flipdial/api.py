@@ -30,6 +30,7 @@ from starlette.background import BackgroundTask
 
 from flipdial import (
     audit,
+    builtin_server,
     cardview,
     contacts,
     contacts_server,
@@ -368,6 +369,36 @@ def phone_sync(body: PhoneSyncIn, s: SettingsDep, client: ClientDep, actor: Acto
     if body.confirm or body.accept_drop:
         audit.record(s, actor, "phone.confirm", "", accepted_drop=body.accept_drop)
     return {**out, "state": phone.status(s)}
+
+
+# -- built-in contacts server ----------------------------------------------------------
+
+
+class BuiltinOnIn(BaseModel):
+    host: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=253)]
+
+
+@router.get("/contacts-server")
+def builtin_status(s: SettingsDep) -> dict:
+    return builtin_server.status(s)
+
+
+@router.post("/contacts-server/on")
+def builtin_on(body: BuiltinOnIn, s: SettingsDep, actor: ActorDep) -> dict:
+    """Turn on FlipDial's built-in contacts server, reachable from phones at `host`."""
+    try:
+        builtin_server.turn_on(s, body.host)
+    except contacts_server.ServerSetupError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    audit.record(s, actor, "contacts_server.on", body.host)
+    return builtin_server.status(s)
+
+
+@router.post("/contacts-server/off")
+def builtin_off(s: SettingsDep, actor: ActorDep) -> dict:
+    builtin_server.turn_off(s)
+    audit.record(s, actor, "contacts_server.off")
+    return builtin_server.status(s)
 
 
 # -- phone setup wizard ----------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import uuid
 from collections.abc import Callable
@@ -85,8 +86,25 @@ def create_app(
     oidc_factory: Callable[[], auth.OIDCClient] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        # FlipDial's built-in contacts server runs alongside the web server, when it's on.
+        from flipdial import builtin_server
+
+        if builtin_server.is_on(settings) and not builtin_server.from_settings_file(settings):
+            builtin_server.apply(settings)
+            builtin_server.supervisor.start(builtin_server.folder(settings))
+        yield
+        builtin_server.supervisor.stop()
+
     app = FastAPI(
-        title="FlipDial", version=__version__, docs_url=None, redoc_url=None, openapi_url=None
+        title="FlipDial",
+        version=__version__,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+        lifespan=lifespan,
     )
     app.state.settings = settings
     app.state.carddav_factory = carddav_factory or (lambda: make_client(settings))

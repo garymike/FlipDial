@@ -1,0 +1,107 @@
+"""FlipDial's built-in contacts server: one button turns it on, FlipDial runs it, and a
+contacts server in the settings file always wins."""
+
+from __future__ import annotations
+
+import time
+
+import pytest
+from conftest import _free_port
+from cryptography import x509
+from fastapi.testclient import TestClient
+from test_api import H
+
+from flipdial import builtin_server, phone_setup
+from flipdial import contacts_server as cs
+from flipdial.app import create_app
+from flipdial.carddav.client import CardDAVClient, CardDAVError
+from flipdial.config import Settings
+
+
+@pytest.fixture
+def builtin(settings, monkeypatch):
+    monkeypatch.setattr(cs, "PORT", _free_port())
+    yield settings
+    builtin_server.turn_off(settings)
+
+
+def _wait_up(s, seconds=20):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        try:
+            return CardDAVClient(s).address_book()
+        except CardDAVError:
+            time.sleep(0.2)
+    raise AssertionError("contacts server didn't start")
+
+
+def test_one_button_turns_it_on(builtin):
+    s = builtin
+    assert s.carddav_url is None and not s.carddav_from_file
+    builtin_server.turn_on(s, "192.168.1.20")
+    assert s.carddav_url == f"https://localhost:{cs.PORT}/"
+    assert s.phone_server_url == f"https://192.168.1.20:{cs.PORT}/"
+    folder = builtin_server.folder(s)
+    assert (folder / builtin_server.PASSWORD_FILE).stat().st_mode & 0o777 == 0o600
+    book = _wait_up(s)
+    assert book.name == "Contacts"  # FlipDial made its own address book
+    assert builtin_server.status(s)["running"] is True
+
+    # The phone wizard can make the phone's account straight away.
+    out = phone_setup.create_phone_account(s, CardDAVClient(s))
+    assert out["username"] == "phone"
+
+    # The certificate authority can only vouch for this server's names.
+    ca = x509.load_pem_x509_certificate((folder / "ca.pem").read_bytes())
+    nc = ca.extensions.get_extension_for_class(x509.NameConstraints)
+    assert nc.critical and nc.value.permitted_subtrees
+
+    # Off: it stops, FlipDial goes back to keeping contacts on this computer.
+    builtin_server.turn_off(s)
+    assert s.carddav_url is None and builtin_server.status(s)["running"] is False
+    # On again: the same accounts and contacts.
+    builtin_server.turn_on(s, "192.168.1.20")
+    assert _wait_up(s).name == "Contacts"
+    assert "phone" in cs.users(folder)
+
+
+def test_settings_file_server_wins(settings):
+    s = Settings(data_dir=settings.data_dir, carddav_url="https://nas.example/carddav/")
+    assert s.carddav_from_file
+    with pytest.raises(cs.ServerSetupError, match="server_in_settings_file"):
+        builtin_server.turn_on(s, "192.168.1.20")
+    assert builtin_server.status(s)["available"] is False
+
+
+def test_bad_address_refused(builtin):
+    for bad in ["", "a/b", "x:1", "user@host", "two words"]:
+        with pytest.raises(cs.ServerSetupError):
+            builtin_server.turn_on(builtin, bad)
+
+
+def test_new_address_means_new_certificates(builtin):
+    s = builtin
+    builtin_server.turn_on(s, "192.168.1.20")
+    before = (builtin_server.folder(s) / "ca.pem").read_bytes()
+    builtin_server.turn_on(s, "nas.local")
+    after = (builtin_server.folder(s) / "ca.pem").read_bytes()
+    assert before != after
+    assert s.phone_server_url == f"https://nas.local:{cs.PORT}/"
+    _wait_up(s)
+
+
+def test_api_and_loading_settings(builtin, monkeypatch):
+    s = builtin
+    api = TestClient(create_app(s, lambda: CardDAVClient(s)))
+    st = api.get("/api/contacts-server").json()
+    assert st["available"] and not st["on"] and st["port"] == cs.PORT
+    r = api.post("/api/contacts-server/on", json={"host": "192.168.1.20"}, headers=H)
+    assert r.status_code == 200 and r.json()["on"] is True
+    # A fresh start of FlipDial (or the worker) picks it up from the database.
+    monkeypatch.setenv("FLIPDIAL_DATA_DIR", str(s.data_dir))
+    from flipdial.config import get_settings
+
+    fresh = get_settings()
+    assert fresh.carddav_url == f"https://localhost:{cs.PORT}/" and not fresh.carddav_from_file
+    r = api.post("/api/contacts-server/off", headers=H)
+    assert r.json()["on"] is False
