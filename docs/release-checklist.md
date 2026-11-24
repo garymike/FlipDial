@@ -2,10 +2,19 @@
 
 v1 ships when every box below is checked. Copy this list into the release issue and tick items there.
 
+## Version numbers
+
+Versions are `MAJOR.MINOR.PATCH`, tagged `v` plus the version (`v0.13.0`). The release title is the tag.
+
+- **Before 1.0:** raise the middle number for any release with something new (`0.13.0`), and the last number for releases with fixes only (`0.13.1`).
+- **1.0.0** is the public launch: from then on, stored data and setup stay compatible within a major version.
+- **Test builds** add `-rc1`, `-a1` or `-b1` (`1.0.0-rc1`) and publish as pre-releases.
+- Every version is released. A run that fails creates no tag, so the same version can simply be run again.
+
 ## How a release is made
 
 1. Work through this list in a release issue.
-2. Set the version in `backend/pyproject.toml` (and `web/package.json`) and merge to main. Then go to **Actions → Release → Run workflow** and type the version, for example `1.0.0` (or push a tag `v1.0.0` yourself). The workflow checks the version matches the code, creates the tag, and reruns every CI check, builds the container image, signs it with Sigstore (keyless, tied to this repository's workflow), attaches an SBOM and build provenance, builds the Python package and web app, and signs their checksums.
+2. Set the version in `backend/pyproject.toml` (and `web/package.json`) and merge to main. Then go to **Actions → Release → Run workflow** and type the version, for example `1.0.0` (or push a tag `v1.0.0` yourself). The workflow checks the version matches the code, reruns every CI check, creates the tag once they pass, builds the container image, signs it with Sigstore (keyless, tied to this repository's workflow), attaches an SBOM and build provenance, builds the Python package and web app, and signs their checksums.
 3. The workflow leaves a **draft** release. Add the accuracy report, recommended model and known limitations, then publish.
 
 ## 1. Accuracy gate

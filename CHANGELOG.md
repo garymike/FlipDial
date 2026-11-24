@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.12.3
+## 0.13.0
 
 ### New
 
@@ -11,6 +11,8 @@
 
 - The built-in contacts server now stops with FlipDial every time, even if FlipDial
   crashes or is ended in Task Manager. Nothing is left running on its own.
+- Changing the built-in contacts server's address now restarts it, so it uses the new
+  certificate right away. Before, it kept the old one until FlipDial was restarted.
 
 ## 0.12.2
 
