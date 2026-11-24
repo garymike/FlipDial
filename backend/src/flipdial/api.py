@@ -516,6 +516,16 @@ def phone_profile_link(body: ProfileLinkIn, s: SettingsDep, actor: ActorDep) -> 
     }
 
 
+class LinkCheckIn(BaseModel):
+    token: Annotated[str, StringConstraints(max_length=100)]
+
+
+@router.post("/phone/profile-link/check")
+def phone_profile_link_check(body: LinkCheckIn, s: SettingsDep) -> dict:
+    """Has this link been opened? (The wizard shows it.)"""
+    return phone_setup.link_state(s, body.token)
+
+
 @router.get("/phone/inbox")
 def phone_inbox(s: SettingsDep) -> dict:
     """Contacts added on the phone, and contacts changed in both places."""

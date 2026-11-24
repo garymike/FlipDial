@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, DEMO, describe, type UpdateInfo } from './lib/api'
+  import SyncNow from './lib/SyncNow.svelte'
   import Dial from './lib/Dial.svelte'
   import Duplicates from './lib/Duplicates.svelte'
   import Review from './lib/Review.svelte'
@@ -145,6 +146,7 @@
       <a href={href({ name: v.name })} aria-current={router.route.name === v.name ? 'page' : undefined}>{v.label}</a>
     {/each}
   </nav>
+  {#if layout.mode !== 'phone'}<SyncNow />{/if}
   <a class="review" href={href({ name: 'review' })} aria-current={router.route.name === 'review' ? 'page' : undefined}>
     Review {#if reviewCount}<span class="pill">{reviewCount}</span>{/if}
   </a>
@@ -248,6 +250,7 @@
   {#if more}
     <button type="button" class="more-backdrop" aria-label="Close menu" onclick={() => (more = false)}></button>
     <div class="more" role="menu">
+      <div class="more-sync"><SyncNow compact /></div>
       <a role="menuitem" href={href({ name: 'transfer' })} onclick={() => (more = false)}>Import, export and backup</a>
       <a role="menuitem" href={href({ name: 'duplicates' })} onclick={() => (more = false)}>Possible duplicates</a>
       <a role="menuitem" href={href({ name: 'trash' })} onclick={() => (more = false)}>Trash</a>
@@ -259,6 +262,13 @@
 {/if}
 
 <style>
+  .more-sync {
+    padding: 4px 14px 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .more-sync:empty {
+    display: none;
+  }
   .update-bar {
     display: flex;
     flex-wrap: wrap;

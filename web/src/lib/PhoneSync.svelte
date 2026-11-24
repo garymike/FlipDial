@@ -116,7 +116,8 @@
     {/if}
     <p class="detail">
       {st.on_phone} on your phone now, {st.wanted} after the next sync. Last synced {when(st.last_success)}.
-      FlipDial sends changes within a minute and checks the phone book every day after {st.check_hour}:00.
+      FlipDial looks for changes every {st.check_minutes ?? 5} minutes and does a full check every day after
+      {st.check_hour}:00. Use Sync now (here, or next to Review) when you don't want to wait.
     </p>
 
     {#if st.problem}

@@ -139,6 +139,7 @@ export interface PhoneStatus {
   problem?: { code: string; before?: number; now?: number } | null
   pending?: PhonePending | null
   check_hour?: number
+  check_minutes?: number // how often changes are looked for
   waiting?: number // in Review: added on the phone, or changed in both places
 }
 
@@ -510,6 +511,8 @@ export const api = {
       '/api/phone/profile-link',
       { base },
     ),
+  phoneProfileLinkCheck: (token: string) =>
+    call<{ known: boolean; used_at: string | null; expired: boolean }>('POST', '/api/phone/profile-link/check', { token }),
   phoneInbox: () => call<{ items: PhoneInboxItem[] }>('GET', '/api/phone/inbox'),
   phoneInboxAction: (id: number, action: 'accept' | 'dismiss') =>
     call<{ uid: string }>('POST', `/api/phone/inbox/${id}/${action}`),

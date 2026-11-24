@@ -758,6 +758,7 @@ def status(settings: Settings) -> dict[str, Any]:
         "problem": json.loads(state["problem"]) if state["problem"] else None,
         "pending": json.loads(state["pending_json"]) if state["pending_json"] else None,
         "check_hour": settings.phone_check_hour,
+        "check_minutes": check_minutes(settings),
         "waiting": waiting_count(settings),
     }
     return out
@@ -772,6 +773,14 @@ def phone_client(settings: Settings) -> CardDAVClient:
     return CardDAVClient(settings, book=phone_rules.book_name(settings))
 
 
+def check_minutes(settings: Settings) -> int:
+    """How often the worker looks for changes to send: every 5 minutes, slowing to 10 for
+    large address books (each look reads every contact). Sync now is always immediate."""
+    with db.session(settings.db_path) as conn:
+        n = conn.execute("SELECT COUNT(*) FROM contacts").fetchone()[0]
+    return 5 if n < 1000 else 7 if n < 5000 else 10
+
+
 def dirty(settings: Settings) -> bool:
     """Whether the phone book is behind FlipDial, judged from local data only."""
     masters = _masters(settings)
@@ -782,7 +791,7 @@ def dirty(settings: Settings) -> bool:
 
 
 def tick(settings: Settings, refresh) -> dict[str, Any] | None:
-    """Called by the worker every pass. Pushes local changes soon after they happen, and
+    """Called by the worker every few minutes (check_minutes). Pushes local changes, and
     once a day (after the check hour) refreshes from the server and checks the phone book.
     Waiting confirmations and stopped syncs are retried only on the daily check."""
     if not phone_rules.enabled(settings):
