@@ -1,0 +1,5 @@
+# betterleaks / gitleaks false positives. One fingerprint per line: path:rule:line.
+# Both are dummy passwords in tests that check Settings hides secrets from repr();
+# the values ("hunter2-example", "s3cret-example") are fixtures, not credentials.
+backend/tests/test_config.py:generic-password:31
+backend/tests/test_carddav.py:generic-password:151
