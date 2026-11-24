@@ -20,12 +20,17 @@
     api.duplicates().then((d) => (dupes = d.count)).catch(() => (dupes = 0))
   })
 
+  // Typing in search sends a request per keystroke; only the newest may update the wall.
+  let latest = 0
   async function load() {
+    const ticket = ++latest
     try {
-      data = await api.contacts({ q: query, deck, scan, starred: starredOnly })
+      const next = await api.contacts({ q: query, deck, scan, starred: starredOnly })
+      if (ticket !== latest) return
+      data = next
       error = ''
     } catch (e) {
-      error = describe(e)
+      if (ticket === latest) error = describe(e)
     }
   }
 
