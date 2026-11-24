@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 
 from flipdial.carddav.vcard import VCard, escape, split_unescaped, unescape
 from flipdial.extract.schema import CardFields
+from flipdial.socials import normalize as normalize_social
+from flipdial.socials import platform_key, profile_url
 
 SCHEMA_VERSION = "1"
 MANAGED = (
@@ -129,8 +131,14 @@ def apply(card: VCard, c: ReviewedContact) -> VCard:
     for w in c.websites:
         card.add("URL", w)
     for platform, handle in c.socials:
-        params = [("TYPE", platform.lower())] if platform else []
-        card.add("SOCIALPROFILE" if v4 else "X-SOCIALPROFILE", handle, params)
+        # Apple's form: type=instagram;x-user=name:https://instagram.com/name
+        name, handle = normalize_social(platform, handle)
+        if not handle:
+            continue
+        key = platform_key(name) or name.lower()
+        params = ([("TYPE", key)] if key else []) + [("X-USER", handle)]
+        url = profile_url(name, handle)
+        card.add("SOCIALPROFILE" if v4 else "X-SOCIALPROFILE", url or handle, params)
     if c.address:
         card.add(
             "ADR",

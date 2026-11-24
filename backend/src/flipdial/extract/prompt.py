@@ -22,7 +22,11 @@ Steps:
    - title, organization.
    - emails, phones, websites: every one printed. A number labeled WhatsApp, Signal, WeChat
      or similar goes in phones and also in socials with that app as the platform.
-   - socials: social and messaging accounts, with the platform name.
+   - socials: social and messaging accounts, each with the platform name (Instagram,
+     Facebook, X, TikTok, LinkedIn, Bluesky, Threads, Mastodon, YouTube and so on) and the
+     handle. When a row of platform icons sits next to one handle, add one entry per icon,
+     each with that handle. Recognize platforms from their logos when the name isn't
+     written.
    - address: the full postal address, joining its lines with ", ".
    - about: any other printed description, such as a tagline or list of services."""
 

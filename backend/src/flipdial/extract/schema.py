@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from flipdial.socials import normalize as normalize_social
+
 MAX_TEXT = 200
 MAX_ITEMS = 6
 LOW_CONFIDENCE = 0.6
@@ -193,9 +195,14 @@ def validate(raw: dict[str, Any]) -> Extraction:
         elif s.value:
             dropped += 1
     socials = []
+    seen: set[tuple[str, str]] = set()
     for s in fields.socials:
-        if _HANDLE.match(s.handle) or _valid_url(s.handle):
-            socials.append(s)
+        name, handle = normalize_social(s.platform, s.handle)
+        if (_HANDLE.match(handle) or _valid_url(handle) or _PHONE_CHARS.match(handle)) and handle:
+            key = (name.lower(), handle.lower())
+            if key not in seen:
+                seen.add(key)
+                socials.append(s.model_copy(update={"platform": name, "handle": handle}))
         elif s.handle:
             dropped += 1
     fields = fields.model_copy(
@@ -248,6 +255,7 @@ _FIND_SITE = re.compile(
     r"(?:/[^\s]*)?(?![\w@])",
     re.IGNORECASE,
 )
+_FIND_HANDLE = re.compile(r"(?<![\w@])@([A-Za-z0-9_][A-Za-z0-9_.]{1,29})(?![\w@])")
 FOUND_CONFIDENCE = 0.5
 
 
@@ -299,6 +307,16 @@ def _fill_from_transcript(fields: CardFields, flags: set[str]) -> CardFields:
             have.add(_site_key(url))
             flags.add("found_in_text:websites")
     update["websites"] = sites
+
+    socials = list(fields.socials)
+    have = {s.handle.lower() for s in socials}
+    for m in _FIND_HANDLE.findall(rest):
+        h = m.rstrip(".")
+        if h.lower() not in have and len(socials) < MAX_ITEMS:
+            socials.append(Social(platform="", handle=h, confidence=FOUND_CONFIDENCE))
+            have.add(h.lower())
+            flags.add("found_in_text:socials")
+    update["socials"] = socials
     return fields.model_copy(update=update)
 
 

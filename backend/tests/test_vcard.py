@@ -46,7 +46,9 @@ def test_new_card_round_trips(version):
     assert card.get("N")[0].value == "Example;Ava;;;"
     assert card.first("X-FLIPDIAL-EVENT") == "Art Fair 2026"
     social = "SOCIALPROFILE" if version == "4.0" else "X-SOCIALPROFILE"
-    assert card.first(social) == "@studio.example"
+    prop = card.get(social)[0]
+    assert prop.text() == "https://instagram.com/studio.example"  # Apple's form: link + x-user
+    assert dict(prop.params) == {"TYPE": "instagram", "X-USER": "studio.example"}
     cats = card.get("CATEGORIES")[0].value
     assert "Art Fair 2026" in cats and "Starred" in cats
     assert all(len(line.encode()) <= 75 for line in text.split("\r\n"))

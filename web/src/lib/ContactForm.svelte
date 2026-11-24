@@ -1,6 +1,6 @@
 <script lang="ts">
   // Shared editing form for review and contact detail. Flags mark fields to check.
-  import type { ContactInput } from './api'
+  import { PLATFORMS, type ContactInput } from './api'
 
   let {
     value = $bindable(),
@@ -11,7 +11,10 @@
   const flagFor = (field: string) => {
     const f = flags.filter((x) => x.endsWith(`:${field}`)).map((x) => x.split(':')[0])
     if (f.includes('suspicious_text')) return 'Looks like instructions or code. Check it.'
-    if (f.includes('found_in_text')) return "Found in the card's text, but not where expected. Check it."
+    if (f.includes('found_in_text'))
+      return field === 'socials'
+        ? "Found on the card. Pick the platform, or remove it if it isn't one."
+        : "Found in the card's text, but not where expected. Check it."
     if (f.includes('low_confidence')) return 'Unsure. Check it against the card.'
     return ''
   }
@@ -65,6 +68,29 @@
     </fieldset>
   {/each}
 
+  <fieldset class="field">
+    <legend>Social</legend>
+    {#each value.socials as s, i (i)}
+      <div class="multi social">
+        <select aria-label={`Platform ${i + 1}`} bind:value={value.socials[i].platform} class:flag={!s.platform && !!flagFor('socials')}>
+          <option value="">Choose…</option>
+          {#each PLATFORMS as p (p)}<option value={p}>{p}</option>{/each}
+          {#if s.platform && !PLATFORMS.includes(s.platform as (typeof PLATFORMS)[number])}<option value={s.platform}>{s.platform}</option>{/if}
+        </select>
+        <input
+          aria-label={`Handle ${i + 1}`}
+          bind:value={value.socials[i].handle}
+          maxlength="80"
+          placeholder="handle or profile link"
+          class:flag={!s.platform && !!flagFor('socials')}
+        />
+        <button type="button" class="remove" aria-label={`Remove social ${i + 1}`} onclick={() => (value.socials = value.socials.filter((_, j) => j !== i))}>×</button>
+      </div>
+    {/each}
+    {#if flagFor('socials')}<span class="note">{flagFor('socials')}</span>{/if}
+    <button type="button" class="add" onclick={() => (value.socials = [...value.socials, { platform: '', handle: '' }])}>+ Add social</button>
+  </fieldset>
+
   <div class="field">
     <label for={`${idPrefix}-address`}>Address</label>
     <input id={`${idPrefix}-address`} bind:value={value.address} maxlength="200" class:flag={!!flagFor('address')} />
@@ -113,7 +139,8 @@
     padding: 0;
   }
   input,
-  textarea {
+  textarea,
+  select {
     box-sizing: border-box;
     width: 100%;
     min-height: 44px;
@@ -137,8 +164,13 @@
     font-weight: 400;
     margin-left: 6px;
   }
+  .social select {
+    flex: 0 0 140px;
+    width: 140px;
+  }
   input.flag,
-  textarea.flag {
+  textarea.flag,
+  select.flag {
     border-color: var(--amber);
   }
   input[type='checkbox'] {

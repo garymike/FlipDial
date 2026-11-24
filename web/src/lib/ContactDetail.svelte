@@ -130,7 +130,10 @@
             {#each contact.websites as w (w)}
               <dt>Website</dt><dd><a href={safeUrl(w)} rel="noopener noreferrer" target="_blank">{w}</a></dd>
             {/each}
-            {#each contact.socials as s (s.handle)}<dt>{s.platform || 'Social'}</dt><dd>{s.handle}</dd>{/each}
+            {#each contact.socials as s (s.platform + s.handle)}
+              <dt>{s.platform || 'Social'}</dt>
+              <dd>{#if s.url}<a href={s.url} rel="noopener noreferrer" target="_blank">{s.handle}</a>{:else}{s.handle}{/if}</dd>
+            {/each}
             {#if contact.address}<dt>Address</dt><dd>{contact.address}</dd>{/if}
             {#if contact.about}<dt>About</dt><dd class="multiline">{contact.about}</dd>{/if}
             {#if contact.note}<dt>Notes</dt><dd class="multiline">{contact.note}</dd>{/if}

@@ -16,6 +16,8 @@ from flipdial.carddav.client import CardDAVClient, CardDAVError
 from flipdial.carddav.contact import ReviewedContact, apply
 from flipdial.carddav.vcard import VCard, VCardError, split_unescaped, unescape
 from flipdial.config import Settings
+from flipdial.socials import normalize as normalize_social
+from flipdial.socials import profile_url
 
 log = logging.getLogger("flipdial.contacts")
 
@@ -58,10 +60,12 @@ def view(card: VCard) -> ContactView:
     if adr:
         parts = [unescape(x) for x in split_unescaped(adr[0].value, ";")]
         address = ", ".join(x for x in parts if x)
-    socials = [
-        {"platform": dict(p.params).get("TYPE", ""), "handle": p.text()}
-        for p in card.get("SOCIALPROFILE") + card.get("X-SOCIALPROFILE")
-    ]
+    socials = []
+    for p in card.get("SOCIALPROFILE") + card.get("X-SOCIALPROFILE"):
+        params = {k.upper(): v for k, v in p.params}
+        name, handle = normalize_social(params.get("TYPE", ""), params.get("X-USER") or p.text())
+        if handle:
+            socials.append({"platform": name, "handle": handle, "url": profile_url(name, handle)})
     cats = _categories(card)
     return ContactView(
         uid=card.uid,

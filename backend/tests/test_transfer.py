@@ -126,7 +126,7 @@ def test_linkedin_import_preview_commit_undo(api):
     listing = api.get("/api/contacts", params={"q": "linktest"}).json()["contacts"]
     lena = next(c for c in listing if c["full_name"] == "Lena Linktest")
     assert lena["source"] == "linkedin" and lena["met_on"] == "2025-03-14"
-    assert lena["event"] == "LinkedIn" and lena["socials"][0]["platform"] == "linkedin"
+    assert lena["event"] == "LinkedIn" and lena["socials"][0]["platform"] == "LinkedIn"
 
     again = api.post("/api/import/preview", json={"text": LINKEDIN}, headers=H).json()
     assert again["counts"]["duplicate"] == 2  # already imported
