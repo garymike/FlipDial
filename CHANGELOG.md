@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.2
+
+### Security
+
+- **The built-in contacts server listens only at home:** on this computer and the home
+  address you chose, not on every network. If you chose the address (not the name), it
+  pauses on other networks, like café or hotel Wi-Fi, and Setup says so. It starts again
+  when you're back home.
+- The iPhone profile link listens only on the home address.
+
 ## 0.12.1
 
 ### New
