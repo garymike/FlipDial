@@ -79,7 +79,8 @@ def test_semicolon_csv_and_bom():
 def test_csv_export_blocks_formulas():
     out = csvfile.write_csv([{"full_name": "=HYPERLINK(1)", "emails": ["a@b.test"]}])
     rows = list(csv.reader(io.StringIO(out.lstrip("﻿"))))
-    assert rows[1][0] == "'=HYPERLINK(1)" and rows[1][3] == "a@b.test"
+    emails = rows[0].index("Emails")
+    assert rows[1][0] == "'=HYPERLINK(1)" and rows[1][emails] == "a@b.test"
 
 
 def test_vcf_split_and_prepare():

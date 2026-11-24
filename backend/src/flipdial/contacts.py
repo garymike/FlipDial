@@ -15,6 +15,7 @@ from typing import Any
 from flipdial import db
 from flipdial.carddav.client import CardDAVClient, CardDAVError
 from flipdial.carddav.contact import ReviewedContact, apply
+from flipdial.carddav.person import read_birthday, read_name, read_org
 from flipdial.carddav.typed import read_addresses, read_typed
 from flipdial.carddav.vcard import VCard, VCardError, split_unescaped, unescape
 from flipdial.cardview import View
@@ -31,6 +32,14 @@ class ContactView:
     full_name: str
     title: str = ""
     organization: str = ""
+    department: str = ""
+    given_name: str = ""
+    middle_name: str = ""
+    family_name: str = ""
+    prefix: str = ""
+    suffix: str = ""
+    nickname: str = ""
+    birthday: str = ""  # YYYY-MM-DD, or --MM-DD without a year
     # Each is {"value", "kind", "label"}: kind is work, home, mobile and so on (see typed.py)
     emails: list[dict[str, str]] = field(default_factory=list)
     phones: list[dict[str, str]] = field(default_factory=list)
@@ -70,13 +79,16 @@ def view(card: VCard) -> ContactView:
         if handle:
             socials.append({"platform": name, "handle": handle, "url": profile_url(name, handle)})
     cats = _categories(card)
+    organization, department = read_org(card)
     return ContactView(
         uid=card.uid,
         full_name=card.first("FN"),
         title=card.first("TITLE"),
-        organization=unescape(split_unescaped(card.get("ORG")[0].value, ";")[0])
-        if card.get("ORG")
-        else "",
+        organization=organization,
+        department=department,
+        **read_name(card),
+        nickname=card.first("NICKNAME"),
+        birthday=read_birthday(card),
         emails=[t.as_dict() for t in read_typed(card, "EMAIL")],
         phones=[t.as_dict() for t in read_typed(card, "TEL")],
         websites=[t.as_dict() for t in read_typed(card, "URL")],
@@ -200,8 +212,11 @@ def get_contact(settings: Settings, uid: str) -> tuple[VCard, str, str | None] |
 
 
 def to_reviewed(v: ContactView) -> ReviewedContact:
+    """The contact as it stands. Name parts, nickname and birthday stay None (unchanged)."""
     return ReviewedContact(
         full_name=v.full_name,
+        given_name=v.given_name,
+        family_name=v.family_name,
         title=v.title,
         organization=v.organization,
         emails=list(v.emails),
@@ -254,6 +269,10 @@ def newest_card(settings: Settings, card_ids: list[str]) -> str:
     return row["id"] if row else card_ids[-1]
 
 
+NAME_KEYS = {"given_name", "middle_name", "family_name", "prefix", "suffix"}
+KEEP_IF_SAME = NAME_KEYS | {"nickname", "department", "birthday"}
+
+
 def update_contact(
     settings: Settings, client: CardDAVClient, uid: str, changes: dict[str, Any]
 ) -> ContactView:
@@ -265,7 +284,17 @@ def update_contact(
     show = changes.pop("card_id", None)
     if show is not None and show not in {x["card_id"] for x in scans_for(settings, uid)}:
         raise ValueError("not_this_contacts_card")
-    reviewed = to_reviewed(view(card))
+    before = view(card)
+    reviewed = to_reviewed(before)
+    if "full_name" in changes and changes["full_name"] != before.full_name:
+        if not NAME_KEYS & changes.keys():
+            # A new name with no parts given: split it again instead of keeping old parts.
+            reviewed.given_name = reviewed.family_name = ""
+            reviewed.middle_name = ""
+    for key in KEEP_IF_SAME & changes.keys():
+        # Unchanged values aren't rewritten, so a birthday FlipDial can't show survives.
+        if changes[key] == getattr(before, key):
+            del changes[key]
     for key, value in changes.items():
         if key == "socials":
             value = [(s.get("platform", ""), s.get("handle", "")) for s in value]

@@ -15,6 +15,12 @@ OUT = Path(__file__).resolve().parent.parent / "demo"
 W, H = 700, 400
 
 # (uid, name, title, org, email, phone, website, deck, met_on, starred, style, colors, back)
+# A few details that only some contacts have, to show them in the reading pane.
+EXTRA = {
+    "ada": {"given_name": "Ada", "family_name": "Quillfeather", "nickname": "Addie",
+            "birthday": "--05-17"},
+}
+
 PEOPLE = [
     ("ada", "Ada Quillfeather", "Glass Artist", "Quillfeather Glassworks", "ada@quillfeather.example",
      "(312) 555-0142", "quillfeather.example", "Art Fair 2026", "2026-05-16", True, "serif",
@@ -179,6 +185,7 @@ def main() -> None:
             "about": tagline or "", "note": "Met at the booth; follow up about a commission." if star else "",
             "categories": [deck], "event": deck, "met_on": met, "starred": star, "source": "scan",
             "card_id": uid, "has_back": bool(tagline),
+            **EXTRA.get(uid, {}),
         })
     for uid, name, title, org, email, phone, web, deck, met, star, source in NO_SCAN:
         socials = [{"platform": "linkedin", "handle": f"https://linkedin.example/in/{uid}-lindqvist"}] if source == "linkedin" else []

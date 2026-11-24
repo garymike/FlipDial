@@ -21,8 +21,13 @@ MAX_CELL = 2_000
 FIELDS = (
     "full_name",
     "given_name",
+    "middle_name",
     "family_name",
+    "prefix",
+    "suffix",
+    "nickname",
     "organization",
+    "department",
     "title",
     "email",
     "phone",
@@ -30,6 +35,7 @@ FIELDS = (
     "linkedin",
     "address",
     "met_on",
+    "birthday",
     "tags",
     "note",
 )
@@ -46,6 +52,17 @@ _EXACT = {
     "family name": "family_name",
     "surname": "family_name",
     "lastname": "family_name",
+    "middle name": "middle_name",
+    "additional name": "middle_name",
+    "name prefix": "prefix",
+    "prefix": "prefix",
+    "name suffix": "suffix",
+    "suffix": "suffix",
+    "nickname": "nickname",
+    "department": "department",
+    "organization department": "department",
+    "organization 1 - department": "department",
+    "birthday": "birthday",
     "company": "organization",
     "organization": "organization",
     "organisation": "organization",
@@ -159,6 +176,19 @@ def _split_list(value: str, key: str) -> list[str]:
     return out
 
 
+def parse_birthday(value: str) -> str:
+    """A full date, or a month and day without a year (Google writes --MM-DD)."""
+    value = value.strip()
+    m = re.match(r"^--?(\d{2})-?(\d{2})$", value)
+    if m:
+        try:
+            datetime(2000, int(m[1]), int(m[2]))
+        except ValueError:
+            return ""
+        return f"--{m[1]}-{m[2]}"
+    return parse_date(value)
+
+
 def parse_date(value: str) -> str:
     value = value.strip()
     for fmt in ("%Y-%m-%d", "%d %b %Y", "%m/%d/%Y", "%d %B %Y"):
@@ -223,7 +253,14 @@ def row_values(row: list[str], mapping: list[str]) -> dict[str, list[str]]:
 
 EXPORT_COLUMNS = (
     ("Name", "full_name"),
+    ("Prefix", "prefix"),
+    ("First name", "given_name"),
+    ("Middle name", "middle_name"),
+    ("Last name", "family_name"),
+    ("Suffix", "suffix"),
+    ("Nickname", "nickname"),
     ("Organization", "organization"),
+    ("Department", "department"),
     ("Title", "title"),
     ("Emails", "emails"),
     ("Phones", "phones"),
@@ -232,6 +269,7 @@ EXPORT_COLUMNS = (
     ("Address", "address"),
     ("Deck", "event"),
     ("Met on", "met_on"),
+    ("Birthday", "birthday"),
     ("Tags", "categories"),
     ("Starred", "starred"),
     ("Has scan", "has_scan"),

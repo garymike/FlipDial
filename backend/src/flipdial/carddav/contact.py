@@ -1,8 +1,9 @@
 """Map a reviewed card onto a vCard.
 
 FlipDial only touches the properties listed in MANAGED. Everything else on an existing
-contact (birthdays, photos set elsewhere, other apps' fields) is left exactly as it was.
-Categories are merged, never replaced.
+contact (photos set elsewhere, other apps' fields) is left exactly as it was. Nickname,
+birthday and the extra name parts are only changed when a value is given for them (None
+keeps what the contact has). Categories are merged, never replaced.
 """
 
 from __future__ import annotations
@@ -11,6 +12,13 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from flipdial.carddav.person import (
+    name_value,
+    org_value,
+    read_name,
+    read_org,
+    write_birthday,
+)
 from flipdial.carddav.typed import Address, Typed, to_addresses, to_typed, write_all
 from flipdial.carddav.vcard import VCard, escape, split_unescaped, unescape
 from flipdial.extract.schema import CardFields
@@ -41,6 +49,13 @@ class ReviewedContact:
     family_name: str = ""
     title: str = ""
     organization: str = ""
+    # None keeps what the contact already has; "" clears it.
+    middle_name: str | None = None
+    prefix: str | None = None  # Dr., Prof.
+    suffix: str | None = None  # Jr., PhD
+    nickname: str | None = None
+    department: str | None = None
+    birthday: str | None = None  # YYYY-MM-DD, or --MM-DD without a year
     emails: list[Typed] = field(default_factory=list)
     phones: list[Typed] = field(default_factory=list)
     websites: list[Typed] = field(default_factory=list)
@@ -73,6 +88,10 @@ class ReviewedContact:
             family_name=f.family_name.value,
             title=f.title.value,
             organization=f.organization.value,
+            middle_name=f.middle_name.value or None,
+            prefix=f.prefix.value or None,
+            suffix=f.suffix.value or None,
+            department=f.department.value or None,
             emails=[{"value": e.value, "kind": e.kind} for e in f.emails],
             phones=[{"value": p.value, "kind": p.kind} for p in f.phones],
             websites=[{"value": w.value, "kind": w.kind} for w in f.websites],
@@ -101,7 +120,13 @@ def _name_parts(c: ReviewedContact) -> tuple[str, str]:
         return "", ""
     if c.given_name or c.family_name:
         return c.given_name, c.family_name
-    parts = c.full_name.split()
+    name = c.full_name.strip()
+    # "Dr. Ada Quill, PhD" with prefix Dr. and suffix PhD: split only "Ada Quill".
+    if c.prefix and name.casefold().startswith(c.prefix.casefold()):
+        name = name[len(c.prefix) :]
+    if c.suffix and name.casefold().endswith(c.suffix.casefold()):
+        name = name[: -len(c.suffix)]
+    parts = name.strip(" ,").split()
     if len(parts) >= 2:
         return " ".join(parts[:-1]), parts[-1]
     return c.full_name, ""
@@ -119,13 +144,24 @@ def apply(card: VCard, c: ReviewedContact) -> VCard:
     if not c.full_name.strip():
         raise ValueError("full_name required")
     v4 = card.version.startswith("4")
+    had_name, (_, had_department) = read_name(card), read_org(card)
+    keep = {k: had_name[k] for k in ("middle_name", "prefix", "suffix")}
+    for key in keep:
+        if getattr(c, key) is None:
+            setattr(c, key, keep[key])  # used when splitting the name below
+    department = had_department if c.department is None else c.department.strip()
     card.remove(*MANAGED)
 
     card.add("FN", c.full_name)
     given, family = _name_parts(c)
-    card.add("N", ";".join([escape(family), escape(given), "", "", ""]), raw=True)
+    if is_company(c):
+        parts = {}
+    else:
+        parts = {"given_name": given, "family_name": family}
+        parts |= {k: (getattr(c, k) or "").strip() for k in ("middle_name", "prefix", "suffix")}
+    card.add("N", name_value(parts), raw=True)
     if c.organization:
-        card.add("ORG", c.organization)
+        card.add("ORG", org_value(c.organization, department), raw=True)
     if c.title:
         card.add("TITLE", c.title)
     write_all(card, phones=c.phones, emails=c.emails, websites=c.websites, addresses=c.addresses)
@@ -138,6 +174,10 @@ def apply(card: VCard, c: ReviewedContact) -> VCard:
         params = ([("TYPE", key)] if key else []) + [("X-USER", handle)]
         url = profile_url(name, handle)
         card.add("SOCIALPROFILE" if v4 else "X-SOCIALPROFILE", url or handle, params)
+    if c.nickname is not None:
+        card.set("NICKNAME", c.nickname.strip()[:200])
+    if c.birthday is not None:
+        write_birthday(card, c.birthday)
     if c.note is not None:
         card.remove("NOTE")
         if c.note.strip():

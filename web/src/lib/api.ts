@@ -80,6 +80,14 @@ export interface Contact {
   full_name: string
   title: string
   organization: string
+  department?: string
+  given_name?: string
+  middle_name?: string
+  family_name?: string
+  prefix?: string // Dr., Prof.
+  suffix?: string // Jr., PhD
+  nickname?: string
+  birthday?: string // YYYY-MM-DD, or --MM-DD without a year
   emails: Typed[]
   phones: Typed[]
   websites: Typed[]
@@ -155,8 +163,14 @@ export interface Field {
 
 export interface ReviewFields {
   full_name: Field
+  given_name?: Field
+  middle_name?: Field
+  family_name?: Field
+  prefix?: Field
+  suffix?: Field
   title: Field
   organization: Field
+  department?: Field
   emails: Field[]
   phones: Field[]
   websites: Field[]
@@ -217,8 +231,13 @@ export type ImportField =
   | ''
   | 'full_name'
   | 'given_name'
+  | 'middle_name'
   | 'family_name'
+  | 'prefix'
+  | 'suffix'
+  | 'nickname'
   | 'organization'
+  | 'department'
   | 'title'
   | 'email'
   | 'phone'
@@ -226,6 +245,7 @@ export type ImportField =
   | 'linkedin'
   | 'address'
   | 'met_on'
+  | 'birthday'
   | 'tags'
   | 'note'
 

@@ -26,7 +26,11 @@
       "starred": true,
       "source": "scan",
       "card_id": "ada",
-      "has_back": true
+      "has_back": true,
+      "given_name": "Ada",
+      "family_name": "Quillfeather",
+      "nickname": "Addie",
+      "birthday": "--05-17"
     },
     {
       "uid": "demo-bram",

@@ -46,8 +46,16 @@
     const f = item.fields
     return {
       full_name: f?.full_name.value ?? '',
+      given_name: f?.given_name?.value ?? '',
+      middle_name: f?.middle_name?.value ?? '',
+      family_name: f?.family_name?.value ?? '',
+      prefix: f?.prefix?.value ?? '',
+      suffix: f?.suffix?.value ?? '',
+      nickname: '',
+      birthday: '',
       title: f?.title.value ?? '',
       organization: f?.organization.value ?? '',
+      department: f?.department?.value ?? '',
       emails: f?.emails.map(typed) ?? [],
       phones: f?.phones.map(typed) ?? [],
       websites: f?.websites.map(typed) ?? [],

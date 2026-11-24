@@ -200,12 +200,23 @@
     })
   })
 
+  // "May 17, 1990", or "May 17" without a year.
+  function birthdayText(v: string): string {
+    const m = /^(\d{4}|-)-(\d{2})-(\d{2})$/.exec(v)
+    if (!m) return v
+    const day = new Date(2000, Number(m[2]) - 1, Number(m[3])).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })
+    return m[1] === '-' ? day : `${day}, ${m[1]}`
+  }
+
   function startEdit() {
     if (!contact) return
     const { full_name, title, organization, emails, phones, websites, socials, addresses, about, note, event, met_on, starred } =
       contact
+    const { given_name = '', middle_name = '', family_name = '', prefix = '', suffix = '', nickname = '', department = '', birthday = '' } =
+      contact
     form = {
       full_name, title, organization, about, note, event, met_on, starred,
+      given_name, middle_name, family_name, prefix, suffix, nickname, department, birthday,
       emails: emails.map((t) => ({ ...t })), phones: phones.map((t) => ({ ...t })), websites: websites.map((t) => ({ ...t })),
       addresses: addresses.map((a) => ({ ...a })),
       socials: socials.map((s) => ({ ...s })),
@@ -332,7 +343,7 @@
   {#if contact}
     <div class="head">
       <h1>{contact.full_name}</h1>
-      <p class="sub">{[contact.title, contact.organization].filter(Boolean).join(', ')}</p>
+      <p class="sub">{[contact.title, contact.department, contact.organization].filter(Boolean).join(', ')}</p>
     </div>
 
     {#if showCard && shown}
@@ -458,6 +469,8 @@
               <dt>Address <span class="kind">{kindName('addresses', a)}</span></dt>
               <dd class="multiline">{[a.street, [a.city, [a.region, a.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', '), a.country].filter(Boolean).join('\n')}</dd>
             {/each}
+            {#if contact.nickname}<dt>Nickname</dt><dd>{contact.nickname}</dd>{/if}
+            {#if contact.birthday}<dt>Birthday</dt><dd>{birthdayText(contact.birthday)}</dd>{/if}
             {#if contact.about}<dt>About</dt><dd class="multiline">{contact.about}</dd>{/if}
             {#if contact.note}<dt>Notes</dt><dd class="multiline">{contact.note}</dd>{/if}
             {#if contact.event}<dt>Met at</dt><dd>{contact.event}</dd>{/if}

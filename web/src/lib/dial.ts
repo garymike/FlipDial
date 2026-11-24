@@ -44,6 +44,8 @@ export function letterIndex(names: string[]): Map<string, number> {
 type Seekable = {
   full_name: string
   organization: string
+  nickname?: string
+  department?: string
   title?: string
   event?: string
   about?: string
@@ -80,7 +82,7 @@ function tests(q: string): ((c: Seekable) => boolean)[] {
     (c) => fold(c.full_name).startsWith(q) || fold(c.organization).startsWith(q),
     (c) => [c.full_name, c.organization].some((t) => fold(t).split(/[\s\-&.,]+/).some((w) => w.startsWith(q))),
     (c) =>
-      [c.full_name, c.organization, c.title ?? '', c.event ?? '', c.about ?? '',
+      [c.full_name, c.nickname ?? '', c.organization, c.department ?? '', c.title ?? '', c.event ?? '', c.about ?? '',
         ...(c.emails ?? []).map((e) => (typeof e === 'string' ? e : e.value))]
         .some((t) => fold(t).includes(q)),
   ]
