@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **Setup is one click away:** a gear next to Review opens it. The search box is smaller
+  and sits in the middle of the header.
+
+### Fixes
+
+- The built-in contacts server now stops with FlipDial every time, even if FlipDial
+  crashes or is ended in Task Manager. Nothing is left running on its own.
+
 ## 0.12.2
 
 ### Security

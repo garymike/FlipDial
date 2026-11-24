@@ -3,6 +3,10 @@ contacts server in the settings file always wins."""
 
 from __future__ import annotations
 
+import os
+import signal
+import subprocess
+import sys
 import time
 
 import pytest
@@ -123,3 +127,38 @@ def test_listens_only_here_and_at_home(builtin, monkeypatch):
     time.sleep(1)
     assert not builtin_server.supervisor.running()
     assert builtin_server.supervisor.problem == "away_from_home"
+
+
+def test_server_stops_when_flipdial_is_killed(builtin, tmp_path):
+    """Even a hard kill of FlipDial (no chance to clean up) takes the server with it."""
+    s = builtin
+    builtin_server.turn_on(s, HOME)
+    _wait_up(s)
+    builtin_server.supervisor.stop()
+    script = tmp_path / "parent.py"
+    script.write_text(
+        "import sys, time\n"
+        "from pathlib import Path\n"
+        "from flipdial.builtin_server import Supervisor\n"
+        "sv = Supervisor()\n"
+        "sv.folder = Path(sys.argv[1])\n"
+        "sv._launch()\n"
+        "print(sv.proc.pid, flush=True)\n"
+        "time.sleep(60)\n"
+    )
+    parent = subprocess.Popen(  # noqa: S603  (our own test script)
+        [sys.executable, str(script), str(builtin_server.folder(s))],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    child = int(parent.stdout.readline())
+    _wait_up(s)
+    parent.kill()  # like ending it in Task Manager
+    parent.wait()
+    for _ in range(50):
+        if builtin_server.port_free():
+            break
+        time.sleep(0.1)
+    else:
+        os.kill(child, signal.SIGTERM)
+        pytest.fail("the contacts server kept running after FlipDial was killed")

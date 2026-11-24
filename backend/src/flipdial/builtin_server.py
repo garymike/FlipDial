@@ -213,6 +213,74 @@ def status(settings: Settings) -> dict:
 # -- the server process ----------------------------------------------------------------
 
 
+_job = None
+
+
+def _stop_with_us(proc: subprocess.Popen) -> None:
+    """On Windows, also put the server in a job that Windows ends when FlipDial ends.
+    The pipe in contacts_child already covers this; the job is a second safety net."""
+    global _job
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateJobObjectW.restype = wintypes.HANDLE
+        k32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+        k32.SetInformationJobObject.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+        ]
+        k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+        if _job is None:
+
+            class Basic(ctypes.Structure):
+                _fields_ = [  # noqa: RUF012
+                    ("PerProcessUserTimeLimit", ctypes.c_int64),
+                    ("PerJobUserTimeLimit", ctypes.c_int64),
+                    ("LimitFlags", wintypes.DWORD),
+                    ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t),
+                    ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t),
+                    ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD),
+                ]
+
+            class Io(ctypes.Structure):
+                _fields_ = [  # noqa: RUF012
+                    (n, ctypes.c_uint64)
+                    for n in ("Read", "Write", "Other", "ReadBytes", "WriteBytes", "OtherBytes")
+                ]
+
+            class Extended(ctypes.Structure):
+                _fields_ = [  # noqa: RUF012
+                    ("Basic", Basic),
+                    ("Io", Io),
+                    ("ProcessMemoryLimit", ctypes.c_size_t),
+                    ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                    ("PeakJobMemoryUsed", ctypes.c_size_t),
+                ]
+
+            job = k32.CreateJobObjectW(None, None)
+            info = Extended()
+            info.Basic.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            if not job or not k32.SetInformationJobObject(
+                job, 9, ctypes.byref(info), ctypes.sizeof(info)
+            ):  # 9 = JobObjectExtendedLimitInformation
+                raise OSError(ctypes.get_last_error(), "job setup failed")
+            _job = job
+        if not k32.AssignProcessToJobObject(_job, int(proc._handle)):  # type: ignore[attr-defined]
+            raise OSError(ctypes.get_last_error(), "couldn't add the server to the job")
+    except Exception as exc:  # noqa: BLE001  (a safety net only; never stop the server for it)
+        log.warning("contacts server job object not set", extra={"error": str(exc)})
+
+
 class Supervisor:
     """Runs Radicale as a child process and restarts it if it stops."""
 
@@ -248,6 +316,8 @@ class Supervisor:
                     self.proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     self.proc.kill()
+            if self.proc and self.proc.stdin:
+                self.proc.stdin.close()
             self.proc = None
 
     def _launch(self) -> None:
@@ -256,15 +326,23 @@ class Supervisor:
         if path.is_file() and path.stat().st_size > LOG_MAX:
             path.replace(path.with_suffix(".log.1"))  # keep one older log, so it can't grow forever
         logfile = open(path, "ab")  # noqa: SIM115  (kept open by the child)
-        args = [sys.executable, "-m", "radicale", "--config", str(self.folder / "config")]
+        args = [
+            sys.executable,
+            "-m",
+            "flipdial.contacts_child",
+            "--config",
+            str(self.folder / "config"),
+        ]
         if self.settings is not None:
             args += ["--server-hosts", listen_on(self.settings)]
         self.proc = subprocess.Popen(  # noqa: S603  (fixed arguments)
             args,
+            stdin=subprocess.PIPE,  # the server exits when this closes (contacts_child)
             stdout=logfile,
             stderr=subprocess.STDOUT,
         )
         logfile.close()
+        _stop_with_us(self.proc)
 
     def _loop(self) -> None:
         delay, started = 2.0, 0.0
