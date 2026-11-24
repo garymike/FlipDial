@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -135,26 +136,66 @@ MIGRATIONS: list[str] = [
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")
 
 
+def _use_wal(conn: sqlite3.Connection) -> None:
+    # Switching a new database to WAL fails at once (no waiting) if another process is doing
+    # the same at that moment, which happens when the server and worker start together.
+    for _ in range(100):
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            return
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc):
+                raise
+            time.sleep(0.05)
+    conn.execute("PRAGMA journal_mode=WAL")
+
+
 def connect(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=30)  # wait for another process rather than fail
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    _use_wal(conn)
     conn.execute("PRAGMA foreign_keys=ON")
     migrate(conn)
     return conn
 
 
+def _statements(sql: str) -> list[str]:
+    """Split a migration into statements, keeping trigger bodies (BEGIN ... END;) whole."""
+    out, buf = [], ""
+    for part in sql.split(";"):
+        buf += part + ";"
+        if sqlite3.complete_statement(buf):
+            if buf.strip(" \n\t;"):
+                out.append(buf.strip())
+            buf = ""
+    return out
+
+
 def migrate(conn: sqlite3.Connection) -> None:
+    """Bring the schema up to date. Safe when several processes start at once: the first takes
+    a write lock and migrates, the others wait, then find nothing left to do."""
     conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
-    row = conn.execute("SELECT version FROM schema_version").fetchone()
-    current = row[0] if row else 0
-    for version, sql in enumerate(MIGRATIONS[current:], start=current + 1):
-        with conn:
-            conn.executescript(sql)
-            conn.execute("DELETE FROM schema_version")
-            conn.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
-        log.info("database migrated", extra={"schema_version": version})
+    previous = conn.isolation_level
+    conn.isolation_level = None  # manage the transaction here
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute("SELECT version FROM schema_version").fetchone()
+            current = row[0] if row else 0
+            for version, sql in enumerate(MIGRATIONS[current:], start=current + 1):
+                for statement in _statements(sql):
+                    conn.execute(statement)
+                conn.execute("DELETE FROM schema_version")
+                conn.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.isolation_level = previous
+    if current < len(MIGRATIONS):
+        log.info("database migrated", extra={"schema_version": len(MIGRATIONS)})
 
 
 @contextmanager

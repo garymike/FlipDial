@@ -135,6 +135,10 @@ jobs:
           (Invoke-WebRequest http://127.0.0.1:8080/healthz -UseBasicParsing).Content
           (Invoke-WebRequest http://127.0.0.1:8080/ -UseBasicParsing).Content | Select-String FlipDial
           scripts\windows\start.ps1 -NoBrowser   # second start just reports it's running
+          Start-Sleep 5   # a worker that crashes on startup would be gone by now
+          . scripts\windows\common.ps1
+          $roles = @(Get-FlipDialProcesses | ForEach-Object { $_.Role }) -join ','
+          if ($roles -ne 'server,worker') { "expected server and worker running, found: $roles"; exit 1 }
           scripts\windows\stop.ps1
           Start-Sleep 2
           try { Invoke-WebRequest http://127.0.0.1:8080/healthz -UseBasicParsing -TimeoutSec 3; throw 'still running' } catch { if ($_.Exception.Message -eq 'still running') { exit 1 } }
