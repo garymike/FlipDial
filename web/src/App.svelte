@@ -141,18 +141,32 @@
     <span class="sr">Search contacts</span>
     <input type="search" placeholder={router.route.name === 'dial' ? 'Dial to a name or company' : 'Search names, companies, events'} bind:value={query} />
   </label>
-  <nav aria-label="View">
-    {#each views as v (v.name)}
-      <a href={href({ name: v.name })} aria-current={router.route.name === v.name ? 'page' : undefined}>{v.label}</a>
-    {/each}
-  </nav>
-  {#if layout.mode !== 'phone'}<SyncNow />{/if}
-  <a class="review" href={href({ name: 'review' })} aria-current={router.route.name === 'review' ? 'page' : undefined}>
-    Review {#if reviewCount}<span class="pill">{reviewCount}</span>{/if}
-  </a>
-  {#if me && me.mode === 'oidc'}
-    <button type="button" class="signout" title={`Signed in as ${me.user}`} onclick={signOut}>Sign out</button>
-  {/if}
+  <div class="tools">
+    <nav aria-label="View">
+      {#each views as v (v.name)}
+        <a href={href({ name: v.name })} aria-current={router.route.name === v.name ? 'page' : undefined}>{v.label}</a>
+      {/each}
+    </nav>
+    {#if layout.mode !== 'phone'}<SyncNow />{/if}
+    <a class="review" href={href({ name: 'review' })} aria-current={router.route.name === 'review' ? 'page' : undefined}>
+      Review {#if reviewCount}<span class="pill">{reviewCount}</span>{/if}
+    </a>
+    <a
+      class="gear"
+      href={href({ name: 'setup' })}
+      title="Setup"
+      aria-label="Setup"
+      aria-current={router.route.name === 'setup' ? 'page' : undefined}
+    >
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    </a>
+    {#if me && me.mode === 'oidc'}
+      <button type="button" class="signout" title={`Signed in as ${me.user}`} onclick={signOut}>Sign out</button>
+    {/if}
+  </div>
 </header>
 
 {#if update?.release}
@@ -359,12 +373,52 @@
     margin-left: 6px;
   }
   header {
-    display: flex;
-    flex-wrap: wrap;
+    /* Brand on the left, search in the middle of the page, everything else on the right. */
+    display: grid;
+    grid-template-columns: 1fr minmax(200px, 340px) 1fr;
     align-items: center;
     gap: 16px;
     padding: 18px 32px;
     border-bottom: 1px solid #2c2f36;
+  }
+  .brand {
+    justify-self: start;
+  }
+  .tools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    min-width: 0;
+  }
+  .gear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    color: #bdb8af;
+  }
+  .gear:hover {
+    color: var(--bone);
+  }
+  .gear[aria-current='page'] {
+    border-color: var(--amber);
+    color: var(--bone);
+  }
+  /* Not enough room to keep the search in the exact middle: let things wrap. */
+  @media (max-width: 1180px) and (min-width: 701px) {
+    header {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .search {
+      flex: 1 1 220px;
+      max-width: 340px;
+      margin: 0 auto;
+    }
   }
   .brand {
     display: flex;
@@ -381,7 +435,7 @@
     color: var(--amber);
   }
   .search {
-    flex: 1 1 260px;
+    width: 100%;
   }
   .search input {
     box-sizing: border-box;
@@ -492,8 +546,12 @@
     }
     .brand span,
     header nav,
-    header .review {
+    header .review,
+    header .gear {
       display: none;
+    }
+    header {
+      display: flex;
     }
     .search {
       flex: 1 1 auto;

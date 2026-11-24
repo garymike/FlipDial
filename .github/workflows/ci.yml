@@ -140,6 +140,13 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errs) | Out-Null
             if ($errs) { $errs; exit 1 }
           }
+      - name: Contacts server stops with FlipDial
+        shell: powershell
+        run: |
+          Push-Location backend; uv sync --extra dev
+          uv run pytest -q tests/test_builtin_server.py
+          if ($LASTEXITCODE) { exit 1 }
+          Pop-Location
       - name: Start, check, stop
         shell: powershell
         run: |
