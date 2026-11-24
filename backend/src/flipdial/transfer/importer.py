@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from flipdial import contacts, db
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact, new_card, new_uid
+from flipdial.carddav.typed import values
 from flipdial.carddav.vcard import VCard, VCardError
 from flipdial.config import Settings
 from flipdial.duplicates import norm_email, norm_name, norm_phone
@@ -58,7 +59,7 @@ class _Index:
         self.names: set[str] = set()
         for c in contacts.list_contacts(settings):
             self.uids.add(c.uid)
-            self.add(_key(c.full_name, c.emails, c.phones))
+            self.add(_key(c.full_name, values(c.emails), values(c.phones)))
 
     def add(self, values: tuple[str, set[str], set[str]]) -> None:
         name, emails, phones = values
@@ -88,12 +89,21 @@ def _key(name: str, emails: list[str], phones: list[str]) -> tuple[str, set[str]
 
 def _values(card: VCard) -> tuple[str, set[str], set[str]]:
     v = contacts.view(card)
-    return _key(v.full_name, v.emails, v.phones)
+    return _key(v.full_name, values(v.emails), values(v.phones))
 
 
 def _from_row(
-    values: dict[str, list[str]], fmt: str, version: str, deck: str
+    values: dict[str, list[str]],
+    fmt: str,
+    version: str,
+    deck: str,
+    kinds: dict[str, dict] | None = None,
 ) -> tuple[VCard | None, str]:
+    kinds = kinds or {}
+
+    def typed(key: str, limit: int) -> list[dict]:
+        return [{"value": v[:limit], **kinds.get(v, {})} for v in values.get(key, [])][:10]
+
     one = {k: v[0] for k, v in values.items() if v}
     given, family = one.get("given_name", ""), one.get("family_name", "")
     full = (
@@ -111,11 +121,11 @@ def _from_row(
         family_name=family[:200],
         title=one.get("title", "")[:200],
         organization=one.get("organization", "")[:200],
-        emails=[e[:200] for e in values.get("email", [])][:10],
-        phones=[p[:80] for p in values.get("phone", [])][:10],
-        websites=[w[:200] for w in values.get("website", [])][:10],
+        emails=typed("email", 200),
+        phones=typed("phone", 80),
+        websites=typed("website", 200),
         socials=socials[:10],
-        address=one.get("address", "")[:500],
+        addresses=[one["address"][:500]] if one.get("address") else [],
         event=deck,
         met_on=csvfile.parse_date(one.get("met_on", "")),
         tags=[t[:80] for t in values.get("tags", [])][:20],
@@ -183,8 +193,9 @@ def _candidates(
     info |= {"format": table.format, "headers": table.headers, "mapping": table.mapping}
     for i, row in enumerate(table.rows, start=1):
         values = csvfile.row_values(row, table.mapping)
+        kinds = csvfile.row_kinds(row, table.headers, table.mapping)
         try:
-            card, why = _from_row(values, table.format, settings.vcard_version, deck)
+            card, why = _from_row(values, table.format, settings.vcard_version, deck, kinds)
         except (ValueError, VCardError):
             card, why = None, "bad_values"
         if card is None:

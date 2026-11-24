@@ -74,7 +74,10 @@ class Property:
     def render(self) -> str:
         head = self.name
         for k, v in self.params:
-            needs_quote = any(c in v for c in ":;,") and not v.startswith('"')
+            # TYPE lists are written unquoted (TYPE=WORK,VOICE), as RFC 6350 errata 7061
+            # and Apple do; other values with a comma are quoted so it stays literal.
+            special = ":;" if k == "TYPE" else ":;,"
+            needs_quote = any(c in v for c in special) and not v.startswith('"')
             head += f";{k}=" + (f'"{v}"' if needs_quote else v)
         return fold(f"{head}:{self.value}")
 

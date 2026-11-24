@@ -25,6 +25,7 @@ from flipdial import audit, contacts, db, duplicates, forget, status, updates
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
+from flipdial.carddav.typed import values
 from flipdial.config import Settings
 from flipdial.transfer import backup, importer
 
@@ -39,15 +40,52 @@ class Social(BaseModel):
     handle: Short = ""
 
 
+class TypedIn(BaseModel):
+    """A phone, email or website with its type. A plain string is accepted as work."""
+
+    value: Text = ""
+    kind: Short = ""  # work, home, mobile... see carddav/typed.py; unknown becomes work
+    label: Short = ""  # for kind "custom"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plain(cls, v: object) -> object:
+        return {"value": v} if isinstance(v, str) else v
+
+
+class AddressIn(BaseModel):
+    street: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] = ""
+    city: Text = ""
+    region: Text = ""
+    postal_code: Short = ""
+    country: Text = ""
+    kind: Short = ""
+    label: Short = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plain(cls, v: object) -> object:
+        return {"street": v} if isinstance(v, str) else v
+
+
+def _one_address(model: BaseModel) -> None:
+    """Older clients send one address as text; it becomes the street of a work address."""
+    text = getattr(model, "address", None)
+    if text and not getattr(model, "addresses", None):
+        model.addresses = [AddressIn(street=text)]
+    model.address = None
+
+
 class ContactIn(BaseModel):
     full_name: Text = ""  # may be empty for a business card; the company name is used
     title: Text = ""
     organization: Text = ""
-    emails: list[Text] = Field(default_factory=list, max_length=10)
-    phones: list[Text] = Field(default_factory=list, max_length=10)
-    websites: list[Text] = Field(default_factory=list, max_length=10)
+    emails: list[TypedIn] = Field(default_factory=list, max_length=10)
+    phones: list[TypedIn] = Field(default_factory=list, max_length=10)
+    websites: list[TypedIn] = Field(default_factory=list, max_length=10)
     socials: list[Social] = Field(default_factory=list, max_length=10)
-    address: Text = ""
+    addresses: list[AddressIn] = Field(default_factory=list, max_length=5)
+    address: Text | None = None  # older form of addresses
     about: Note = ""
     note: Note = ""
     event: Short = ""
@@ -61,6 +99,7 @@ class ContactIn(BaseModel):
             if not self.organization:
                 raise ValueError("a name or a company is required")
             self.full_name = self.organization  # a business card: saved as a company contact
+        _one_address(self)
         return self
 
 
@@ -68,11 +107,12 @@ class ContactPatch(BaseModel):
     full_name: Text | None = Field(default=None, min_length=1)
     title: Text | None = None
     organization: Text | None = None
-    emails: list[Text] | None = Field(default=None, max_length=10)
-    phones: list[Text] | None = Field(default=None, max_length=10)
-    websites: list[Text] | None = Field(default=None, max_length=10)
+    emails: list[TypedIn] | None = Field(default=None, max_length=10)
+    phones: list[TypedIn] | None = Field(default=None, max_length=10)
+    websites: list[TypedIn] | None = Field(default=None, max_length=10)
     socials: list[Social] | None = Field(default=None, max_length=10)
-    address: Text | None = None
+    addresses: list[AddressIn] | None = Field(default=None, max_length=5)
+    address: Text | None = None  # older form of addresses
     about: Note | None = None
     note: Note | None = None
     event: Short | None = None
@@ -138,7 +178,9 @@ def list_contacts(
         if (
             needle
             and needle
-            not in " ".join([c.full_name, c.organization, c.title, *c.emails, c.event]).casefold()
+            not in " ".join(
+                [c.full_name, c.organization, c.title, *values(c.emails), c.event]
+            ).casefold()
         ):
             continue
         out.append(c.as_dict())
@@ -167,6 +209,7 @@ def get_contact(uid: str, s: SettingsDep) -> dict:
 def patch_contact(
     uid: str, body: ContactPatch, s: SettingsDep, client: ClientDep, actor: ActorDep
 ) -> dict:
+    _one_address(body)
     changes = body.model_dump(exclude_none=True)
     try:
         out = contacts.update_contact(s, client, uid, changes).as_dict()
@@ -268,10 +311,7 @@ def approve(
     card_id: str, body: ContactIn, s: SettingsDep, client: ClientDep, actor: ActorDep
 ) -> dict:
     _card_id(card_id)
-    data = body.model_dump()
-    data["socials"] = [(x["platform"], x["handle"]) for x in data["socials"]]
-    data["note"] = data["note"] or None  # an empty note from review keeps any existing note
-    reviewed = ReviewedContact(**data, source="scan", has_scan=True)
+    reviewed = _reviewed(body, source="scan", has_scan=True)
     try:
         uid = approve_card(s, client, card_id, reviewed)
         with db.session(s.db_path) as conn:
@@ -449,7 +489,7 @@ def card_original(card_id: str, role: Literal["front", "back", "scan"], s: Setti
 
 
 def _reviewed(body: ContactIn, **extra) -> ReviewedContact:
-    data = body.model_dump()
+    data = body.model_dump(exclude={"address"})
     data["socials"] = [(x["platform"], x["handle"]) for x in data["socials"]]
     data["note"] = data["note"] or None  # an empty note from review keeps any existing note
     return ReviewedContact(**data, **extra)
@@ -530,8 +570,8 @@ def review_matches(card_id: str, s: SettingsDep) -> dict:
         uid="",
         full_name=f.get("full_name", {}).get("value", ""),
         organization=f.get("organization", {}).get("value", ""),
-        emails=[e.get("value", "") for e in f.get("emails", [])],
-        phones=[p.get("value", "") for p in f.get("phones", [])],
+        emails=[{"value": e.get("value", "")} for e in f.get("emails", [])],
+        phones=[{"value": p.get("value", "")} for p in f.get("phones", [])],
     )
     return {"matches": duplicates.matches_for_fields(s, probe)}
 

@@ -1,6 +1,7 @@
 import pytest
 
 from flipdial.carddav.contact import ReviewedContact, apply, new_card
+from flipdial.carddav.typed import values
 from flipdial.carddav.vcard import VCard, VCardError, escape, fold, unescape
 from flipdial.extract.schema import validate
 
@@ -28,7 +29,7 @@ def contact(**kw):
         phones=["+1 312 555 0100"],
         websites=["https://studio.example"],
         socials=[("Instagram", "@studio.example")],
-        address="100 Example St, Springfield",
+        addresses=["100 Example St, Springfield"],
         event="Art Fair 2026",
         starred=True,
     )
@@ -98,4 +99,5 @@ def test_from_extraction():
         }
     ).fields
     c = ReviewedContact.from_fields(fields, event="RSA 2026")
-    assert c.full_name == "Ava Example" and c.emails == ["ava@studio.example"]
+    assert c.full_name == "Ava Example" and values(c.emails) == ["ava@studio.example"]
+    assert c.emails[0].kind == "work"

@@ -11,21 +11,18 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from flipdial.carddav.typed import Address, Typed, to_addresses, to_typed, write_all
 from flipdial.carddav.vcard import VCard, escape, split_unescaped, unescape
 from flipdial.extract.schema import CardFields
 from flipdial.socials import normalize as normalize_social
 from flipdial.socials import platform_key, profile_url
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"  # 2: typed phones, emails, websites and addresses
 MANAGED = (
     "FN",
     "N",
     "ORG",
     "TITLE",
-    "EMAIL",
-    "TEL",
-    "URL",
-    "ADR",
     "SOCIALPROFILE",
     "X-SOCIALPROFILE",
     "REV",
@@ -44,11 +41,11 @@ class ReviewedContact:
     family_name: str = ""
     title: str = ""
     organization: str = ""
-    emails: list[str] = field(default_factory=list)
-    phones: list[str] = field(default_factory=list)
-    websites: list[str] = field(default_factory=list)
+    emails: list[Typed] = field(default_factory=list)
+    phones: list[Typed] = field(default_factory=list)
+    websites: list[Typed] = field(default_factory=list)
     socials: list[tuple[str, str]] = field(default_factory=list)  # (platform, handle)
-    address: str = ""
+    addresses: list[Address] = field(default_factory=list)
     about: str = ""  # what the card says about them (tagline, services)
     note: str | None = None  # your own notes; None leaves any existing note alone
     event: str = ""
@@ -57,6 +54,13 @@ class ReviewedContact:
     tags: list[str] = field(default_factory=list)
     source: str = "scan"
     has_scan: bool = True
+
+    def __post_init__(self) -> None:
+        # Plain strings (older callers, imports) become work values.
+        self.emails = to_typed("EMAIL", self.emails)
+        self.phones = to_typed("TEL", self.phones)
+        self.websites = to_typed("URL", self.websites)
+        self.addresses = to_addresses(self.addresses)
 
     @classmethod
     def from_fields(cls, f: CardFields, **extra) -> ReviewedContact:
@@ -69,11 +73,11 @@ class ReviewedContact:
             family_name=f.family_name.value,
             title=f.title.value,
             organization=f.organization.value,
-            emails=[e.value for e in f.emails],
-            phones=[p.value for p in f.phones],
-            websites=[w.value for w in f.websites],
+            emails=[{"value": e.value, "kind": e.kind} for e in f.emails],
+            phones=[{"value": p.value, "kind": p.kind} for p in f.phones],
+            websites=[{"value": w.value, "kind": w.kind} for w in f.websites],
             socials=[(s.platform, s.handle) for s in f.socials],
-            address=f.address.value,
+            addresses=[f.address_record()] if f.address.value else [],
             about=f.about.value,
             **extra,
         )
@@ -124,12 +128,7 @@ def apply(card: VCard, c: ReviewedContact) -> VCard:
         card.add("ORG", c.organization)
     if c.title:
         card.add("TITLE", c.title)
-    for e in c.emails:
-        card.add("EMAIL", e, [("TYPE", "work")] if v4 else [("TYPE", "INTERNET,WORK")])
-    for p in c.phones:
-        card.add("TEL", p, [("TYPE", "work")] if v4 else [("TYPE", "WORK,VOICE")])
-    for w in c.websites:
-        card.add("URL", w)
+    write_all(card, phones=c.phones, emails=c.emails, websites=c.websites, addresses=c.addresses)
     for platform, handle in c.socials:
         # Apple's form: type=instagram;x-user=name:https://instagram.com/name
         name, handle = normalize_social(platform, handle)
@@ -139,14 +138,6 @@ def apply(card: VCard, c: ReviewedContact) -> VCard:
         params = ([("TYPE", key)] if key else []) + [("X-USER", handle)]
         url = profile_url(name, handle)
         card.add("SOCIALPROFILE" if v4 else "X-SOCIALPROFILE", url or handle, params)
-    if c.address:
-        card.add(
-            "ADR",
-            ";".join(["", "", escape(c.address), "", "", "", ""]),
-            [("TYPE", "work")],
-            raw=True,
-        )
-
     if c.note is not None:
         card.remove("NOTE")
         if c.note.strip():
