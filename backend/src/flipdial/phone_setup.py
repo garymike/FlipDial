@@ -9,6 +9,7 @@ Passwords typed to test the phone's account are used for that one check and neve
 from __future__ import annotations
 
 import hashlib
+import os
 import plistlib
 import secrets
 import ssl
@@ -19,7 +20,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from flipdial import db, phone_rules
+from flipdial import contacts_server, db, phone_rules
 from flipdial.carddav.client import CardDAVClient, CardDAVError
 from flipdial.config import Settings
 from flipdial.status import where_saved
@@ -31,6 +32,20 @@ BOOK_KEY = "phone_addressbook"
 
 class SetupError(ValueError):
     pass
+
+
+def bundled(settings: Settings) -> bool:
+    """FlipDial's own contacts server is set up here and FlipDial may add accounts to it."""
+    d = settings.radicale_dir
+    return bool(d and (d / "users").is_file() and os.access(d / "users", os.W_OK))
+
+
+def phone_url(settings: Settings, url: str) -> str:
+    """The address as a phone sees it (FLIPDIAL_PHONE_SERVER_URL, when set)."""
+    if not settings.phone_server_url or not url:
+        return url
+    base, u = urlparse(settings.phone_server_url), urlparse(url)
+    return u._replace(scheme=base.scheme, netloc=base.netloc).geturl()
 
 
 def info(settings: Settings, client: CardDAVClient | None) -> dict[str, Any]:
@@ -45,6 +60,7 @@ def info(settings: Settings, client: CardDAVClient | None) -> dict[str, Any]:
         "phone_username": phone_rules.get_setting(settings, USERNAME_KEY),
         "flipdial_username": settings.carddav_username or "",
         "book_url": "",
+        "bundled": bundled(settings),
         "error": "",
     }
     if client is None:
@@ -53,7 +69,8 @@ def info(settings: Settings, client: CardDAVClient | None) -> dict[str, Any]:
         out["main_book"] = client.address_book().name
         out["books"] = [b.name or urlparse(b.url).path for b in client.books()]
         if out["book"]:
-            out["book_url"] = CardDAVClient(settings, book=out["book"]).address_book().url
+            url = CardDAVClient(settings, book=out["book"]).address_book().url
+            out["book_url"] = phone_url(settings, url)
     except CardDAVError as exc:
         out["error"] = exc.code
     return out
@@ -77,6 +94,35 @@ def choose_book(settings: Settings, client: CardDAVClient, name: str, create: bo
     return name
 
 
+def create_phone_account(settings: Settings, client: CardDAVClient) -> dict[str, str]:
+    """On FlipDial's own contacts server: a new account for a phone, with its own phone
+    book that FlipDial fills. The password is returned once and not kept."""
+    if not bundled(settings):
+        raise SetupError("no_bundled_server")
+    if settings.phone_addressbook:
+        raise SetupError("set_in_settings_file")
+    folder = settings.radicale_dir
+    if folder is None:
+        raise SetupError("no_bundled_server")
+    name = contacts_server.next_phone_name(folder)
+    password = contacts_server.add_user(folder, name)
+    # Signing in once makes the server create the account's home.
+    probe = settings.model_copy(
+        update={"carddav_username": None, "carddav_password": None, "carddav_addressbook": None}
+    )
+    first = CardDAVClient(probe, book=f"/{name}/")
+    first.http.auth = httpx.BasicAuth(name, password)
+    try:
+        first._propfind_xml(first.start, "<d:current-user-principal/>", "0")
+    finally:
+        first.close()
+    path = f"/{name}/contacts/"
+    client.create_book("Phone", url=path)
+    phone_rules.put_setting(settings, BOOK_KEY, path)
+    phone_rules.put_setting(settings, USERNAME_KEY, name)
+    return {"username": name, "password": password, "book": path}
+
+
 def forget_book(settings: Settings) -> None:
     """Turn phone sync off. The phone book and its contacts stay on the server."""
     if settings.phone_addressbook:
@@ -98,14 +144,15 @@ def test_account(settings: Settings, username: str, password: str) -> dict[str, 
     client = CardDAVClient(probe, book=phone_book or None)
     client.http.auth = httpx.BasicAuth(username, password)
     try:
-        names = [b.name or urlparse(b.url).path for b in client.books()]
+        found = client.books()
     finally:
         client.close()
-    main = CardDAVClient(settings).address_book().name
+    keys = {b.name for b in found} | {urlparse(b.url).path for b in found}
+    main = CardDAVClient(settings).address_book()
     return {
-        "books": names,
-        "sees_phone_book": phone_book in names,
-        "sees_main_book": main in names,
+        "books": [b.name or urlparse(b.url).path for b in found],
+        "sees_phone_book": phone_book in keys,
+        "sees_main_book": main.name in keys or urlparse(main.url).path in keys,
     }
 
 
@@ -182,7 +229,7 @@ def profile(settings: Settings) -> bytes:
     """The iPhone configuration profile: one CardDAV account for the phone book."""
     phone = CardDAVClient(settings, book=phone_rules.book_name(settings))
     try:
-        book = urlparse(phone.address_book().url)
+        book = urlparse(phone_url(settings, phone.address_book().url))
     finally:
         phone.close()
     port = book.port or (443 if book.scheme == "https" else 80)

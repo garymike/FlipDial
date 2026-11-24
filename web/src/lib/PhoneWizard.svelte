@@ -18,6 +18,7 @@
   let username = $state('')
   let password = $state('')
   let test = $state<{ sees_phone_book: boolean; sees_main_book: boolean } | null>(null)
+  let made = $state<{ username: string; password: string } | null>(null)
   // Step 3
   let device = $state<'iphone' | 'android'>('iphone')
   let link = $state<{ url: string; expires_at: string; qr_svg: string } | null>(null)
@@ -57,6 +58,14 @@
       step = 'account'
     })
 
+  const makeAccount = () =>
+    run(async () => {
+      const r = await api.phoneSetupAccount()
+      made = { username: r.username, password: r.password }
+      await load()
+      ondone?.()
+    })
+
   const check = () =>
     run(async () => {
       test = await api.phoneSetupTest(username, password)
@@ -86,6 +95,8 @@
     }
   }
   const isSynology = $derived(info?.server_kind === 'synology')
+  // A phone book on FlipDial's own server is given by its path; it's called Phone there.
+  const bookName = $derived(info?.book?.startsWith('/') ? 'Phone' : (info?.book ?? ''))
   // The phone reaches the contacts server directly, so its address has to work from the phone.
   const bookHost = $derived.by(() => {
     try {
@@ -113,6 +124,26 @@
       Phone sync needs a contacts server on your home network, such as Synology Contacts, Nextcloud or Radicale.
       Add it with FLIPDIAL_CARDDAV_URL, then come back here.
     </p>
+  {:else if step === 'book' && info.bundled}
+    <p class="detail">
+      You're using FlipDial's own contacts server. Each phone gets its own account and its own address book, which
+      FlipDial fills with the contacts you choose. The phone can't see anything else.
+    </p>
+    <button type="button" class="primary" onclick={() => (step = 'account')}>Next</button>
+  {:else if step === 'account' && info.bundled}
+    {#if !made}
+      <p class="detail">FlipDial makes the phone's account and its address book, and shows the password once.</p>
+      <button type="button" class="primary" disabled={busy} onclick={makeAccount}>{busy ? 'Making it…' : "Make the phone's account"}</button>
+    {:else}
+      <div class="grid copy">
+        <span>User name</span><code>{made.username}</code>
+        <button type="button" class="link" onclick={() => copy(made?.username ?? '', 'user')}>{copied === 'user' ? 'Copied' : 'Copy'}</button>
+        <span>Password</span><code>{made.password}</code>
+        <button type="button" class="link" onclick={() => copy(made?.password ?? '', 'pass')}>{copied === 'pass' ? 'Copied' : 'Copy'}</button>
+      </div>
+      <p class="warn">Shown only now. You'll type it on the phone in the next step, so copy it somewhere safe first.</p>
+      <button type="button" class="primary" onclick={() => (step = 'phone')}>Next</button>
+    {/if}
   {:else if step === 'book'}
     <p class="detail">
       Your phone gets its own address book, next to your main one ({info.main_book || 'the main address book'}). Only the
@@ -229,7 +260,7 @@
             <button type="button" class="link" onclick={() => copy(info?.phone_username ?? '', 'user')}>{copied === 'user' ? 'Copied' : 'Copy'}</button>
           </div>
           and the account's password.</li>
-        <li>Turn on the <strong>{info.book}</strong> address book. In the account settings you can limit syncing to your home Wi-Fi.</li>
+        <li>Turn on the <strong>{bookName}</strong> address book. In the account settings you can limit syncing to your home Wi-Fi.</li>
       </ol>
     {/if}
     <p class="hint">Then choose which contacts go to the phone below and press Sync now.</p>

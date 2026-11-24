@@ -59,7 +59,8 @@ function Test-ReleaseSignature([string]$Repo, [string]$Release, [string]$Commit)
 function Install-Version([string]$Commit) {
     Invoke-Checked 'git checkout' 'git' @('-C', $Root, 'checkout', '--quiet', '--detach', $Commit)
     Write-Step 'Updating the Python parts'
-    Invoke-Checked 'uv sync' $((Get-Command uv).Source) @('sync', '--frozen') $Backend
+    # The contacts-server extra is small and lets the bundled contacts server run if set up.
+    Invoke-Checked 'uv sync' $((Get-Command uv).Source) @('sync', '--frozen', '--extra', 'contacts-server') $Backend
     if (Get-FlipDialSetting 'FLIPDIAL_WEB_DIR' '') { Build-WebApp }
 }
 

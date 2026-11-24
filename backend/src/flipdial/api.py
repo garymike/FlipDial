@@ -32,6 +32,7 @@ from flipdial import (
     audit,
     cardview,
     contacts,
+    contacts_server,
     db,
     duplicates,
     forget,
@@ -413,6 +414,18 @@ def phone_setup_book(body: PhoneBookIn, s: SettingsDep, client: ClientDep, actor
         raise _setup_errors(exc) from exc
     audit.record(s, actor, "phone.setup_book", name, created=body.create)
     return phone_setup.info(s, client)
+
+
+@router.post("/phone/setup/account")
+def phone_setup_account(s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
+    """FlipDial's own contacts server: make a phone account and its phone book. The
+    password is in this answer only; it isn't kept or logged."""
+    try:
+        out = phone_setup.create_phone_account(s, client)
+    except (phone_setup.SetupError, contacts_server.ServerSetupError, CardDAVError) as exc:
+        raise _setup_errors(exc) from exc
+    audit.record(s, actor, "phone.setup_account", out["username"])
+    return out
 
 
 @router.delete("/phone/setup/book")

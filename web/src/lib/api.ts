@@ -154,6 +154,7 @@ export interface PhoneSetupInfo {
   books: string[]
   phone_username: string
   flipdial_username: string
+  bundled: boolean // FlipDial's own contacts server: it can make the phone's account
   error: string
 }
 
@@ -477,6 +478,8 @@ export const api = {
   phoneSetup: () => call<PhoneSetupInfo>('GET', '/api/phone/setup'),
   phoneSetupBook: (name: string, create: boolean) =>
     call<PhoneSetupInfo>('POST', '/api/phone/setup/book', { name, create }),
+  phoneSetupAccount: () =>
+    call<{ username: string; password: string; book: string }>('POST', '/api/phone/setup/account'),
   phoneSetupOff: () => call<{ enabled: false }>('DELETE', '/api/phone/setup/book'),
   phoneSetupUsername: (username: string) => call<{ username: string }>('PUT', '/api/phone/setup/username', { username }),
   phoneSetupTest: (username: string, password: string) =>
@@ -612,6 +615,7 @@ export function describe(err: unknown): string {
     book_exists: 'An address book with that name is already there. Pick it from the list instead.',
     set_in_settings_file: 'The phone book is set in the settings file (FLIPDIAL_PHONE_ADDRESSBOOK). Change it there.',
     username_required: "Enter the phone's user name first.",
+    no_bundled_server: "FlipDial's own contacts server isn't set up here.",
     name_required: 'Enter a name.',
     demo_readonly: 'That is turned off in the demo. Install FlipDial to use it with your own contacts.',
     not_supported: 'This install updates differently. See the release notes.',

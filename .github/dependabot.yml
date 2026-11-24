@@ -37,3 +37,19 @@ updates:
       interval: weekly
     cooldown: # propose a release only after it has been out a week (security updates are not delayed)
       default-days: 7
+  - package-ecosystem: pip
+    directory: /docker/contacts-server
+    schedule:
+      interval: weekly
+    cooldown: # propose a release only after it has been out a week (security updates are not delayed)
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      contacts-server:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /docker/contacts-server
+    schedule:
+      interval: weekly
+    cooldown: # propose a release only after it has been out a week (security updates are not delayed)
+      default-days: 7

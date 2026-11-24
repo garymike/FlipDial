@@ -103,6 +103,19 @@ jobs:
           docker run -d --name fd -p 127.0.0.1:8080:8080 -e FLIPDIAL_ALLOW_NO_AUTH=true flipdial:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/healthz && exit 0; sleep 1; done
           docker logs fd; exit 1
+      - name: Contacts server image builds and starts with a fresh setup
+        run: |
+          docker build -f docker/contacts-server/Dockerfile -t flipdial-contacts:ci .
+          mkdir -p cs && chmod 777 cs
+          docker run --rm -v "$PWD/cs:/data" -e FLIPDIAL_ALLOW_NO_AUTH=true flipdial:ci \
+            flipdial contacts-server init --host nas.example > /dev/null
+          docker run -d --name cs -p 127.0.0.1:5232:5232 -v "$PWD/cs/contacts-server:/data/contacts-server" flipdial-contacts:ci
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --cacert cs/contacts-server/ca.pem https://localhost:5232/ || true)
+            [ "$code" = "401" ] || [ "$code" = "200" ] || [ "$code" = "302" ] && exit 0
+            sleep 1
+          done
+          docker logs cs; exit 1
 
   windows:
     name: Windows scripts
