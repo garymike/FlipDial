@@ -34,12 +34,16 @@ a {
   outline-offset: 3px;
 }
 
+/* Animations turned off in the system (Windows: Settings, Accessibility, Visual effects,
+   Animation effects; often off over Remote Desktop). Movement stops, but short fades stay,
+   so things change gently instead of jumping. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    transition: none !important;
     animation: none !important;
+    transition-property: opacity, color, background-color, border-color !important;
+    transition-duration: 0.2s !important;
   }
 }
 
