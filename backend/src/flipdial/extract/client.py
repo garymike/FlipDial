@@ -49,6 +49,20 @@ def _parse(text: str) -> dict[str, Any]:
     return data
 
 
+def _http_error(exc: httpx.HTTPError) -> ModelError:
+    """Turn a failed request into a reason the person can act on."""
+    if isinstance(exc, httpx.TimeoutException):
+        return ModelError("model_timeout")
+    if isinstance(exc, httpx.HTTPStatusError):
+        text = exc.response.text[:500].lower()
+        if exc.response.status_code == 404 or "not found" in text:
+            return ModelError("model_not_installed")
+        if "image" in text or "vision" in text or "multimodal" in text:
+            return ModelError("model_not_vision")
+        return ModelError("model_error")
+    return ModelError("model_unreachable")
+
+
 class OllamaReader:
     def __init__(self, settings: Settings, client: httpx.Client | None = None):
         self.name = f"ollama:{settings.model_name}"
@@ -60,6 +74,7 @@ class OllamaReader:
         body = {
             "model": self.model,
             "stream": False,
+            "think": False,  # reasoning adds time and nothing useful to copying card text
             "format": json_schema(),
             "options": {"temperature": 0},
             "messages": [
@@ -69,10 +84,13 @@ class OllamaReader:
         }
         try:
             r = self.http.post(self.url, json=body)
+            if r.status_code == 400 and "think" in r.text.lower():
+                body.pop("think")  # an Ollama version or model without the switch
+                r = self.http.post(self.url, json=body)
             r.raise_for_status()
             content = r.json()["message"]["content"]
         except httpx.HTTPError as exc:
-            raise ModelError("model_unreachable") from exc
+            raise _http_error(exc) from exc
         except (KeyError, TypeError, ValueError) as exc:
             raise ModelError("unexpected_response") from exc
         return _parse(content)
@@ -111,7 +129,7 @@ class OpenAICompatibleReader:
             r.raise_for_status()
             text = r.json()["choices"][0]["message"]["content"]
         except httpx.HTTPError as exc:
-            raise ModelError("model_unreachable") from exc
+            raise _http_error(exc) from exc
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise ModelError("unexpected_response") from exc
         return _parse(text)

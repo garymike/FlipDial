@@ -103,6 +103,7 @@
       </button>
       <a class="cleanup" href={href({ name: 'transfer' })}>Import, export and backup</a>
       <a class="cleanup" href={href({ name: 'activity' })}>Activity log</a>
+      <a class="cleanup" href={href({ name: 'setup' })}>Setup check</a>
     </section>
   </aside>
 

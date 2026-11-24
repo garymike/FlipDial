@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints
 from starlette.background import BackgroundTask
 
-from flipdial import audit, contacts, db, duplicates, forget
+from flipdial import audit, contacts, db, duplicates, forget, status
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
@@ -237,6 +237,39 @@ def approve(
         raise _dav_errors(exc) from exc
     audit.record(s, actor, "card.approve", card_id, vcard_uid=uid)
     return contacts.view(card).as_dict() | {"uid": uid}
+
+
+@router.get("/status")
+def setup_status(request: Request, s: SettingsDep) -> dict:
+    """What FlipDial needs and whether it's in place, in plain words."""
+    return status.check(s, request.app.state.carddav_factory)
+
+
+@router.post("/review/retry")
+def retry_all(s: SettingsDep, actor: ActorDep) -> dict:
+    """Read every card that failed again (after fixing the model setup, for example)."""
+    with db.session(s.db_path) as conn:
+        n = conn.execute(
+            "UPDATE cards SET status = 'extract_pending', attempts = 0, last_error = NULL "
+            "WHERE status = 'extract_failed'"
+        ).rowcount
+    audit.record(s, actor, "card.retry", "", cards=n)
+    return {"retrying": n}
+
+
+@router.post("/review/{card_id}/retry")
+def retry(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
+    _card_id(card_id)
+    with db.session(s.db_path) as conn:
+        n = conn.execute(
+            "UPDATE cards SET status = 'extract_pending', attempts = 0, last_error = NULL "
+            "WHERE id = ? AND status = 'extract_failed'",
+            (card_id,),
+        ).rowcount
+    if not n:
+        raise HTTPException(409, "not_failed")
+    audit.record(s, actor, "card.retry", card_id, cards=1)
+    return {"retrying": 1}
 
 
 @router.post("/review/{card_id}/dismiss")

@@ -99,7 +99,10 @@ class Extractor:
 
     def run_forever(self) -> None:
         log.info("extraction watching queue", extra={"reader": self.reader.name})
+        from flipdial.status import beat
+
         while True:
+            beat(self.s, "extract")
             try:
                 self.run_once()
             except Exception:

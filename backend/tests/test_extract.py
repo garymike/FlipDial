@@ -125,10 +125,35 @@ def test_openai_compatible_request(settings, tmp_path):
     assert "tools" not in seen["body"]
 
 
+def test_ollama_unreachable_and_timeout(settings, tmp_path):
+    for exc, code in (
+        (httpx.ConnectError("refused"), "model_unreachable"),
+        (httpx.ReadTimeout("slow"), "model_timeout"),
+    ):
+
+        def fail(request, exc=exc):
+            raise exc
+
+        reader = OllamaReader(settings, httpx.Client(transport=httpx.MockTransport(fail)))
+        with pytest.raises(ModelError) as caught:
+            reader.read([_image(tmp_path)])
+        assert caught.value.args[0] == code
+
+
 @pytest.mark.parametrize(
     ("response", "code"),
     [
-        (httpx.Response(500), "model_unreachable"),
+        (httpx.Response(500), "model_error"),
+        (
+            httpx.Response(404, json={"error": "model 'llama3.2-vision' not found"}),
+            "model_not_installed",
+        ),
+        (
+            httpx.Response(
+                500, json={"error": "this model is missing data required for image input"}
+            ),
+            "model_not_vision",
+        ),
         (
             httpx.Response(200, json={"message": {"content": "sure! here you go"}}),
             "response_not_json",

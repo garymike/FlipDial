@@ -162,6 +162,7 @@
   <p class="lead">
     Bring contacts in from other apps, or take everything with you. Imports can be undone.
     Every import and export is recorded in the <a href={href({ name: 'activity' })}>activity log</a>.
+    If scans aren't being read, run the <a href={href({ name: 'setup' })}>setup check</a>.
   </p>
 
   {#if DEMO}<p class="notice">Importing, exporting and backups are turned off in the demo, since it runs entirely in your browser.</p>{/if}

@@ -46,6 +46,12 @@ Tip: right-click `start.cmd`, choose **Send to > Desktop (create shortcut)**, an
 
 Point your scanner's FlipDial profile at the inbox: `<data folder>\inbox` (for example `C:\_dev\flipdial-data\inbox`). Scans are picked up within a few seconds and appear under **Review** once read. See [ingest](ingest.md) for scanner settings.
 
+## When cards aren't being read
+
+Open **Setup check** (Wall sidebar, or the link in the red bar FlipDial shows when something is wrong). It checks Ollama, the card-reading model, whether that model can read images, the scan worker, the inbox and your contacts server, and says what to do for anything that isn't right. If the model you've set isn't installed, it lists the installed models that can read images.
+
+After fixing the problem, use **Read again** on the Review page for cards that failed.
+
 ## Notes
 
 - FlipDial listens only on this computer (`http://127.0.0.1:8080`) unless you set up [sign-in](sign-in.md).
