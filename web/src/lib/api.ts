@@ -326,11 +326,15 @@ export interface ImportOptions {
   mapping?: ImportField[]
   deck?: string
   include_duplicates?: boolean
+  update?: boolean // update contacts already in FlipDial (adds values, never removes)
+  prefer_file?: boolean // when both have a different value, use the file's
 }
 
 export interface ImportCounts {
   total: number
   new: number
+  update?: number // already in FlipDial, with something new to add
+  same?: number // already in FlipDial, nothing new
   duplicate: number
   invalid: number
 }
@@ -341,14 +345,22 @@ export interface ImportPreview {
   headers?: string[]
   mapping?: ImportField[]
   counts: ImportCounts
-  rows: { row: number; name: string; organization: string; email: string; status: 'new' | 'duplicate' | 'invalid'; reason: string }[]
+  rows: {
+    row: number
+    name: string
+    organization: string
+    email: string
+    status: 'new' | 'update' | 'same' | 'duplicate' | 'invalid'
+    reason: string
+    changes?: string[]
+  }[]
 }
 
 export interface ImportRecord {
   id: number
   created_at: string
   format: string
-  counts: ImportCounts & { created: number; skipped: number; failed: number }
+  counts: ImportCounts & { created: number; updated?: number; unchanged?: number; skipped: number; failed: number }
   undone: boolean
 }
 
@@ -512,8 +524,12 @@ export const api = {
   importRun: (o: ImportOptions) =>
     call<{ import_id: number; format: string; counts: ImportRecord['counts'] }>('POST', '/api/import', o),
   imports: () => call<{ imports: ImportRecord[] }>('GET', '/api/imports'),
-  undoImport: (id: number) => call<{ removed: number; kept_edited: number }>('POST', `/api/imports/${id}/undo`),
+  undoImport: (id: number) => call<{ removed: number; restored?: number; kept_edited: number }>('POST', `/api/imports/${id}/undo`),
   exportUrl: (kind: 'vcf' | 'csv' | 'backup') => urls.exportUrl(kind),
+  changesInfo: () =>
+    call<{ since: string; count: number; phone_sync: boolean; count_phone?: number }>('GET', '/api/export/changes'),
+  changesUrl: (onlyPhone: boolean) =>
+    DEMO ? '#/transfer' : `/api/export/changes.vcf${onlyPhone ? '?only_phone=true' : ''}`,
   forget: (uid: string) =>
     call<{ forgotten: string; scans: number }>('DELETE', `/api/contacts/${encodeURIComponent(uid)}`),
   updateInfo: () => call<UpdateInfo>('GET', '/api/update'),

@@ -130,7 +130,7 @@ def test_linkedin_import_preview_commit_undo(api):
     assert lena["event"] == "LinkedIn" and lena["socials"][0]["platform"] == "LinkedIn"
 
     again = api.post("/api/import/preview", json={"text": LINKEDIN}, headers=H).json()
-    assert again["counts"]["duplicate"] == 2  # already imported
+    assert again["counts"]["same"] + again["counts"]["duplicate"] == 2  # already imported
 
     undo = api.post(f"/api/imports/{result['import_id']}/undo", headers=H)
     assert undo.status_code == 200 and undo.json()["removed"] == 2
@@ -144,7 +144,7 @@ def test_undo_keeps_edited_contacts(api):
     uid = api.get("/api/contacts", params={"q": "edie"}).json()["contacts"][0]["uid"]
     api.patch(f"/api/contacts/{uid}", json={"title": "Potter"}, headers=H)
     undo = api.post(f"/api/imports/{result['import_id']}/undo", headers=H).json()
-    assert undo == {"removed": 0, "kept_edited": 1}
+    assert undo == {"removed": 0, "restored": 0, "kept_edited": 1}
 
 
 def test_custom_mapping_and_bad_mapping(api):
@@ -178,7 +178,9 @@ def test_vcard_roundtrip_and_csv_export(api):
     assert rows[0][0] == "Name" and any(r[0] == "Vera Vcardtest" for r in rows[1:])
     # our own CSV comes back in with a sensible mapping
     again = api.post("/api/import/preview", json={"text": csv_out.text}, headers=H).json()
-    assert again["counts"]["duplicate"] >= 1 and "email" in again["mapping"]
+    vera = next(r for r in again["rows"] if r["name"] == "Vera Vcardtest")
+    assert vera["status"] == "same", vera["changes"]  # its own export brings nothing new
+    assert "email" in again["mapping"]
 
 
 def test_import_limits(api):
@@ -254,3 +256,46 @@ def test_restore_rejects_tampering_and_unsafe_paths(dav_settings, tmp_path):
     with pytest.raises(backup.BackupError, match="not_a_backup"):
         (tmp_path / "x.zip").write_text("nope")
         backup.restore_backup(fresh(3), tmp_path / "x.zip")
+
+
+def test_import_updates_matching_contacts_without_removing(api):
+    text = "Name,Email,Phone,Title\nUma Update,uma@update.test,(312) 555-0161,Potter\n"
+    first = api.post("/api/import", json={"text": text}, headers=H).json()
+    assert first["counts"]["created"] == 1
+    uid = api.get("/api/contacts", params={"q": "uma update"}).json()["contacts"][0]["uid"]
+    api.patch(f"/api/contacts/{uid}", json={"title": "Kiln Lead"}, headers=H)
+
+    newer = (
+        "Name,Email,Phone,Title,Notes\n"
+        "Uma Update,uma@update.test,(312) 555-0199,Glaze Chemist,Met at the guild\n"
+    )
+    p = api.post("/api/import/preview", json={"text": newer}, headers=H).json()
+    row = p["rows"][0]
+    assert row["status"] == "update" and set(row["changes"]) == {"phones", "note"}
+    r = api.post("/api/import", json={"text": newer}, headers=H).json()
+    assert r["counts"]["updated"] == 1 and r["counts"]["created"] == 0
+    c = api.get(f"/api/contacts/{uid}").json()
+    assert {x["value"] for x in c["phones"]} == {"(312) 555-0161", "(312) 555-0199"}
+    assert c["title"] == "Kiln Lead" and c["note"] == "Met at the guild"  # FlipDial's kept
+
+    # The file's value wins only when asked; and undo puts it back.
+    r = api.post("/api/import", json={"text": newer, "prefer_file": True}, headers=H).json()
+    assert api.get(f"/api/contacts/{uid}").json()["title"] == "Glaze Chemist"
+    undo = api.post(f"/api/imports/{r['import_id']}/undo", headers=H).json()
+    assert undo["restored"] == 1
+    assert api.get(f"/api/contacts/{uid}").json()["title"] == "Kiln Lead"
+
+    # Unchanged when there's nothing new; copies only when asked.
+    r = api.post("/api/import", json={"text": newer}, headers=H).json()
+    assert r["counts"]["unchanged"] == 1
+
+
+def test_export_changes(api):
+    api.get("/api/export/changes.vcf")  # start from now
+    assert api.get("/api/export/changes").json()["count"] == 0
+    api.post("/api/import", json={"text": "Name,Email\nXia Changed,xia@changed.test\n"}, headers=H)
+    info = api.get("/api/export/changes").json()
+    assert info["count"] == 1 and info["since"]
+    out = api.get("/api/export/changes.vcf")
+    assert "FN:Xia Changed" in out.text and "X-FLIPDIAL" not in out.text
+    assert api.get("/api/export/changes").json()["count"] == 0

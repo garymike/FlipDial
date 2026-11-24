@@ -33,7 +33,27 @@
     tags: 'Tags',
     note: 'Note',
   }
-  const STATUS: Record<string, string> = { new: 'New', duplicate: 'Already have', invalid: 'Skipped' }
+  const STATUS: Record<string, string> = {
+    new: 'New',
+    update: 'Will be updated',
+    same: 'Up to date',
+    duplicate: 'Looks like one you have',
+    invalid: 'Skipped',
+  }
+  const CHANGE_NAMES: Record<string, string> = {
+    name: 'name',
+    name_parts: 'name parts',
+    organization: 'company',
+    title: 'title',
+    phones: 'phones',
+    emails: 'emails',
+    websites: 'websites',
+    addresses: 'addresses',
+    socials: 'social',
+    nickname: 'nickname',
+    birthday: 'birthday',
+    note: 'notes',
+  }
   const SKIP_REASONS: Record<string, string> = {
     ...REASONS,
     same_contact: 'Same contact',
@@ -50,10 +70,25 @@
   let mapping = $state<ImportField[]>([])
   let deck = $state('')
   let includeDuplicates = $state(false)
+  let updateMatches = $state(true)
+  let preferFile = $state(false)
   let busy = $state(false)
   let error = $state('')
   let notice = $state<{ text: string; importId?: number } | null>(null)
   let history = $state<ImportRecord[]>([])
+
+  let changes = $state<{ since: string; count: number; phone_sync: boolean; count_phone?: number } | null>(null)
+  async function loadChanges() {
+    try {
+      changes = await api.changesInfo()
+    } catch {
+      changes = null
+    }
+  }
+  $effect(() => {
+    loadChanges()
+  })
+  const reloadChanges = () => setTimeout(loadChanges, 1500)
 
   async function loadHistory() {
     try {
@@ -115,7 +150,11 @@
   }
 
   const toImport = $derived(
-    preview ? preview.counts.new + (includeDuplicates ? preview.counts.duplicate : 0) : 0,
+    preview
+      ? preview.counts.new +
+          (includeDuplicates ? preview.counts.duplicate : 0) +
+          (updateMatches ? (preview.counts.update ?? 0) : includeDuplicates ? (preview.counts.update ?? 0) + (preview.counts.same ?? 0) : 0)
+      : 0,
   )
 
   async function doImport() {
@@ -127,16 +166,22 @@
         deck,
         mapping: mapping.length ? mapping : undefined,
         include_duplicates: includeDuplicates,
+        update: updateMatches,
+        prefer_file: preferFile,
       })
       const c = r.counts
-      const parts = [`Imported ${c.created} contact${c.created === 1 ? '' : 's'}.`]
+      const parts = [`Added ${c.created} contact${c.created === 1 ? '' : 's'}.`]
+      if (c.updated) parts.push(`Updated ${c.updated}.`)
+      if (c.unchanged) parts.push(`${c.unchanged} already up to date.`)
       if (c.skipped) parts.push(`${c.skipped} skipped.`)
       if (c.failed) parts.push(`${c.failed} could not be saved.`)
       notice = { text: parts.join(' '), importId: r.import_id }
+      loadChanges()
       preview = null
       text = ''
       fileName = ''
       await loadHistory()
+      loadChanges()
     } catch (e) {
       error = describe(e)
     } finally {
@@ -150,9 +195,11 @@
       notice = {
         text:
           `Removed ${r.removed} imported contact${r.removed === 1 ? '' : 's'}.` +
+          (r.restored ? ` Put ${r.restored} updated contact${r.restored === 1 ? '' : 's'} back as they were.` : '') +
           (r.kept_edited ? ` Kept ${r.kept_edited} you edited since.` : ''),
       }
       await loadHistory()
+      loadChanges()
     } catch (e) {
       error = describe(e)
     }
@@ -196,7 +243,9 @@
       <div class="summary">
         <span class="format">{FORMATS[preview.format] ?? preview.format}</span>
         <span><strong>{preview.counts.new}</strong> new</span>
-        <span><strong>{preview.counts.duplicate}</strong> already in your contacts</span>
+        {#if preview.counts.update}<span><strong>{preview.counts.update}</strong> to update</span>{/if}
+        {#if preview.counts.same}<span><strong>{preview.counts.same}</strong> up to date</span>{/if}
+        {#if preview.counts.duplicate}<span><strong>{preview.counts.duplicate}</strong> look like ones you have</span>{/if}
         {#if preview.counts.invalid}<span><strong>{preview.counts.invalid}</strong> skipped</span>{/if}
       </div>
 
@@ -221,10 +270,22 @@
           <span>Put them in a deck (optional)</span>
           <input type="text" maxlength="80" bind:value={deck} placeholder="For example: LinkedIn" onchange={() => runPreview()} />
         </label>
+        {#if preview.counts.update || preview.counts.same}
+          <label class="check">
+            <input type="checkbox" bind:checked={updateMatches} />
+            Update contacts you already have: add new phones, emails and details, and fill in empty fields. Nothing is removed.
+          </label>
+          {#if updateMatches}
+            <label class="check">
+              <input type="checkbox" bind:checked={preferFile} />
+              When both have a different value, use the file's (otherwise FlipDial's is kept)
+            </label>
+          {/if}
+        {/if}
         {#if preview.counts.duplicate}
           <label class="check">
             <input type="checkbox" bind:checked={includeDuplicates} />
-            Also import the {preview.counts.duplicate} that look like contacts you already have
+            Also add the {preview.counts.duplicate} that look like contacts you already have, as separate contacts
           </label>
         {/if}
       </div>
@@ -240,7 +301,8 @@
                 <td>{r.email}</td>
                 <td>
                   <span class="chip">{STATUS[r.status]}</span>
-                  {#if r.reason}<span class="why">{SKIP_REASONS[r.reason] ?? r.reason}</span>{/if}
+                  {#if r.changes?.length}<span class="why">adds {r.changes.map((x) => CHANGE_NAMES[x] ?? x).join(', ')}</span>
+                  {:else if r.reason && r.status !== 'same'}<span class="why">{SKIP_REASONS[r.reason] ?? r.reason}</span>{/if}
                 </td>
               </tr>
             {/each}
@@ -266,11 +328,11 @@
       <ul class="history">
         {#each history as h (h.id)}
           <li>
-            <span>{FORMATS[h.format] ?? h.format}, {h.counts.created} added</span>
+            <span>{FORMATS[h.format] ?? h.format}, {h.counts.created} added{h.counts.updated ? `, ${h.counts.updated} updated` : ''}</span>
             <span class="when">{when(h.created_at)}</span>
             {#if h.undone}
               <span class="when">Undone</span>
-            {:else if h.counts.created}
+            {:else if h.counts.created || h.counts.updated}
               <button type="button" class="link" onclick={() => undo(h.id)}>Undo</button>
             {/if}
           </li>
@@ -286,6 +348,28 @@
       <a class="secondary" href={api.exportUrl('vcf')} download>vCard (.vcf)</a>
       <a class="secondary" href={api.exportUrl('csv')} download>Spreadsheet (.csv)</a>
     </div>
+  </section>
+
+  <section class="panel">
+    <h2>Changes for Google Contacts</h2>
+    <p class="hint">
+      A vCard of contacts changed since you last downloaded this, with standard fields only. Import it at
+      contacts.google.com; if Google makes copies, its Merge &amp; fix tool combines them. Nothing is connected to your
+      Google account.
+    </p>
+    {#if changes}
+      <p class="hint">
+        {changes.count} changed {changes.since ? `since ${when(changes.since)}` : '(first time: every contact)'}{changes.phone_sync
+          ? `, ${changes.count_phone} of them on your phone`
+          : ''}.
+      </p>
+      <div class="exports" class:off={DEMO} aria-disabled={DEMO}>
+        <a class="secondary" href={api.changesUrl(false)} download onclick={reloadChanges}>Download changes</a>
+        {#if changes.phone_sync}
+          <a class="secondary" href={api.changesUrl(true)} download onclick={reloadChanges}>Only contacts on my phone</a>
+        {/if}
+      </div>
+    {/if}
   </section>
 
   <section class="panel">

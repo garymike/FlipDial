@@ -272,6 +272,8 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       if (seg[2] === 'scans') return { scans: scansOf(find(seg[1])) }
       if (seg[2] === 'reread') return rereadState(find(seg[1]))
       return seg[1] ? withPhone(find(seg[1])) : list(url.searchParams)
+    case 'GET /export':
+      return { since: '', count: contacts.length, phone_sync: true, count_phone: onPhone.size }
     case 'GET /phone':
       if (seg[1] === 'setup')
         return {

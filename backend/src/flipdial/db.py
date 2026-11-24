@@ -239,6 +239,10 @@ MIGRATIONS: list[str] = [
         used_at     TEXT
     );
     """,
+    # 17: imports can update contacts already there; the version before is kept for undo.
+    """
+    ALTER TABLE import_items ADD COLUMN before TEXT;
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

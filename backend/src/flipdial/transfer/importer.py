@@ -1,7 +1,10 @@
 """Import contacts from vCard or CSV files (including LinkedIn's Connections.csv).
 
-Every import is previewed first, likely duplicates are skipped unless the person says
-otherwise, and each import can be undone as long as the contacts weren't edited since.
+Every import is previewed first. A contact already in FlipDial (same UID, email or phone)
+is updated: new numbers, emails and details are added and empty fields filled in; nothing is
+removed, and FlipDial's value is kept when both differ unless the person chooses the file's.
+Other likely duplicates are skipped unless the person says otherwise. Each import can be
+undone as long as the contacts weren't edited since.
 """
 
 from __future__ import annotations
@@ -11,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from flipdial import contacts, db
+from flipdial import contacts, db, phone_merge
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact, new_card, new_uid
 from flipdial.carddav.typed import values
@@ -30,12 +33,17 @@ class TransferError(Exception):
     pass
 
 
+STRONG = ("same_contact", "same_email", "same_phone")  # sure enough to update
+
+
 @dataclass
 class Candidate:
     row: int
     card: VCard | None
-    status: str  # new | duplicate | invalid
+    status: str  # new | update | same | duplicate | invalid
     reason: str = ""
+    target: str = ""  # the existing contact it matches, for update and same
+    changes: tuple[str, ...] = ()
 
     def summary(self) -> dict:
         c = self.card
@@ -46,6 +54,7 @@ class Candidate:
             "email": c.first("EMAIL") if c else "",
             "status": self.status,
             "reason": self.reason,
+            "changes": list(self.changes),
         }
 
 
@@ -57,9 +66,26 @@ class _Index:
         self.emails: set[str] = set()
         self.phones: set[str] = set()
         self.names: set[str] = set()
+        # Which existing contact has each email and phone (contacts in FlipDial only).
+        self.owner: dict[str, str] = {}
         for c in contacts.list_contacts(settings):
             self.uids.add(c.uid)
-            self.add(_key(c.full_name, values(c.emails), values(c.phones)))
+            key = _key(c.full_name, values(c.emails), values(c.phones))
+            for v in key[1]:
+                self.owner.setdefault("e:" + v, c.uid)
+            for v in key[2]:
+                self.owner.setdefault("p:" + v, c.uid)
+            self.add(key)
+
+    def target(self, values: tuple[str, set[str], set[str]]) -> str:
+        _, emails, phones = values
+        for v in sorted(emails):
+            if "e:" + v in self.owner:
+                return self.owner["e:" + v]
+        for v in sorted(phones):
+            if "p:" + v in self.owner:
+                return self.owner["p:" + v]
+        return ""
 
     def add(self, values: tuple[str, set[str], set[str]]) -> None:
         name, emails, phones = values
@@ -174,7 +200,9 @@ def _candidates(
                 out.append(Candidate(i, None, "invalid", str(exc)))
                 continue
             if card.uid and card.uid in index.uids:
-                out.append(Candidate(i, card, "duplicate", "same_contact"))
+                out.append(
+                    _matched(settings, Candidate(i, card, "duplicate", "same_contact", card.uid))
+                )
                 continue
             if not card.uid:
                 card.add("UID", new_uid())
@@ -183,7 +211,7 @@ def _candidates(
             if deck:
                 card.set("X-FLIPDIAL-EVENT", deck)
                 vcf.add_category(card, deck)
-            out.append(_judge(index, i, card))
+            out.append(_judge(settings, index, i, card))
         return info, out
 
     try:
@@ -207,19 +235,32 @@ def _candidates(
         if card is None:
             out.append(Candidate(i, None, "invalid", why))
             continue
-        out.append(_judge(index, i, card))
+        out.append(_judge(settings, index, i, card))
     return info, out
 
 
-def _judge(index: _Index, row: int, card: VCard) -> Candidate:
+def _judge(settings: Settings, index: _Index, row: int, card: VCard) -> Candidate:
     vals = _values(card)
     why = index.reason(vals)
+    target = index.target(vals) if why in STRONG else ""
     index.add(vals)  # catches the same person twice in one file
-    return Candidate(row, card, "duplicate" if why else "new", why)
+    c = Candidate(row, card, "duplicate" if why else "new", why, target)
+    return _matched(settings, c) if target else c
+
+
+def _matched(settings: Settings, c: Candidate) -> Candidate:
+    """A contact already in FlipDial: what an update would change ("same" if nothing)."""
+    found = contacts.get_contact(settings, c.target)
+    if found is None or c.card is None:
+        return c
+    trial = VCard.parse(found[0].render())
+    c.changes = tuple(phone_merge.merge_in(trial, c.card))
+    c.status = "update" if c.changes else "same"
+    return c
 
 
 def _counts(cands: list[Candidate]) -> dict[str, int]:
-    out = {"total": len(cands), "new": 0, "duplicate": 0, "invalid": 0}
+    out = {"total": len(cands), "new": 0, "update": 0, "same": 0, "duplicate": 0, "invalid": 0}
     for c in cands:
         out[c.status] += 1
     return out
@@ -245,9 +286,17 @@ def run_import(
     mapping: list[str] | None = None,
     deck: str = "",
     include_duplicates: bool = False,
+    update: bool = True,
+    prefer_file: bool = False,
 ) -> dict:
     info, cands = _candidates(settings, text, kind, mapping, deck)
-    counts = _counts(cands) | {"created": 0, "skipped": 0, "failed": 0}
+    counts = _counts(cands) | {
+        "created": 0,
+        "updated": 0,
+        "unchanged": 0,
+        "skipped": 0,
+        "failed": 0,
+    }
     # Record the import first, and each contact as it's created, so a crash partway
     # through still leaves everything that was added undoable.
     with db.session(settings.db_path) as conn:
@@ -256,6 +305,12 @@ def run_import(
             (_now(), info["format"], json.dumps(counts)),
         ).lastrowid
     for c in cands:
+        if update and c.status in ("update", "same") and c.card is not None:
+            done = _update(settings, client, import_id, c, prefer_file)
+            counts[done] += 1
+            continue
+        if c.status in ("update", "same"):
+            c.status = "duplicate"
         if c.card is None or (c.status == "duplicate" and not include_duplicates):
             counts["skipped"] += 1
             continue
@@ -288,8 +343,36 @@ def run_import(
     return {"import_id": import_id, "format": info["format"], "counts": counts}
 
 
+def _update(
+    settings: Settings, client: CardDAVClient, import_id: int, c: Candidate, prefer_file: bool
+) -> str:
+    """Bring the file's values into the contact it matches. Returns the count to bump."""
+    found = contacts.get_contact(settings, c.target)
+    if found is None or c.card is None:
+        return "skipped"
+    card, href, etag = found
+    before = card.render()
+    if not phone_merge.merge_in(card, c.card, prefer_file):
+        return "unchanged"
+    card.set("REV", datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"), raw=True)
+    try:
+        remote = client.update(href, card, etag)
+    except ConflictError:
+        return "skipped"  # changed elsewhere since it was read
+    except (CardDAVError, VCardError):
+        return "failed"
+    with db.session(settings.db_path) as conn:
+        conn.execute(
+            "INSERT INTO import_items (import_id, uid, etag, before) VALUES (?, ?, ?, ?)",
+            (import_id, card.uid, remote.etag, before),
+        )
+    contacts.store(settings, card, remote.href, remote.etag)
+    return "updated"
+
+
 def undo_import(settings: Settings, client: CardDAVClient, import_id: int) -> dict[str, int]:
-    """Remove the contacts an import created, except any edited since."""
+    """Remove the contacts an import created and put back the ones it updated, except any
+    edited since."""
     with db.session(settings.db_path) as conn:
         row = conn.execute("SELECT undone_at FROM imports WHERE id = ?", (import_id,)).fetchone()
         if row is None:
@@ -297,9 +380,9 @@ def undo_import(settings: Settings, client: CardDAVClient, import_id: int) -> di
         if row["undone_at"]:
             raise TransferError("already_undone")
         items = conn.execute(
-            "SELECT uid, etag FROM import_items WHERE import_id = ?", (import_id,)
+            "SELECT uid, etag, before FROM import_items WHERE import_id = ?", (import_id,)
         ).fetchall()
-    removed = kept = 0
+    removed = kept = restored = 0
     for item in items:
         found = contacts.get_contact(settings, item["uid"])
         if found is None:
@@ -307,6 +390,16 @@ def undo_import(settings: Settings, client: CardDAVClient, import_id: int) -> di
         _, href, etag = found
         if item["etag"] and etag != item["etag"]:
             kept += 1
+            continue
+        if item["before"]:
+            old = VCard.parse(item["before"])
+            try:
+                remote = client.update(href, old, etag)
+            except ConflictError:
+                kept += 1
+                continue
+            contacts.store(settings, old, remote.href, remote.etag)
+            restored += 1
             continue
         try:
             client.delete(href, etag)
@@ -318,8 +411,11 @@ def undo_import(settings: Settings, client: CardDAVClient, import_id: int) -> di
         removed += 1
     with db.session(settings.db_path) as conn:
         conn.execute("UPDATE imports SET undone_at = ? WHERE id = ?", (_now(), import_id))
-    log.info("import undone", extra={"import_id": import_id, "removed": removed, "kept": kept})
-    return {"removed": removed, "kept_edited": kept}
+    log.info(
+        "import undone",
+        extra={"import_id": import_id, "removed": removed, "restored": restored, "kept": kept},
+    )
+    return {"removed": removed, "restored": restored, "kept_edited": kept}
 
 
 def recent_imports(settings: Settings, limit: int = 20) -> list[dict]:

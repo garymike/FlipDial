@@ -38,6 +38,7 @@
     'import.undo': 'Undid an import',
     'export.vcard': 'Exported contacts (vCard)',
     'export.csv': 'Exported contacts (CSV)',
+    'export.changes': 'Exported changes (vCard, for Google Contacts)',
     'export.backup': 'Downloaded a full backup',
     restore: 'Restored a backup',
     'update.start': 'Started an update',
@@ -94,7 +95,7 @@
       case 'phone.choice':
         return `${e.action === 'phone.rule' ? (e.target === '*' ? 'Every contact' : e.target) + ': ' : ''}${d.state === 'follow' ? 'follow tags' : d.state === 'on' ? 'on the phone' : 'off the phone'}`
       case 'import':
-        return `${n('created')} added, ${n('skipped')} skipped (${String(d.format ?? '')})`
+        return `${n('created')} added, ${n('updated')} updated, ${n('skipped')} skipped (${String(d.format ?? '')})`
       case 'import.undo':
         return `${n('removed')} removed, ${n('kept_edited')} kept`
       case 'export.vcard':
