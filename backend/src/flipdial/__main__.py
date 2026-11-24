@@ -179,13 +179,14 @@ def main(argv: list[str] | None = None) -> None:
 
 def _transfer(args: argparse.Namespace, settings) -> None:
     from flipdial import audit, contacts
-    from flipdial.carddav.client import CardDAVClient, CardDAVError
+    from flipdial.carddav.client import CardDAVError
+    from flipdial.carddav.local import make_client
     from flipdial.transfer import backup, importer
 
     try:
         if args.command == "import":
             text = args.file.read_text(encoding="utf-8-sig", errors="replace")
-            client = CardDAVClient(settings)
+            client = make_client(settings)
             contacts.sync(settings, client)  # duplicate checks need the current contacts
             if args.dry_run:
                 result = importer.preview(settings, text, deck=args.deck)
@@ -210,7 +211,7 @@ def _transfer(args: argparse.Namespace, settings) -> None:
         elif args.command == "export":
             if args.out.suffix.lower() not in (".vcf", ".csv"):
                 sys.exit("Use a .vcf or .csv file name.")
-            contacts.sync(settings, CardDAVClient(settings))
+            contacts.sync(settings, make_client(settings))
             fn = backup.export_csv if args.out.suffix.lower() == ".csv" else backup.export_vcf
             text, n = fn(settings)
             args.out.write_text(text, encoding="utf-8")
@@ -218,9 +219,9 @@ def _transfer(args: argparse.Namespace, settings) -> None:
             audit.record(settings, "cli", action, contacts=n)
             print(f"Exported {n} contacts.")
         elif args.command == "backup":
-            if settings.carddav_url:
+            if True:
                 try:
-                    contacts.sync(settings, CardDAVClient(settings))
+                    contacts.sync(settings, make_client(settings))
                 except CardDAVError as exc:
                     print(f"Warning: could not refresh contacts ({exc}); using the local copy.")
             manifest = backup.create_backup(settings, args.out)

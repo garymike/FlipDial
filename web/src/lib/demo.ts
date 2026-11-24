@@ -131,7 +131,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
         ],
       }
     case 'GET /me':
-      return { user: 'demo', mode: 'none' }
+      return { user: 'demo', mode: 'none', storage: 'local' }
     case 'POST /sync':
       record('contacts.sync', '', { added: 0, updated: 0, removed: 0 })
       return { added: 0, updated: 0, removed: 0, skipped: 0 }

@@ -79,6 +79,11 @@
     }
   }
 
+  let storage = $state<'server' | 'local'>('server')
+  $effect(() => {
+    api.me().then((m) => (storage = m.storage)).catch(() => {})
+  })
+
   const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`)
 </script>
 
@@ -144,7 +149,8 @@
             <ul class="tags">{#each contact.categories as t (t)}<li>{t}</li>{/each}</ul>
           {/if}
           <div class="panel">
-            <span class="badge" aria-hidden="true">S</span> Saved to your contacts server
+            <span class="badge" aria-hidden="true">S</span>
+            {storage === 'local' ? 'Saved on this computer (no contacts server set up yet)' : 'Saved to your contacts server'}
           </div>
           {#if confirming}
             <div class="forget" role="group" aria-label="Forget this contact">

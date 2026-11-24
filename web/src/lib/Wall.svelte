@@ -35,6 +35,11 @@
     load()
   })
 
+  let storage = $state<'server' | 'local'>('server')
+  $effect(() => {
+    api.me().then((m) => (storage = m.storage)).catch(() => {})
+  })
+
   async function syncNow() {
     syncing = true
     try {
@@ -97,7 +102,7 @@
     {/if}
     <section class="panel">
       <h2>Sync</h2>
-      <div class="row"><span class="badge" aria-hidden="true">S</span><span>Contacts server</span></div>
+      <div class="row"><span class="badge" aria-hidden="true">S</span><span>{storage === 'local' ? 'Saved on this computer' : 'Contacts server'}</span></div>
       <button type="button" class="secondary" onclick={syncNow} disabled={syncing}>
         {syncing ? 'Syncing…' : 'Sync now'}
       </button>
@@ -109,7 +114,7 @@
 
   <main>
     <div class="toolbar">
-      <h1>{heading} <span class="count">{data?.contacts.length ?? 0} contacts</span></h1>
+      <h1>{heading} <span class="count">{data?.contacts.length ?? 0} {(data?.contacts.length ?? 0) === 1 ? 'contact' : 'contacts'}</span></h1>
       <div class="segmented" role="group" aria-label="Scan filter">
         {#each scanOptions as o (o.id)}
           <button type="button" aria-pressed={scan === o.id} onclick={() => (scan = o.id)}>{o.label}</button>

@@ -208,15 +208,19 @@ def check(
             )
         )
 
+    from flipdial.carddav.local import local_count
+
+    on_computer = local_count(s)
     if not s.carddav_url:
         items.append(
             _item(
                 "contacts_server",
                 "Contacts server",
                 "warn",
-                "Not set up. Cards can be read and reviewed, but not saved.",
-                "Add FLIPDIAL_CARDDAV_URL, _USERNAME and _PASSWORD to backend\\.env "
-                "(see docs/carddav.md), then restart.",
+                f"Not set up, so contacts are saved on this computer ({on_computer} so far).",
+                "To see them on your phone, add FLIPDIAL_CARDDAV_URL, _USERNAME and _PASSWORD "
+                "to backend\\.env (see docs/carddav.md) and restart. You can then copy them "
+                "to the server from here.",
             )
         )
     elif carddav_factory is not None:
@@ -231,6 +235,19 @@ def check(
                     f"Connected to {book.name or 'your address book'}.",
                 )
             )
+            if on_computer:
+                items.append(
+                    _item(
+                        "local_contacts",
+                        "Contacts saved on this computer",
+                        "warn",
+                        f"{on_computer} {'contact was' if on_computer == 1 else 'contacts were'} "
+                        "saved here before the server was set up.",
+                        "Copy them to the server so they show on your phone. The copies on this "
+                        "computer are kept as a backup.",
+                    )
+                    | {"action": "push_local", "action_label": f"Copy {on_computer} to the server"}
+                )
         except Exception as exc:  # noqa: BLE001  (any failure here is reported, not raised)
             code = getattr(exc, "code", "unreachable")
             items.append(

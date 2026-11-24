@@ -9,6 +9,7 @@
     'contact.merge_undo': 'Undid a merge',
     'contact.forget': 'Forgot a contact',
     'contacts.sync': 'Synced with the contacts server',
+    'contacts.copy_to_server': 'Copied contacts from this computer to the server',
     'card.approve': 'Saved a scanned card',
     'card.dismiss': 'Dismissed a scanned card',
     'card.attach': 'Added a scan to a contact',

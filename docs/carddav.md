@@ -1,5 +1,7 @@
 # Contacts server (CardDAV)
 
+**No server yet?** FlipDial works without one: contacts are saved as vCard files in your data folder (`local-contacts`), and everything else works the same. When you add a server later, **Setup check** offers to copy them across in one step. Contacts already on the server are skipped, and the local folder is kept as a backup.
+
 Approved cards are saved as contacts on your CardDAV server. FlipDial works with any CardDAV server; it is tested against Radicale in CI, and the v1 release checklist adds Synology Contacts and Nextcloud.
 
 ```mermaid

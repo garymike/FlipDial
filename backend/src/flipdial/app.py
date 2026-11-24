@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from flipdial import __version__, audit, auth, db
 from flipdial.api import router
 from flipdial.carddav.client import CardDAVClient
+from flipdial.carddav.local import make_client
 from flipdial.config import Settings, get_settings
 from flipdial.logging import request_id
 
@@ -88,7 +89,7 @@ def create_app(
         title="FlipDial", version=__version__, docs_url=None, redoc_url=None, openapi_url=None
     )
     app.state.settings = settings
-    app.state.carddav_factory = carddav_factory or (lambda: CardDAVClient(settings))
+    app.state.carddav_factory = carddav_factory or (lambda: make_client(settings))
     oidc_factory = oidc_factory or (lambda: auth.OIDCClient(settings))
     db.connect(settings.db_path).close()  # run migrations at startup
 
@@ -210,7 +211,8 @@ def create_app(
 
     @app.get("/api/me")
     async def me(request: Request) -> dict:
-        return {"user": request.state.user, "mode": settings.auth_mode}
+        storage = "server" if settings.carddav_url else "local"
+        return {"user": request.state.user, "mode": settings.auth_mode, "storage": storage}
 
     @app.post("/api/logout")
     async def logout(request: Request) -> Response:
