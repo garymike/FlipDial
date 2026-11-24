@@ -155,7 +155,9 @@ jobs:
           $roles = @(Get-FlipDialProcesses | ForEach-Object { $_.Role }) -join ','
           if ($roles -ne 'server,worker') { "expected server and worker running, found: $roles"; exit 1 }
           scripts\windows\stop.ps1
+          if ($LASTEXITCODE) { 'stop failed'; exit 1 }
           Start-Sleep 2
           try { Invoke-WebRequest http://127.0.0.1:8080/healthz -UseBasicParsing -TimeoutSec 3; throw 'still running' } catch { if ($_.Exception.Message -eq 'still running') { exit 1 } }
           if (Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*flipdial*" }) { 'python left running'; exit 1 }
           'start and stop work'
+          exit 0
