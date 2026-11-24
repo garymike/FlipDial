@@ -129,22 +129,20 @@ def main(argv: list[str] | None = None) -> None:
         try:
             if args.action == "init":
                 out = cs.init(folder, args.host)
-                host = args.host[0]
-                print(f"Contacts server set up in {folder}. Add these to your settings file:\n")
-                print(f"FLIPDIAL_RADICALE_DIR={folder}")
                 # In Docker, FlipDial reaches the server by its service name.
                 inside = (
                     "contacts" if os.environ.get("FLIPDIAL_INSTALL") == "docker" else "localhost"
                 )
-                print(f"FLIPDIAL_CARDDAV_URL=https://{inside}:{cs.PORT}/")
-                print(f"FLIPDIAL_CARDDAV_USERNAME={out['username']}")
-                print(f"FLIPDIAL_CARDDAV_PASSWORD={out['password']}")
-                print(f"FLIPDIAL_CARDDAV_CA_BUNDLE={folder / 'ca.pem'}")
-                print(f"FLIPDIAL_PHONE_SERVER_URL=https://{host}:{cs.PORT}/")
-                print("\nThe password is shown only this once.")
+                lines = cs.settings_lines(folder, out, inside, args.host[0])
+                # Passwords go into a private file, never to the screen or a log.
+                path = cs.write_private_note(folder, "settings-to-add.env", lines)
+                print(f"Contacts server set up in {folder}.")
+                print(f"Copy the lines in {path} into your settings file, then delete it.")
+                print("It holds FlipDial's password for the contacts server, which isn't kept.")
             elif args.action == "add-user":
                 pw = cs.add_user(folder, args.name)
-                print(f"Account {args.name} added. Its password (shown only once): {pw}")
+                path = cs.write_private_note(folder, f"{args.name}-password.txt", pw + "\n")
+                print(f"Account {args.name} added. Its password is in {path}; delete it once used.")
             else:
                 import subprocess
 

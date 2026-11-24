@@ -210,6 +210,25 @@ def init(folder: Path, hosts: list[str], config_dir: str | None = None) -> dict[
     return {"username": FLIPDIAL_USER, "password": password}
 
 
+def settings_lines(folder: Path, login: dict[str, str], inside: str, host: str) -> str:
+    """The settings FlipDial needs for this server, as lines for the settings file."""
+    return (
+        f"FLIPDIAL_RADICALE_DIR={folder}\n"
+        f"FLIPDIAL_CARDDAV_URL=https://{inside}:{PORT}/\n"
+        f"FLIPDIAL_CARDDAV_USERNAME={login['username']}\n"
+        f"FLIPDIAL_CARDDAV_PASSWORD={login['password']}\n"
+        f"FLIPDIAL_CARDDAV_CA_BUNDLE={folder / 'ca.pem'}\n"
+        f"FLIPDIAL_PHONE_SERVER_URL=https://{host}:{PORT}/\n"
+    )
+
+
+def write_private_note(folder: Path, name: str, text: str) -> Path:
+    """Write something secret (a password) to an owner-only file for the person to copy."""
+    path = folder / name
+    _private(path, text.encode())
+    return path
+
+
 def users(folder: Path) -> list[str]:
     path = folder / "users"
     if not path.is_file():

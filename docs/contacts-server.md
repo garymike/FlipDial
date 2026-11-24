@@ -16,7 +16,7 @@ FlipDial works without a contacts server: it keeps contacts in its data folder. 
    flipdial contacts-server init --host nas.local --host 192.168.1.20
    ```
 
-   It prints the settings to add to your settings file, including FlipDial's password. That's the only time the password is shown.
+   It writes the settings to add to your settings file into `settings-to-add.env` in the server's folder (an owner-only file; with Docker, that's `data/contacts-server/` next to your compose file). Copy the lines into your settings file, then delete it: it holds FlipDial's password for the server, which isn't stored anywhere else.
 
 2. Start it:
    - **Docker:** `docker compose run --rm flipdial flipdial contacts-server init --host ...` for step 1, then `docker compose --profile contacts-server up -d` (see `docker/compose.example.yml`).
@@ -27,7 +27,7 @@ FlipDial works without a contacts server: it keeps contacts in its data folder. 
 
 4. In **Setup > Phone > Set up phone sync**, choose **Make the phone's account**. FlipDial creates the account and its phone book, and shows the password once. Then add it to the phone as the wizard shows (one-tap profile on iPhone, DAVx5 on Android). The phone profile includes the server's certificate so the iPhone can trust it; on Android, DAVx5 asks you to accept it once.
 
-To add a phone account by hand instead: `flipdial contacts-server add-user phone2`.
+To add a phone account by hand instead: `flipdial contacts-server add-user phone2`. Its password goes into `phone2-password.txt` in the same folder; delete the file once you've used it.
 
 ## What's in the folder
 
