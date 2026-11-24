@@ -165,6 +165,18 @@
 
   const cleaned = (f: ContactInput): ContactInput => cleanInput(f)
 
+  // Turn a side or swap front and back. Display only; the scan files never change.
+  async function changeView(change: { swap?: boolean; turn?: 'front' | 'back' }) {
+    if (!current) return
+    try {
+      const r = await api.cardView(current.card_id, change)
+      current.view = r.view
+      if (change.swap) showBack = false
+    } catch (e) {
+      error = describe(e)
+    }
+  }
+
   async function attach(uid: string) {
     if (!current || !form) return
     busy = true
@@ -202,7 +214,7 @@
   // Undo for the last dismissal, the Dismissed list, and reading a card again.
   let undoId = $state<string | null>(null)
   let confirmReread = $state(false)
-  let dismissedList = $state<{ card_id: string; created_at: string; label: string }[]>([])
+  let dismissedList = $state<{ card_id: string; created_at: string; label: string; view?: string }[]>([])
   let showDismissed = $state(false)
   let confirmDelete = $state<string | null>(null)
 
@@ -284,7 +296,7 @@
       <ul>
         {#each waiting as w (w.card_id)}
           <li>
-            <span class="thumbimg"><ScanImage src={api.image(w.card_id, 'thumb')} alt="Scanned card" /></span>
+            <span class="thumbimg"><ScanImage src={api.image(w.card_id, 'thumb', w.view)} alt="Scanned card" /></span>
             {#if w.status === 'extract_failed'}
               <span class="why">{READ_ERRORS[w.error ?? ''] ?? "Couldn't be read."}</span>
               {#if w.error_detail}<span class="said">Ollama said: {w.error_detail}</span>{/if}
@@ -330,7 +342,7 @@
       <section class="images" aria-label="Card images">
         <span class="bigimg">
           <ScanImage
-            src={api.image(current.card_id, showBack ? 'back' : 'front')}
+            src={api.image(current.card_id, showBack ? 'back' : 'front', current.view)}
             alt={showBack ? 'Back of the card' : 'Front of the card'}
             fit="natural"
             lazy={false}
@@ -342,7 +354,14 @@
             <button type="button" aria-pressed={showBack} onclick={() => (showBack = true)}>Back</button>
           </div>
         {/if}
-        {#if current.flags.length}
+        <div class="turnbar">
+          <button type="button" class="secondary small" onclick={() => changeView({ turn: showBack ? 'back' : 'front' })}>Rotate</button>
+          {#if current.has_back}<button type="button" class="secondary small" onclick={() => changeView({ swap: true })}>Swap front and back</button>{/if}
+        </div>
+        {#if current.flags.includes('sideways:front') && /f0/.test(current.view ?? 'f0')}
+          <p class="flags">This card looks sideways. Use Rotate until it reads upright.</p>
+        {/if}
+        {#if current.flags.some((f) => f !== 'sideways:front')}
           <p class="flags">Check the highlighted fields before saving.</p>
         {/if}
         <nav class="pager" aria-label="Cards to review">
@@ -393,7 +412,7 @@
         <ul>
           {#each dismissedList as d (d.card_id)}
             <li>
-              <span class="thumbimg"><ScanImage src={api.image(d.card_id, 'thumb')} alt="Dismissed card" /></span>
+              <span class="thumbimg"><ScanImage src={api.image(d.card_id, 'thumb', d.view)} alt="Dismissed card" /></span>
               <span class="label">{d.label || 'Not read'}</span>
               {#if confirmDelete === d.card_id}
                 <span class="why">Delete this scan for good? This can't be undone.</span>
@@ -486,6 +505,14 @@
   .segmented button[aria-pressed='true'] {
     background: #2e3239;
     color: var(--bone);
+  }
+  .turnbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .turnbar .small {
+    min-height: 36px;
   }
   .flags {
     margin: 0;

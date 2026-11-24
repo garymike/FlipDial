@@ -5,6 +5,8 @@ Layout (see docs/data-model.md):
     archive/<card-id>/
       front.orig.<ext>  back.orig.<ext>   or   scan.orig.pdf   (never modified)
       front.crop.jpg    back.crop.jpg     thumb.jpg            (derived, regenerable)
+      view/                                                     (turned or swapped copies
+                                                                 for display; see cardview.py)
       manifest.json
 
 Originals are copied, fsynced and verified by SHA-256 before the inbox copy is removed.

@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from starlette.background import BackgroundTask
 
-from flipdial import audit, contacts, db, duplicates, forget, reread, status, updates
+from flipdial import audit, cardview, contacts, db, duplicates, forget, reread, status, updates
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
@@ -329,7 +329,7 @@ def review_queue(s: SettingsDep) -> dict:
     with db.session(s.db_path) as conn:
         rows = conn.execute(
             "SELECT c.id, c.created_at, c.has_back, c.back_blank, c.status, c.last_error, "
-            "c.last_error_detail, c.progress_json, "
+            "c.last_error_detail, c.progress_json, c.view_swapped, c.front_turn, c.back_turn, "
             "e.fields_json, e.flags_json FROM cards c LEFT JOIN extractions e ON e.rowid = ("
             "SELECT rowid FROM extractions WHERE card_id = c.id ORDER BY rowid DESC LIMIT 1) "
             "WHERE c.status IN ('review', 'extract_pending', 'extract_failed') ORDER BY c.id"
@@ -347,6 +347,9 @@ def review_queue(s: SettingsDep) -> dict:
                 "error": r["last_error"],
                 "error_detail": r["last_error_detail"] or "",
                 "progress": _progress(r["progress_json"]),
+                "view": cardview.View(
+                    bool(r["view_swapped"]), r["front_turn"], r["back_turn"]
+                ).token(),
             }
         )
     return {"items": items, "ready": sum(i["status"] == "review" for i in items)}
@@ -447,7 +450,8 @@ def dismiss(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
 def dismissed(s: SettingsDep) -> dict:
     with db.session(s.db_path) as conn:
         rows = conn.execute(
-            "SELECT c.id, c.created_at, e.fields_json FROM cards c LEFT JOIN extractions e "
+            "SELECT c.id, c.created_at, c.view_swapped, c.front_turn, c.back_turn, e.fields_json "
+            "FROM cards c LEFT JOIN extractions e "
             "ON e.rowid = (SELECT rowid FROM extractions WHERE card_id = c.id "
             "ORDER BY rowid DESC LIMIT 1) WHERE c.status = 'dismissed' ORDER BY c.id DESC"
         ).fetchall()
@@ -457,7 +461,10 @@ def dismissed(s: SettingsDep) -> dict:
         label = (f.get("full_name") or {}).get("value") or (f.get("organization") or {}).get(
             "value", ""
         )
-        items.append({"card_id": r["id"], "created_at": r["created_at"], "label": label})
+        view = cardview.View(bool(r["view_swapped"]), r["front_turn"], r["back_turn"]).token()
+        items.append(
+            {"card_id": r["id"], "created_at": r["created_at"], "label": label, "view": view}
+        )
     return {"items": items}
 
 
@@ -505,15 +512,38 @@ DERIVED = {"front": "front.crop.jpg", "back": "back.crop.jpg", "thumb": "thumb.j
 
 @router.get("/cards/{card_id}/image/{name}")
 def card_image(card_id: str, name: str, s: SettingsDep) -> FileResponse:
+    """The card as shown: turned upright and with its sides in order (originals untouched)."""
     _card_id(card_id)
     if name not in DERIVED:
         raise HTTPException(404, "not_found")
-    path = s.archive_dir / card_id / DERIVED[name]
-    if not path.is_file():
+    try:
+        path = cardview.image(s, card_id, name)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    if path is None:
         raise HTTPException(404, "not_found")
     return FileResponse(
         path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"}
     )
+
+
+class ViewIn(BaseModel):
+    swap: bool = False
+    turn: Literal["front", "back"] | None = None
+
+
+@router.post("/cards/{card_id}/view")
+def card_view(card_id: str, body: ViewIn, s: SettingsDep, actor: ActorDep) -> dict:
+    """Swap a card's front and back, or turn one side a quarter turn. Display only."""
+    _card_id(card_id)
+    try:
+        v = cardview.change(s, card_id, swap=body.swap, turn=body.turn)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    audit.record(s, actor, "card.view", card_id, swap=body.swap, turn=body.turn or "")
+    return {"view": v.token()}
 
 
 @router.get("/cards/{card_id}/original/{role}")

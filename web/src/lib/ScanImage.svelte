@@ -16,12 +16,23 @@
     fit = 'frame',
     aspect = 1.75,
     lazy = true,
-  }: { src: string; alt?: string; fit?: 'fill' | 'frame' | 'natural'; aspect?: number; lazy?: boolean } = $props()
+    onratio,
+  }: {
+    src: string
+    alt?: string
+    fit?: 'fill' | 'frame' | 'natural'
+    aspect?: number
+    lazy?: boolean
+    onratio?: (r: number) => void
+  } = $props()
 
   let ratio = $state(1.75)
   function loaded(e: Event) {
     const img = e.currentTarget as HTMLImageElement
-    if (img.naturalWidth && img.naturalHeight) ratio = img.naturalWidth / img.naturalHeight
+    if (img.naturalWidth && img.naturalHeight) {
+      ratio = img.naturalWidth / img.naturalHeight
+      onratio?.(ratio)
+    }
   }
 </script>
 
