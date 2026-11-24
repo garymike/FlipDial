@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import logging
+import socket
 import uuid
 from collections.abc import Callable
 from urllib.parse import urlparse
@@ -44,6 +46,28 @@ p { color: #a8a39b; line-height: 1.5; }
 """
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 CSRF_HEADER = "x-flipdial-request"
+
+
+def _host_allowed(host_header: str, settings: Settings) -> bool:
+    """Without sign-in, answer only to addresses, localhost and this computer's own names.
+
+    A website can point a name it controls at 127.0.0.1 (DNS rebinding) and read the
+    answers in the browser as its own. Its name is then in the Host header, so refusing
+    unknown names stops that."""
+    host = host_header.rsplit(":", 1)[0] if not host_header.endswith("]") else host_header
+    host = host.strip("[]").lower().rstrip(".")
+    if not host:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return True  # a name can't be rebound if none is used
+    except ValueError:
+        pass
+    me = socket.gethostname().lower().split(".")[0]
+    allowed = {"localhost", me, f"{me}.local"} | {
+        h.strip().lower() for h in settings.allowed_hosts.split(",") if h.strip()
+    }
+    return host in allowed or host.endswith(".localhost")
 
 
 def _same_origin(request: Request) -> bool:
@@ -116,6 +140,11 @@ def create_app(
         rid = uuid.uuid4().hex[:16]
         token = request_id.set(rid)
         path = request.url.path
+        if settings.auth_mode == "none" and not _host_allowed(
+            request.headers.get("host", ""), settings
+        ):
+            request_id.reset(token)
+            return JSONResponse({"detail": "unknown_host"}, 421)
         try:
             user = None if path in auth.PUBLIC_PATHS else _resolve_user(request, settings)
             request.state.user = user

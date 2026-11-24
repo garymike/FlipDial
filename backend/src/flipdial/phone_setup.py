@@ -13,6 +13,7 @@ import os
 import plistlib
 import secrets
 import ssl
+import threading
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -260,6 +261,85 @@ def profile(settings: Settings) -> bytes:
             "PayloadContent": [payload, *_ca_payloads(settings)],
         }
     )
+
+
+PROFILE_PORT = 5233
+
+
+class _ProfileServer:
+    """When FlipDial only answers on this computer (its default without sign-in), a phone
+    can't open the profile link. This serves that one link on the home network instead:
+    only /phone-profile/<token>, until it's used or 15 minutes pass, then it closes.
+
+    It is plain HTTP: the profile holds no password, but someone able to tamper with
+    traffic on your Wi-Fi during those minutes could swap it. iOS shows what a profile
+    adds before installing it."""
+
+    def __init__(self) -> None:
+        self.server = None
+        self.lock = threading.Lock()
+
+    def start(self, settings: Settings) -> None:
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            server_version = "FlipDial"
+            sys_version = ""
+
+            def do_GET(self) -> None:  # noqa: N802  (the standard library's name)
+                token = self.path.removeprefix("/phone-profile/")
+                if self.path.startswith("/phone-profile/") and use_link(settings, token):
+                    body = profile(settings)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/x-apple-aspen-config")
+                    self.send_header(
+                        "Content-Disposition", 'attachment; filename="FlipDial.mobileconfig"'
+                    )
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    threading.Thread(target=outer.stop, daemon=True).start()
+                    return
+                self.send_error(404)
+
+            def log_message(self, *args) -> None:  # tokens stay out of logs
+                return
+
+        with self.lock:
+            if self.server is not None:
+                return
+            try:
+                self.server = ThreadingHTTPServer(("0.0.0.0", PROFILE_PORT), Handler)  # noqa: S104
+            except OSError as exc:
+                raise SetupError("profile_port_in_use") from exc
+            threading.Thread(target=self.server.serve_forever, daemon=True).start()
+            timer = threading.Timer(LINK_MINUTES * 60, self.stop)
+            timer.daemon = True
+            timer.start()
+
+    def stop(self) -> None:
+        with self.lock:
+            if self.server is not None:
+                self.server.shutdown()
+                self.server.server_close()
+                self.server = None
+
+
+profile_server = _ProfileServer()
+
+
+def network_link_host(settings: Settings) -> str:
+    """The address the phone uses for this computer."""
+    from flipdial import builtin_server
+
+    if settings.phone_server_url:
+        host = urlparse(settings.phone_server_url).hostname or ""
+        if host:
+            return host
+    return builtin_server.local_ip()
 
 
 def qr_svg(text: str) -> str:

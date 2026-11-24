@@ -21,7 +21,7 @@
   let made = $state<{ username: string; password: string } | null>(null)
   // Step 3
   let device = $state<'iphone' | 'android'>('iphone')
-  let link = $state<{ url: string; expires_at: string; qr_svg: string } | null>(null)
+  let link = $state<{ url: string; expires_at: string; qr_svg: string; via: 'flipdial' | 'network' } | null>(null)
   let copied = $state('')
 
   async function load() {
@@ -227,10 +227,10 @@
       <button type="button" aria-pressed={device === 'android'} onclick={() => (device = 'android')}>Android</button>
     </div>
     {#if device === 'iphone'}
-      {#if local}
-        <p class="warn">
-          You opened FlipDial as {location.hostname}, which your phone can't reach. Open it with this computer's address on
-          your network, then make the link.
+      {#if local && !link}
+        <p class="hint">
+          Your phone can't open FlipDial at {location.hostname}, so this computer offers the link on your home network for
+          15 minutes (port 5233). On Windows, this is allowed by the same answer you gave for the contacts server.
         </p>
       {/if}
       {#if !link}
@@ -246,7 +246,11 @@
             <li>If the contacts server uses its own certificate: Settings, General, About, Certificate Trust Settings, and turn it on.</li>
           </ol>
         </div>
-        <p class="hint">The link expires at {new Date(link.expires_at).toLocaleTimeString()} and works once.</p>
+        <p class="hint">
+          The link expires at {new Date(link.expires_at).toLocaleTimeString()} and works once.
+          {#if link.via === 'network'}Install it right away, at home. iOS shows what the profile adds before installing it: one
+            contacts account and, for FlipDial's own server, its certificate.{/if}
+        </p>
         <button type="button" class="secondary" onclick={() => (link = null)}>Make a new link</button>
       {/if}
     {:else}

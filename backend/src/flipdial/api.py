@@ -15,6 +15,7 @@ import time
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Literal
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
@@ -494,11 +495,25 @@ def phone_profile_link(body: ProfileLinkIn, s: SettingsDep, actor: ActorDep) -> 
     """A one-time link (and QR code) for an iPhone to install the contacts account."""
     try:
         token, expires = phone_setup.new_link(s)
+        base, via = body.base, "flipdial"
+        if (urlparse(body.base).hostname or "") in ("localhost", "127.0.0.1", "::1"):
+            # Opened as localhost: the phone can't reach that, so serve the link on the
+            # home network for these 15 minutes instead.
+            host = phone_setup.network_link_host(s)
+            if not host:
+                raise phone_setup.SetupError("no_network_address")
+            phone_setup.profile_server.start(s)
+            base, via = f"http://{host}:{phone_setup.PROFILE_PORT}", "network"
     except phone_setup.SetupError as exc:
         raise _setup_errors(exc) from exc
-    url = f"{body.base}/phone-profile/{token}"
-    audit.record(s, actor, "phone.profile_link")
-    return {"url": url, "expires_at": expires.isoformat(), "qr_svg": phone_setup.qr_svg(url)}
+    url = f"{base}/phone-profile/{token}"
+    audit.record(s, actor, "phone.profile_link", via=via)
+    return {
+        "url": url,
+        "expires_at": expires.isoformat(),
+        "qr_svg": phone_setup.qr_svg(url),
+        "via": via,
+    }
 
 
 @router.get("/phone/inbox")

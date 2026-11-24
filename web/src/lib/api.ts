@@ -505,7 +505,11 @@ export const api = {
       password,
     }),
   phoneProfileLink: (base: string) =>
-    call<{ url: string; expires_at: string; qr_svg: string }>('POST', '/api/phone/profile-link', { base }),
+    call<{ url: string; expires_at: string; qr_svg: string; via: 'flipdial' | 'network' }>(
+      'POST',
+      '/api/phone/profile-link',
+      { base },
+    ),
   phoneInbox: () => call<{ items: PhoneInboxItem[] }>('GET', '/api/phone/inbox'),
   phoneInboxAction: (id: number, action: 'accept' | 'dismiss') =>
     call<{ uid: string }>('POST', `/api/phone/inbox/${id}/${action}`),
@@ -632,6 +636,8 @@ export function describe(err: unknown): string {
     book_exists: 'An address book with that name is already there. Pick it from the list instead.',
     set_in_settings_file: 'The phone book is set in the settings file (FLIPDIAL_PHONE_ADDRESSBOOK). Change it there.',
     username_required: "Enter the phone's user name first.",
+    profile_port_in_use: 'Port 5233 on this computer is in use, so the link for the iPhone can’t be offered. Close what uses it and try again.',
+    no_network_address: "FlipDial couldn't find this computer's address on your network.",
     no_bundled_server: "FlipDial's own contacts server isn't set up here.",
     port_in_use: 'Something else on this computer is already using port 5232. Stop it, or set up that server in the settings file instead.',
     bad_address: 'Enter just a name or address, like 192.168.1.20 or mycomputer.local.',

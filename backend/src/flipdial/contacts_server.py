@@ -18,9 +18,12 @@ bcrypt hashes are stored.
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
 import re
 import secrets
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -29,6 +32,8 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+
+log = logging.getLogger("flipdial.contacts_server")
 
 FLIPDIAL_USER = "flipdial"
 PORT = 5232
@@ -103,6 +108,35 @@ def _password() -> str:
 
 def _hash(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
+
+
+def lock_down(folder: Path) -> None:
+    """Make the folder readable by this account only (plus Windows' own SYSTEM and
+    Administrators). On Windows, file modes like 0600 aren't enforced; access comes from the
+    folder's permissions, and folders made outside the user's profile (C:\\something) are
+    readable by every account on the computer."""
+    if sys.platform != "win32":
+        folder.chmod(0o700)
+        return
+    import getpass
+
+    user = getpass.getuser()
+    icacls = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "icacls.exe"
+    result = subprocess.run(  # noqa: S603  (fixed program; the path and name are arguments)
+        [
+            str(icacls),
+            str(folder),
+            "/inheritance:r",
+            "/grant:r",
+            f"{user}:(OI)(CI)F",
+            "*S-1-5-18:(OI)(CI)F",  # SYSTEM
+            "*S-1-5-32-544:(OI)(CI)F",  # Administrators
+        ],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        log.warning("couldn't limit access to the contacts server folder")
 
 
 def _private(path: Path, data: bytes) -> None:
@@ -222,6 +256,7 @@ def init(folder: Path, hosts: list[str], config_dir: str | None = None) -> dict[
     folder.mkdir(parents=True, exist_ok=True)
     if (folder / "users").exists():
         raise ServerSetupError("already_set_up")
+    lock_down(folder)  # before any secret is written into it
     where = config_dir or str(folder.resolve())
     (folder / "config").write_text(CONFIG.format(port=PORT, dir=where))
     (folder / "rights").write_text(RIGHTS)

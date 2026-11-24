@@ -23,6 +23,8 @@ FlipDial then runs the server as a separate process alongside itself, starts it 
 - **The certificate on your phone.** The phone is asked to trust the server's certificate authority once. It is limited by name constraints to this server's names, and its private key is deleted as soon as the certificate is made, so it can't vouch for any other website.
 - **Others on your Wi-Fi** can reach the server but need a password to see anything. Don't run it on a network you don't trust, and never forward port 5232 on your router.
 - **Backups:** the contacts are plain files in `contacts-server/` in FlipDial's data folder. FlipDial's backup includes every contact.
+- **Setting up an iPhone** while FlipDial is opened as localhost: the one-time profile link is offered on your home network (port 5233) for up to 15 minutes, then closes. It holds no password. Install it right away, at home.
+- **Windows file permissions:** the server's folder is limited to your account (and Windows' own SYSTEM and Administrators). If FlipDial's data folder is outside your user profile (for example C:\_dev\flipdial-data), other accounts on the computer may be able to read the rest of it; keep it in your profile or limit it the same way.
 - **Turning it off** stops it and phones stop syncing. The contacts stay in its folder and come back when you turn it on again.
 
 ## Run it separately (for power users)

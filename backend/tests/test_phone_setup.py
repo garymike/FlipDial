@@ -123,3 +123,26 @@ def test_server_certificate_goes_into_the_profile(wiz, tmp_path):
     prof = plistlib.loads(phone_setup.profile(s))
     [root] = [p for p in prof["PayloadContent"] if p["PayloadType"] == "com.apple.security.root"]
     assert root["PayloadContent"] == cert.public_bytes(serialization.Encoding.DER)
+
+
+def test_profile_served_on_the_network_when_opened_as_localhost(wiz, monkeypatch):
+    import httpx
+    from conftest import _free_port
+
+    s, api = wiz
+    monkeypatch.setattr(phone_setup, "PROFILE_PORT", _free_port())
+    name = "Phone " + uuid.uuid4().hex[:6]
+    api.post("/api/phone/setup/book", json={"name": name, "create": True}, headers=H)
+    api.put("/api/phone/setup/username", json={"username": "phone-user"}, headers=H)
+    s.phone_server_url = "https://127.0.0.1:5232/"
+    link = api.post(
+        "/api/phone/profile-link", json={"base": "http://localhost:8080"}, headers=H
+    ).json()
+    assert link["via"] == "network"
+    assert link["url"].startswith(f"http://127.0.0.1:{phone_setup.PROFILE_PORT}/phone-profile/")
+    try:
+        assert httpx.get(link["url"].replace("/phone-profile/", "/other/")).status_code == 404
+        got = httpx.get(link["url"])
+        assert got.status_code == 200 and b"com.apple.carddav.account" in got.content
+    finally:
+        phone_setup.profile_server.stop()

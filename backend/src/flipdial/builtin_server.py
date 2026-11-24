@@ -31,6 +31,7 @@ log = logging.getLogger("flipdial.builtin_server")
 
 ON_KEY = "builtin_server"
 HOST_KEY = "builtin_server_host"
+LOG_MAX = 5 * 1024 * 1024
 PASSWORD_FILE = "flipdial-password"  # noqa: S105  (a file name, not a password)
 
 
@@ -205,7 +206,10 @@ class Supervisor:
 
     def _launch(self) -> None:
         assert self.folder is not None  # noqa: S101  (set before the thread starts)
-        logfile = open(self.folder / "server.log", "ab")  # noqa: SIM115  (kept open by the child)
+        path = self.folder / "server.log"
+        if path.is_file() and path.stat().st_size > LOG_MAX:
+            path.replace(path.with_suffix(".log.1"))  # keep one older log, so it can't grow forever
+        logfile = open(path, "ab")  # noqa: SIM115  (kept open by the child)
         self.proc = subprocess.Popen(  # noqa: S603  (fixed arguments)
             [sys.executable, "-m", "radicale", "--config", str(self.folder / "config")],
             stdout=logfile,
