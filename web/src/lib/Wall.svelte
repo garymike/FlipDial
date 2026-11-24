@@ -142,6 +142,9 @@
         </button>
       {/each}
       <a class="deck phone-only" href={href({ name: 'transfer' })}>Import and export</a>
+      {#if data?.trashed}
+        <a class="trashlink" href={href({ name: 'trash' })}>Trash <span class="n">{data.trashed}</span></a>
+      {/if}
     </section>
     {#if dupes}
       <section class="panel">
@@ -220,6 +223,18 @@
 </div>
 
 <style>
+  .trashlink {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: var(--ash);
+    text-decoration: none;
+  }
+  .trashlink:hover {
+    color: var(--bone);
+  }
   .pane-wrap {
     flex: 0 1 460px;
     min-width: 360px;
@@ -415,6 +430,7 @@
   li {
     display: flex;
     flex-direction: column;
+    justify-content: flex-end; /* cards of other shapes line up at the bottom, names in a row */
     gap: 10px;
   }
   .tile {

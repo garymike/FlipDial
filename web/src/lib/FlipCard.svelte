@@ -19,11 +19,13 @@
   )
   const back = $derived(contact.card_id && contact.has_back ? api.image(contact.card_id, 'back', contact.card_view) : null)
 
-  // adapt: the frame takes the shape of the side shown, so a vertical card is shown tall
-  // (the reading pane). Elsewhere cards keep one shape and a tall card sits upright inside.
+  // The frame takes the shape of the side shown, so a wider or squarer card fills the width
+  // with no bars. A tall card does too where `adapt` is set (the reading pane); elsewhere it
+  // stands upright inside the usual shape, with nothing drawn around it.
   let frontRatio = $state(1.75)
   let backRatio = $state(1.75)
-  const frameRatio = $derived(adapt ? (flipped && back ? backRatio : frontRatio) : 1.75)
+  const shownRatio = $derived(flipped && back ? backRatio : frontRatio)
+  const frameRatio = $derived(adapt || shownRatio >= 1 ? shownRatio : 1.75)
 
   // A scan with no back: show its details on a back in the front's main color.
   let tint = $state<CardColor | null>(null)
@@ -45,16 +47,16 @@
 
 <div class="frame" class:adapt style:aspect-ratio={frameRatio}>
   <div class="inner" class:flipped>
-    <div class="face">
+    <div class="face" class:scan={!!front}>
       {#if front}
-        <ScanImage src={front} alt={`Front of ${contact.full_name}'s card`} fit="fill" onratio={(r) => (frontRatio = r)} />
+        <ScanImage src={front} alt={`Front of ${contact.full_name}'s card`} fit="fill" card onratio={(r) => (frontRatio = r)} />
       {:else}
         <HouseCard {contact} />
       {/if}
     </div>
-    <div class="face backface">
+    <div class="face backface" class:scan={!!back}>
       {#if back}
-        <ScanImage src={back} alt={`Back of ${contact.full_name}'s card`} fit="fill" onratio={(r) => (backRatio = r)} />
+        <ScanImage src={back} alt={`Back of ${contact.full_name}'s card`} fit="fill" card onratio={(r) => (backRatio = r)} />
       {:else}
         <HouseCard {contact} side="back" {tint} />
       {/if}
@@ -93,6 +95,13 @@
     background: #111214;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
   }
+  /* A scan draws its own rounded edge and shadow, hugging the picture, so a card of another
+     shape never shows a dark box around it. */
+  .face.scan {
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
   .backface {
     transform: rotateY(180deg);
   }
@@ -107,7 +116,14 @@
     .inner.flipped {
       transform: none;
     }
-    .backface {
+    /* A scan draws its own rounded edge and shadow, hugging the picture, so a card of another
+     shape never shows a dark box around it. */
+  .face.scan {
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .backface {
       transform: none;
       opacity: 0;
     }

@@ -160,6 +160,18 @@ MIGRATIONS: list[str] = [
     ALTER TABLE cards ADD COLUMN front_turn INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE cards ADD COLUMN back_turn INTEGER NOT NULL DEFAULT 0;
     """,
+    # 13: Trash. A trashed contact is removed from the contacts server and kept here (with
+    # its scans) so it can be restored; after TRASH_DAYS it is forgotten for good.
+    """
+    CREATE TABLE trash (
+        uid           TEXT PRIMARY KEY,
+        vcard         TEXT NOT NULL,
+        full_name     TEXT NOT NULL,
+        organization  TEXT NOT NULL,
+        card_id       TEXT,
+        trashed_at    TEXT NOT NULL
+    );
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")
