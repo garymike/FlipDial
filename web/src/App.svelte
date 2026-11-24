@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, DEMO } from './lib/api'
+  import { api, DEMO, describe, type UpdateInfo } from './lib/api'
   import ContactDetail from './lib/ContactDetail.svelte'
   import Dial from './lib/Dial.svelte'
   import Duplicates from './lib/Duplicates.svelte'
@@ -38,6 +38,67 @@
       .then((s) => (broken = s.items.find((i) => i.state === 'fail')?.label ?? null))
       .catch(() => (broken = null))
   })
+
+  // New release banner, and the one-click update.
+  let update = $state<UpdateInfo | null>(null)
+  let updating = $state<'off' | 'running' | 'slow' | 'rolledback' | 'error'>('off')
+  let updateError = $state('')
+  const dismissKey = (tag: string) => `flipdial.update.later.${tag}`
+  $effect(() => {
+    api
+      .updateInfo()
+      .then((u) => {
+        let later = false
+        try {
+          later = !!u.release && localStorage.getItem(dismissKey(u.release.tag)) === '1'
+        } catch {
+          /* storage unavailable */
+        }
+        update = u.available && !later ? u : null
+      })
+      .catch(() => (update = null))
+  })
+
+  function later() {
+    if (!update?.release) return
+    try {
+      localStorage.setItem(dismissKey(update.release.tag), '1')
+    } catch {
+      /* storage unavailable */
+    }
+    update = null
+  }
+
+  async function updateNow() {
+    if (!update) return
+    const from = update.current
+    try {
+      await api.startUpdate()
+    } catch (e) {
+      updateError = describe(e)
+      updating = 'error'
+      return
+    }
+    updating = 'running'
+    const started = Date.now()
+    let sawDown = false
+    const timer = setInterval(async () => {
+      try {
+        const r = await fetch('/healthz', { cache: 'no-store' })
+        const v = (await r.json()).version as string
+        if (v !== from) {
+          clearInterval(timer)
+          location.reload()
+        } else if (sawDown) {
+          clearInterval(timer)
+          updating = 'rolledback'
+        }
+      } catch {
+        sawDown = true // restarting
+      }
+      if (Date.now() - started > 10 * 60 * 1000 && updating === 'running') updating = 'slow'
+    }, 3000)
+  }
 
   async function signOut() {
     try {
@@ -82,6 +143,46 @@
   {/if}
 </header>
 
+{#if update?.release}
+  <div class="update-bar" role="status">
+    <span>
+      <strong>FlipDial {update.release.tag} is available.</strong> You have {update.current}.
+      <a href={update.release.url} target="_blank" rel="noopener noreferrer">What's new</a>
+    </span>
+    {#if update.can_update}
+      <span class="update-actions">
+        <button type="button" class="link-btn" onclick={later}>Later</button>
+        <button type="button" class="update-btn" onclick={updateNow}>Update now</button>
+      </span>
+    {:else}
+      <span class="update-how">
+        {update.install === 'docker' ? 'Pull the new image to update.' : 'Run update to install it.'}
+        <button type="button" class="link-btn" onclick={later}>Later</button>
+      </span>
+    {/if}
+  </div>
+{/if}
+
+{#if updating !== 'off'}
+  <div class="updating" role="alertdialog" aria-modal="true" aria-labelledby="updating-title">
+    <div class="updating-box">
+      {#if updating === 'running' || updating === 'slow'}
+        <h2 id="updating-title">Updating FlipDial…</h2>
+        <p>Checking the release signature, installing, and restarting. This takes a minute or two, and this page reloads by itself.</p>
+        {#if updating === 'slow'}<p>This is taking longer than expected. Details are in <code>logs\update.log</code> in your data folder.</p>{/if}
+      {:else if updating === 'rolledback'}
+        <h2 id="updating-title">The update didn't finish</h2>
+        <p>FlipDial is back on the version you had. Details are in <code>logs\update.log</code> in your data folder.</p>
+        <button type="button" class="update-btn" onclick={() => location.reload()}>OK</button>
+      {:else}
+        <h2 id="updating-title">Couldn't start the update</h2>
+        <p>{updateError}</p>
+        <button type="button" class="update-btn" onclick={() => (updating = 'off')}>OK</button>
+      {/if}
+    </div>
+  </div>
+{/if}
+
 {#if broken && router.route.name !== 'setup'}
   <p class="attention" role="status">
     FlipDial needs attention: {broken}. <a href={href({ name: 'setup' })}>Open the setup check</a>
@@ -112,6 +213,72 @@
 {/if}
 
 <style>
+  .update-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 20px;
+    margin: 0;
+    padding: 10px 32px;
+    background: #2a2416;
+    border-bottom: 1px solid #6a5426;
+    font-size: 14px;
+  }
+  .update-bar a {
+    margin-left: 6px;
+  }
+  .update-actions,
+  .update-how {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .update-how {
+    color: var(--ash);
+  }
+  .update-btn {
+    min-height: 36px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--amber);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .link-btn {
+    border: 0;
+    background: transparent;
+    color: var(--ash);
+    font: inherit;
+    cursor: pointer;
+  }
+  .updating {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(10, 11, 13, 0.82);
+  }
+  .updating-box {
+    max-width: 440px;
+    padding: 28px;
+    border-radius: 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    line-height: 1.5;
+  }
+  .updating-box h2 {
+    margin: 0 0 8px;
+    font-family: var(--font-display);
+  }
+  .updating-box p {
+    color: #d6d1c9;
+  }
   .attention {
     margin: 0;
     padding: 10px 32px;

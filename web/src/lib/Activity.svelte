@@ -19,6 +19,8 @@
     'export.csv': 'Exported contacts (CSV)',
     'export.backup': 'Downloaded a full backup',
     restore: 'Restored a backup',
+    'update.start': 'Started an update',
+    'card.retry': 'Asked to read cards again',
     sign_in: 'Signed in',
     sign_out: 'Signed out',
     'sign_in.denied': 'Sign-in refused',

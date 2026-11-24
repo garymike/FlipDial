@@ -15,6 +15,7 @@ dependencies = [
     "httpx>=0.28",
     "defusedxml>=0.7",
     "pyjwt[crypto]>=2.15",
+    "packaging>=26",
 ]
 
 [project.optional-dependencies]

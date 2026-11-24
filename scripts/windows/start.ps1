@@ -41,6 +41,9 @@ function Start-Part([string]$Command, [string]$Name) {
 }
 
 Write-Step 'Starting FlipDial'
+# Lets the app offer one-click updates through this install's own update script.
+$env:FLIPDIAL_INSTALL = 'windows-scripts'
+$env:FLIPDIAL_UPDATER = Join-Path $PSScriptRoot 'update.ps1'
 $server = Start-Part 'serve' 'server'
 $worker = Start-Part 'worker' 'worker'
 @{ server = $server.Id; worker = $worker.Id } | ConvertTo-Json | Set-Content $PidFile

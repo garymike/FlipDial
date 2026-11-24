@@ -6,6 +6,7 @@ Secrets use SecretStr so they never appear in reprs or logs.
 from __future__ import annotations
 
 import ipaddress
+import re
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
@@ -66,6 +67,10 @@ class Settings(BaseSettings):
     trusted_proxies: str = "127.0.0.1/32,::1/128"  # only these addresses may set the header
     cookie_secure: bool | None = None  # default: on when public_url uses https
 
+    # Updates: check GitHub once a day for a newer published release (sends nothing else)
+    update_check: bool = True
+    update_repo: str = "garymike/FlipDial"
+
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_format: Literal["json", "text"] = "json"
@@ -104,6 +109,8 @@ class Settings(BaseSettings):
                 "model_url points outside the local network. Card images would leave your "
                 "network. Set FLIPDIAL_ALLOW_REMOTE_MODEL=true only if you intend that."
             )
+        if not re.match(r"^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", self.update_repo):
+            raise ValueError("FLIPDIAL_UPDATE_REPO must look like owner/repository")
         self._check_auth()
         return self
 

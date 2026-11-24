@@ -117,6 +117,8 @@ export async function handle(method: string, path: string, body?: unknown): Prom
   const route = `${method} /${seg[0] ?? ''}`
 
   switch (route) {
+    case 'GET /update':
+      return { current: 'demo', enabled: false, available: false, release: null, install: 'demo', can_update: false }
     case 'GET /status':
       return {
         state: 'ok',
