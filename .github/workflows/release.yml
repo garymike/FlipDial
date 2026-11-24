@@ -34,7 +34,7 @@ jobs:
     name: Check version and tag
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the tag when started from the Run workflow button
+      contents: read
     outputs:
       tag: ${{ steps.version.outputs.tag }}
     steps:
@@ -61,25 +61,49 @@ jobs:
           got=$(echo "$tag" | sed -E 's/^v//; s/[-.]?(rc|a|b)\.?([0-9]+)$/\1\2/')
           [ "$want" = "$got" ] || { echo "$tag does not match version $want in backend/pyproject.toml"; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-      - name: Create the tag
+      - name: Not released already
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists. Pick a new version."; exit 1
+          if gh api "repos/$GITHUB_REPOSITORY/releases" --paginate -q '.[].tag_name' | grep -qx "$TAG"; then
+            echo "There is already a release for $TAG. Pick a new version."; exit 1
           fi
-          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$GITHUB_SHA"
 
   checks:
     name: Checks
     needs: tag
     uses: ./.github/workflows/ci.yml
 
+  make-tag:
+    # Only after the checks pass, so a failed run can simply be run again with the same
+    # version. A tag left by an earlier failed run (no release yet) is moved here.
+    name: Create the tag
+    needs: [tag, checks]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: |
+          # Checked again here: this token can also see draft releases.
+          if gh api "repos/$GITHUB_REPOSITORY/releases" --paginate -q '.[].tag_name' | grep -qx "$TAG"; then
+            echo "There is already a release (or draft) for $TAG. Pick a new version."; exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f "sha=$GITHUB_SHA" -F force=true
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$GITHUB_SHA"
+          fi
+
   image:
     name: Container image
-    needs: [tag, checks]
+    needs: [tag, checks, make-tag]
+    if: ${{ !cancelled() && needs.checks.result == 'success' && (needs.make-tag.result == 'success' || needs.make-tag.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
