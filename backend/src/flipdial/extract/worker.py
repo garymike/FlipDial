@@ -11,7 +11,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flipdial import db
+from flipdial import cardview, db
 from flipdial.config import Settings
 from flipdial.extract.client import ModelError, Reader, make_reader
 from flipdial.extract.progress import Progress
@@ -60,7 +60,7 @@ class Extractor:
             self._reread(row["card_id"], bool(row["back_blank"]))
 
     def _reread(self, card_id: str, back_blank: bool) -> None:
-        images = card_images(self.s.archive_dir, card_id, back_blank)
+        images = cardview.reading_images(self.s, card_id, back_blank)
         progress = Progress(self.s, card_id)
         try:
             if getattr(self.reader, "streams", False):
@@ -90,7 +90,7 @@ class Extractor:
         log.info("card read again", extra={"card_id": card_id})
 
     def _extract(self, card_id: str, back_blank: bool, attempts: int) -> bool:
-        images = card_images(self.s.archive_dir, card_id, back_blank)
+        images = cardview.reading_images(self.s, card_id, back_blank)
         started = time.monotonic()
         progress = Progress(self.s, card_id)
         try:

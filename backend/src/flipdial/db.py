@@ -154,6 +154,12 @@ MIGRATIONS: list[str] = [
         error_detail  TEXT
     );
     """,
+    # 12: how a card is shown (display only): front and back swapped, quarter turns per side
+    """
+    ALTER TABLE cards ADD COLUMN view_swapped INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE cards ADD COLUMN front_turn INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE cards ADD COLUMN back_turn INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

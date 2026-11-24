@@ -191,7 +191,7 @@
                   {#each [p.a, p.b] as c (c.uid)}
                     <label class:chosen={showCard === c.card_id}>
                       <input type="radio" bind:group={showCard} value={c.card_id} />
-                      <span class="pickimg"><ScanImage src={api.image(c.card_id ?? '', 'thumb')} alt={`Card from ${c.full_name}`} /></span>
+                      <span class="pickimg"><ScanImage src={api.image(c.card_id ?? '', 'thumb', c.card_view)} alt={`Card from ${c.full_name}`} /></span>
                     </label>
                   {/each}
                 </div>

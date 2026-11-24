@@ -134,6 +134,11 @@ class CardFields(BaseModel):
     socials: list[Social] = Field(default_factory=list, max_length=MAX_ITEMS)
     address: TextField = TextField()
     address_parts: AddressParts = AddressParts()
+    sideways: bool = Field(
+        default=False,
+        description="True if the text on the front runs up or down the image instead of "
+        "across, because the card was scanned turned on its side.",
+    )
     about: TextField = TextField()  # printed description: tagline, services
 
     def address_record(self) -> dict[str, str]:
@@ -188,6 +193,8 @@ def _coerce(raw: Any) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if isinstance(raw.get("text"), str):
         out["text"] = raw["text"]
+    if isinstance(raw.get("sideways"), bool):
+        out["sideways"] = raw["sideways"]
     if isinstance(raw.get("address_parts"), dict):
         out["address_parts"] = raw["address_parts"]
     addr = raw.get("address")
@@ -275,6 +282,8 @@ def validate(raw: dict[str, Any]) -> Extraction:
             flags.add(f"low_confidence:{name}")
     if not fields.full_name.value and not fields.organization.value:
         flags.add("no_name_or_company")
+    if fields.sideways:
+        flags.add("sideways:front")  # the person turns it; the model can't tell which way
     if dropped:
         flags.add("values_dropped")
     return Extraction(fields=fields, flags=sorted(flags), dropped=dropped)

@@ -91,6 +91,19 @@
     return v ? { ...contact, card_id: v.card_id, has_back: v.has_back } : contact
   })
 
+  // Turn the side shown, or swap front and back. Display only; the scan files never change.
+  async function changeView(change: { swap?: boolean; turn?: 'front' | 'back' }) {
+    if (!contact?.card_id) return
+    try {
+      const r = await api.cardView(contact.card_id, change)
+      contact = { ...contact, card_view: r.view }
+      if (change.swap) flipped = false
+      onchange?.(contact)
+    } catch (e) {
+      error = describe(e)
+    }
+  }
+
   async function useCard(cardId: string) {
     if (!contact) return
     try {
@@ -271,9 +284,17 @@
     {#if showCard && shown}
       <section class="card" aria-label="Card">
         <button type="button" class="tile" aria-label={flipped ? 'Show the front' : 'Show the back'} onclick={() => (flipped = !flipped)}>
-          <FlipCard contact={shown} {flipped} size="large" />
+          <FlipCard contact={shown} {flipped} size="large" adapt />
         </button>
-        {#if shown.card_id}<p class="fliphint">Click the card to flip it.</p>{/if}
+        {#if shown.card_id}
+          <div class="cardbar">
+            <span class="fliphint">Click the card to flip it.</span>
+            {#if !viewing}
+              <button type="button" class="link" onclick={() => changeView({ turn: flipped ? 'back' : 'front' })}>Rotate</button>
+              {#if shown.has_back}<button type="button" class="link" onclick={() => changeView({ swap: true })}>Swap front and back</button>{/if}
+            {/if}
+          </div>
+        {/if}
         {#if viewing && viewing !== contact.card_id}
           <div class="older">
             <span>You're looking at another of their cards.</span>
@@ -344,7 +365,7 @@
                 flipped = false
               }}
             >
-              <ScanImage src={api.image(sc.card_id, 'thumb')} fit="fill" />
+              <ScanImage src={api.image(sc.card_id, 'thumb', sc.view)} fit="fill" />
               {#if sc.card_id === contact.card_id}<span class="tag">Shown</span>{/if}
             </button>
           {/each}
@@ -614,6 +635,23 @@
     background: rgba(0, 0, 0, 0.7);
     font-size: 10px;
     color: #fff;
+  }
+  .cardbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px 14px;
+  }
+  .cardbar .link {
+    min-height: 32px;
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    color: var(--amber);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
   }
   .fliphint {
     margin: 0;

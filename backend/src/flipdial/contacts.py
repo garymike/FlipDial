@@ -17,6 +17,7 @@ from flipdial.carddav.client import CardDAVClient, CardDAVError
 from flipdial.carddav.contact import ReviewedContact, apply
 from flipdial.carddav.typed import read_addresses, read_typed
 from flipdial.carddav.vcard import VCard, VCardError, split_unescaped, unescape
+from flipdial.cardview import View
 from flipdial.config import Settings
 from flipdial.socials import normalize as normalize_social
 from flipdial.socials import profile_url
@@ -46,6 +47,7 @@ class ContactView:
     source: str = ""
     card_id: str | None = None  # set when the contact has a scan
     has_back: bool = False
+    card_view: str = ""  # how the scan is shown (turns, swapped sides); see cardview.py
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -148,7 +150,8 @@ def _cards_by_id(settings: Settings) -> dict[str, dict]:
         return {
             r["id"]: dict(r)
             for r in conn.execute(
-                "SELECT id, has_back, back_blank FROM cards WHERE status = 'approved'"
+                "SELECT id, has_back, back_blank, view_swapped, front_turn, back_turn "
+                "FROM cards WHERE status = 'approved'"
             )
         }
 
@@ -173,6 +176,9 @@ def _with_scan(v: ContactView, cards: dict[str, dict]) -> ContactView:
         v.card_id = None  # scan not on this FlipDial instance
     else:
         v.has_back = bool(info["has_back"]) and not info["back_blank"]
+        v.card_view = View(
+            bool(info["view_swapped"]), info["front_turn"], info["back_turn"]
+        ).token()
     return v
 
 
@@ -216,7 +222,8 @@ def scans_for(settings: Settings, uid: str) -> list[dict[str, Any]]:
     """Every scanned card linked to a contact, newest first."""
     with db.session(settings.db_path) as conn:
         rows = conn.execute(
-            "SELECT id, created_at, has_back, back_blank FROM cards "
+            "SELECT id, created_at, has_back, back_blank, view_swapped, front_turn, back_turn "
+            "FROM cards "
             "WHERE vcard_uid = ? AND status = 'approved' ORDER BY rowid DESC",
             (uid,),
         ).fetchall()
@@ -225,6 +232,7 @@ def scans_for(settings: Settings, uid: str) -> list[dict[str, Any]]:
             "card_id": r["id"],
             "created_at": r["created_at"],
             "has_back": bool(r["has_back"]) and not r["back_blank"],
+            "view": View(bool(r["view_swapped"]), r["front_turn"], r["back_turn"]).token(),
         }
         for r in rows
     ]

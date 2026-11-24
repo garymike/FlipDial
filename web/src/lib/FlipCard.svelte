@@ -10,12 +10,20 @@
     contact,
     flipped = false,
     size = 'thumb',
-  }: { contact: Contact; flipped?: boolean; size?: 'thumb' | 'large' } = $props()
+    adapt = false,
+  }: { contact: Contact; flipped?: boolean; size?: 'thumb' | 'large'; adapt?: boolean } = $props()
+
 
   const front = $derived(
-    contact.card_id ? api.image(contact.card_id, size === 'large' ? 'front' : 'thumb') : null,
+    contact.card_id ? api.image(contact.card_id, size === 'large' ? 'front' : 'thumb', contact.card_view) : null,
   )
-  const back = $derived(contact.card_id && contact.has_back ? api.image(contact.card_id, 'back') : null)
+  const back = $derived(contact.card_id && contact.has_back ? api.image(contact.card_id, 'back', contact.card_view) : null)
+
+  // adapt: the frame takes the shape of the side shown, so a vertical card is shown tall
+  // (the reading pane). Elsewhere cards keep one shape and a tall card sits upright inside.
+  let frontRatio = $state(1.75)
+  let backRatio = $state(1.75)
+  const frameRatio = $derived(adapt ? (flipped && back ? backRatio : frontRatio) : 1.75)
 
   // A scan with no back: show its details on a back in the front's main color.
   let tint = $state<CardColor | null>(null)
@@ -26,7 +34,7 @@
       return
     }
     let live = true
-    cardColor(api.image(id, 'thumb')).then((c) => {
+    cardColor(api.image(id, 'thumb', contact.card_view)).then((c) => {
       if (live) tint = c
     })
     return () => {
@@ -35,18 +43,18 @@
   })
 </script>
 
-<div class="frame">
+<div class="frame" class:adapt style:aspect-ratio={frameRatio}>
   <div class="inner" class:flipped>
     <div class="face">
       {#if front}
-        <ScanImage src={front} alt={`Front of ${contact.full_name}'s card`} fit="fill" />
+        <ScanImage src={front} alt={`Front of ${contact.full_name}'s card`} fit="fill" onratio={(r) => (frontRatio = r)} />
       {:else}
         <HouseCard {contact} />
       {/if}
     </div>
     <div class="face backface">
       {#if back}
-        <ScanImage src={back} alt={`Back of ${contact.full_name}'s card`} fit="fill" />
+        <ScanImage src={back} alt={`Back of ${contact.full_name}'s card`} fit="fill" onratio={(r) => (backRatio = r)} />
       {:else}
         <HouseCard {contact} side="back" {tint} />
       {/if}
@@ -60,6 +68,11 @@
     width: 100%;
     aspect-ratio: 1.75;
     perspective: 1200px;
+  }
+  .frame.adapt {
+    max-height: 70vh;
+    margin: 0 auto;
+    transition: aspect-ratio 0.3s ease;
   }
   .inner {
     position: relative;

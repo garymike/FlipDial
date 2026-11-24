@@ -243,6 +243,8 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       }
       return { items: review, ready: review.length }
     }
+    case 'POST /cards':
+      throw new ApiError(403, 'demo_readonly') // the demo's cards are drawings, not scans
     case 'POST /review': {
       const item = review.find((r) => r.card_id === seg[1])
       if (!item) throw new ApiError(404, 'not_found')

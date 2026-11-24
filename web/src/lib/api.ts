@@ -95,6 +95,7 @@ export interface Contact {
   source: string
   card_id: string | null
   has_back: boolean
+  card_view?: string // how the scan is shown: turns and swapped sides
 }
 
 /** "Read again" on a saved contact. `proposed` is only a suggestion until applied. */
@@ -113,6 +114,7 @@ export interface Scan {
   card_id: string
   created_at: string
   has_back: boolean
+  view?: string
 }
 
 export interface ContactList {
@@ -153,6 +155,7 @@ export interface ReviewItem {
   error: string | null
   error_detail?: string
   progress?: ReadProgress | null
+  view?: string
 }
 
 export interface ReadProgress {
@@ -374,7 +377,10 @@ export const api = {
   status: () => call<SetupStatus>('GET', '/api/status'),
   retry: (cardId: string) => call<{ retrying: number }>('POST', `/api/review/${cardId}/retry`),
   dismissedCards: () =>
-    call<{ items: { card_id: string; created_at: string; label: string }[] }>('GET', '/api/review/dismissed'),
+    call<{ items: { card_id: string; created_at: string; label: string; view?: string }[] }>(
+      'GET',
+      '/api/review/dismissed',
+    ),
   restoreCard: (cardId: string) => call<{ status: string }>('POST', `/api/review/${cardId}/restore`),
   deleteCard: (cardId: string) => call<{ deleted: string }>('DELETE', `/api/review/${cardId}`),
   retryAll: () => call<{ retrying: number }>('POST', '/api/review/retry'),
@@ -386,7 +392,11 @@ export const api = {
     call<{ entries: AuditEntry[] }>('GET', `/api/audit${before ? `?before=${before}` : ''}`),
   auditVerify: () =>
     call<{ ok: boolean; entries: number; broken_at: number | null; head: string }>('GET', '/api/audit/verify'),
-  image: (cardId: string, side: 'front' | 'back' | 'thumb') => urls.image(cardId, side),
+  // `view` (turns, swapped sides) is in the address so a changed card is never shown from cache.
+  image: (cardId: string, side: 'front' | 'back' | 'thumb', view = '') =>
+    urls.image(cardId, side) + (view && !DEMO ? `?v=${encodeURIComponent(view)}` : ''),
+  cardView: (cardId: string, change: { swap?: boolean; turn?: 'front' | 'back' }) =>
+    call<{ view: string }>('POST', `/api/cards/${cardId}/view`, change),
   original: (cardId: string, role: 'front' | 'back' | 'scan') => urls.original(cardId, role),
 }
 
@@ -443,6 +453,7 @@ export function describe(err: unknown): string {
     not_dismissed: 'That card is already back in Review.',
     cannot_delete: 'Saved cards are removed with Forget on the contact page.',
     bad_mapping: 'The column choices do not match the file. Pick the file again.',
+    no_back: 'This card has no back to swap with.',
     no_scan: "This contact has no scanned card to read.",
     not_this_contacts_card: "That card isn't linked to this contact.",
     not_found: "That contact isn't in your address book any more. It may have been deleted or merged.",
