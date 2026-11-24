@@ -10,6 +10,20 @@ $EnvFile = Join-Path $Backend '.env'
 
 function Write-Step([string]$Text) { Write-Host "==> $Text" -ForegroundColor Cyan }
 
+function Start-Outside([string]$CommandLine) {
+    # Starts a program through Windows itself (WMI), hidden. It isn't a child of this
+    # process and isn't in its job, so stopping FlipDial can't stop it too. (FlipDial runs
+    # under uv, which keeps it in a job that Windows ends along with uv; a program started
+    # the usual way from inside FlipDial would be ended with it.)
+    $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]0 }
+    $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+        CommandLine               = $CommandLine
+        ProcessStartupInformation = $startup
+    }
+    if ($r.ReturnValue -ne 0) { throw "Windows couldn't start it (code $($r.ReturnValue))." }
+    return $r.ProcessId
+}
+
 function Stop-WithError([string]$Text) {
     Write-Host $Text -ForegroundColor Red
     exit 1

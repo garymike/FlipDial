@@ -140,6 +140,33 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errs) | Out-Null
             if ($errs) { $errs; exit 1 }
           }
+      - name: Updater outlives FlipDial
+        # Update now starts the updater from inside FlipDial, which then stops FlipDial. This
+        # copies that: a program started from Python under uv, then uv's tree is killed.
+        shell: powershell
+        run: |
+          . scripts\windows\common.ps1
+          $t = $env:RUNNER_TEMP
+          foreach ($way in 'outside', 'start-process') {
+            $marker = "$t\$way.txt"
+            Set-Content "$t\probe-$way.ps1" "Start-Sleep 10; Set-Content '$marker' ok"
+            $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $t\probe-$way.ps1"
+            if ($way -eq 'outside') {
+              $body = ". '$pwd\scripts\windows\common.ps1'; Start-Outside '$cmd' | Out-Null"
+            } else {
+              $body = "Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-File','$t\probe-$way.ps1'"
+            }
+            Set-Content "$t\launch-$way.ps1" $body
+            $py = "import subprocess, time; subprocess.Popen(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',r'$t\launch-$way.ps1']); time.sleep(60)"
+            Set-Content "$t\run-$way.py" $py
+            $p = Start-Process uv -ArgumentList @('run', '--no-project', 'python', "$t\run-$way.py") -PassThru -WindowStyle Hidden
+            Start-Sleep 6
+            & taskkill.exe /PID $p.Id /T /F 2>$null | Out-Null
+            Start-Sleep 10
+            "${way}: $(if (Test-Path $marker) { 'kept running' } else { 'was stopped' })"
+          }
+          if (-not (Test-Path "$t\outside.txt")) { 'the updater was stopped along with FlipDial'; exit 1 }
+          exit 0
       - name: Contacts server stops with FlipDial
         shell: powershell
         run: |

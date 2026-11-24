@@ -10,11 +10,18 @@ param([string]$Tag, [switch]$Main, [switch]$NoStart, [switch]$FromApp, [switch]$
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 if ($FromApp -and -not $Detached) {
-    # Started by the app: relaunch outside the app's process tree so stopping the app
-    # doesn't stop this updater too.
-    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Tag', $Tag, '-FromApp', '-Detached'
-    )
+    # Started by the app: relaunch outside the app, so stopping the app doesn't stop this
+    # updater too. Start-Process isn't enough: the new process would still be in the job
+    # uv runs FlipDial in, and Windows ends the whole job when FlipDial stops.
+    if ($Tag -notmatch '^v\d+\.\d+\.\d+([-.]?(rc|a|b)\.?\d+)?$') { Stop-WithError "Not a release version: $Tag" }
+    $self = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Tag $Tag -FromApp -Detached"
+    try {
+        Start-Outside $self | Out-Null
+    } catch {
+        New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+        "Couldn't start the updater: $_" | Set-Content (Join-Path $LogDir 'update.log')
+        exit 1
+    }
     exit 0
 }
 
