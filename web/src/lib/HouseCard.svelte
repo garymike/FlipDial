@@ -1,8 +1,14 @@
 <script lang="ts">
   // The card FlipDial draws for a contact without a scan.
   import type { Contact } from './api'
+  import type { CardColor } from './cardColor'
 
-  let { contact, side = 'front' }: { contact: Contact; side?: 'front' | 'back' } = $props()
+  // `tint`: the back of a scanned card that has no back, in the front's main color.
+  let {
+    contact,
+    side = 'front',
+    tint = null,
+  }: { contact: Contact; side?: 'front' | 'back'; tint?: CardColor | null } = $props()
 
   const initials = $derived(
     contact.full_name
@@ -14,7 +20,13 @@
   )
 </script>
 
-<div class="house" class:back={side === 'back'}>
+<div
+  class="house"
+  class:back={side === 'back'}
+  class:tinted={!!tint}
+  style:background={tint?.background}
+  style:color={tint?.text}
+>
   {#if side === 'front'}
     <div class="top">
       <span class="bar" aria-hidden="true"></span>
@@ -52,6 +64,13 @@
     color: var(--bone);
     text-align: left;
     overflow: hidden;
+  }
+  .tinted {
+    border: 0;
+    transition: background-color 0.3s ease;
+  }
+  .tinted :global(*) {
+    color: inherit;
   }
   .top {
     display: flex;
