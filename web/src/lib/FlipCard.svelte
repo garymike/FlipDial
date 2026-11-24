@@ -4,6 +4,7 @@
   import { api, type Contact } from './api'
   import HouseCard from './HouseCard.svelte'
   import ScanImage from './ScanImage.svelte'
+  import { cardColor, type CardColor } from './cardColor'
 
   let {
     contact,
@@ -15,6 +16,23 @@
     contact.card_id ? api.image(contact.card_id, size === 'large' ? 'front' : 'thumb') : null,
   )
   const back = $derived(contact.card_id && contact.has_back ? api.image(contact.card_id, 'back') : null)
+
+  // A scan with no back: show its details on a back in the front's main color.
+  let tint = $state<CardColor | null>(null)
+  $effect(() => {
+    const id = contact.card_id
+    if (!id || back) {
+      tint = null
+      return
+    }
+    let live = true
+    cardColor(api.image(id, 'thumb')).then((c) => {
+      if (live) tint = c
+    })
+    return () => {
+      live = false
+    }
+  })
 </script>
 
 <div class="frame">
@@ -30,7 +48,7 @@
       {#if back}
         <ScanImage src={back} alt={`Back of ${contact.full_name}'s card`} fit="fill" />
       {:else}
-        <HouseCard {contact} side="back" />
+        <HouseCard {contact} side="back" {tint} />
       {/if}
     </div>
   </div>
@@ -64,5 +82,27 @@
   }
   .backface {
     transform: rotateY(180deg);
+  }
+  /* Animations turned off in the system: swap sides with a quick fade instead of a turn. */
+  @media (prefers-reduced-motion: reduce) {
+    .inner {
+      transition: none;
+    }
+    .face {
+      transition: opacity 0.2s ease;
+    }
+    .inner.flipped {
+      transform: none;
+    }
+    .backface {
+      transform: none;
+      opacity: 0;
+    }
+    .inner.flipped .face:not(.backface) {
+      opacity: 0;
+    }
+    .inner.flipped .backface {
+      opacity: 1;
+    }
   }
 </style>
