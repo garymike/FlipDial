@@ -135,6 +135,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE cards ADD COLUMN last_error_detail TEXT;
     """,
+    # 10: live reading progress (stage and a preview of fields found), cleared when done
+    """
+    ALTER TABLE cards ADD COLUMN progress_json TEXT;
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

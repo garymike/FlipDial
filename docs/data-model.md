@@ -27,6 +27,7 @@ Extensions use the `X-FLIPDIAL-` prefix so other clients keep them intact.
 | `X-FLIPDIAL-EVENT` | Event deck name |
 | `X-FLIPDIAL-MET-ON` | Date met |
 | `X-FLIPDIAL-MET-AT` | Where met (place text) |
+| `X-FLIPDIAL-ABOUT` | What the card says about them: tagline, services |
 | `X-FLIPDIAL-INTRODUCED-BY` | UID of the contact who introduced you |
 | `X-FLIPDIAL-SOURCE` | `scan`, `google`, `linkedin`, `manual`, `import` |
 | `X-FLIPDIAL-STARRED` | `yes` when starred (mirrors `CATEGORIES:Starred`) |

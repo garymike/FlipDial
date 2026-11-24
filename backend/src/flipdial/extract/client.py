@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -127,10 +128,14 @@ class OllamaReader:
         self.url = settings.model_url.rstrip("/") + "/api/chat"
         self.http = client or httpx.Client(timeout=settings.model_timeout_seconds)
 
-    def read(self, images: list[Path]) -> dict[str, Any]:
-        body = {
+    streams = True  # can report the answer as it is written (see extract/progress.py)
+
+    def read(
+        self, images: list[Path], on_progress: Callable[[str], None] | None = None
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
             "model": self.model,
-            "stream": False,
+            "stream": on_progress is not None,
             "think": False,  # reasoning adds time and nothing useful to copying card text
             "format": json_schema(),
             "options": {"temperature": 0},
@@ -140,22 +145,54 @@ class OllamaReader:
             ],
         }
         try:
-            r = self.http.post(self.url, json=body)
-            if r.status_code >= 400 and "think" in r.text.lower():
-                body.pop("think")  # a model or Ollama version without the switch
-                r = self.http.post(self.url, json=body)
-            if r.status_code >= 400 and len(images) > 1 and _limits_images(r.text):
-                body["messages"][1]["images"] = [
-                    _one_image(images)
-                ]  # models that take one image per request
-                r = self.http.post(self.url, json=body)
-            r.raise_for_status()
-            content = r.json()["message"]["content"]
+            for _ in range(3):
+                response, content = self._send(body, on_progress)
+                if response.status_code < 400:
+                    return _parse(content)
+                text = response.text
+                if "think" in body and "think" in text.lower():
+                    body.pop("think")  # a model or Ollama version without the switch
+                elif len(body["messages"][1]["images"]) > 1 and _limits_images(text):
+                    # models that take one image per request
+                    body["messages"][1]["images"] = [_one_image(images)]
+                else:
+                    break
+            raise httpx.HTTPStatusError("model error", request=response.request, response=response)
         except httpx.HTTPError as exc:
             raise _http_error(exc) from exc
         except (KeyError, TypeError, ValueError) as exc:
             raise ModelError("unexpected_response") from exc
-        return _parse(content)
+
+    def _send(
+        self, body: dict[str, Any], on_progress: Callable[[str], None] | None
+    ) -> tuple[httpx.Response, str]:
+        if not body["stream"]:
+            r = self.http.post(self.url, json=body)
+            return r, (r.json()["message"]["content"] if r.status_code < 400 else "")
+        parts: list[str] = []
+        size = 0
+        with self.http.stream("POST", self.url, json=body) as r:
+            if r.status_code >= 400:
+                r.read()
+                return r, ""
+            for line in r.iter_lines():
+                if not line.strip():
+                    continue
+                chunk = json.loads(line)
+                if chunk.get("error"):
+                    from flipdial.logging import redact
+
+                    raise ModelError("model_error", redact(str(chunk["error"]))[:200])
+                piece = (chunk.get("message") or {}).get("content", "")
+                size += len(piece.encode())
+                if size > MAX_RESPONSE_BYTES:
+                    raise ModelError("response_too_large")
+                parts.append(piece)
+                if piece and on_progress:
+                    on_progress("".join(parts))
+                if chunk.get("done"):
+                    break
+        return r, "".join(parts)
 
 
 class OpenAICompatibleReader:

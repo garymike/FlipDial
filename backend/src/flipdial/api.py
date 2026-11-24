@@ -11,6 +11,7 @@ import json
 import re
 import shutil
 import tempfile
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
@@ -30,6 +31,7 @@ from flipdial.transfer import backup, importer
 CARD_ID = re.compile(r"^\d{8}T\d{6}-[0-9a-f]{10}$")
 Text = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
 Short = Annotated[str, StringConstraints(strip_whitespace=True, max_length=80)]
+Note = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
 
 
 class Social(BaseModel):
@@ -46,6 +48,8 @@ class ContactIn(BaseModel):
     websites: list[Text] = Field(default_factory=list, max_length=10)
     socials: list[Social] = Field(default_factory=list, max_length=10)
     address: Text = ""
+    about: Note = ""
+    note: Note = ""
     event: Short = ""
     met_on: Annotated[str, StringConstraints(pattern=r"^(\d{4}-\d{2}-\d{2})?$")] = ""
     starred: bool = False
@@ -61,6 +65,8 @@ class ContactPatch(BaseModel):
     websites: list[Text] | None = Field(default=None, max_length=10)
     socials: list[Social] | None = Field(default=None, max_length=10)
     address: Text | None = None
+    about: Note | None = None
+    note: Note | None = None
     event: Short | None = None
     met_on: Annotated[str, StringConstraints(pattern=r"^(\d{4}-\d{2}-\d{2})?$")] | None = None
     starred: bool | None = None
@@ -190,12 +196,26 @@ def sync(s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
 # -- review queue -------------------------------------------------------------------
 
 
+def _progress(raw: str | None) -> dict | None:
+    if not raw:
+        return None
+    try:
+        p = json.loads(raw)
+    except ValueError:
+        return None
+    return {
+        "stage": p.get("stage", "waiting"),
+        "seconds": max(0, round(time.time() - float(p.get("started", time.time())))),
+        "fields": p.get("fields") or {},
+    }
+
+
 @router.get("/review")
 def review_queue(s: SettingsDep) -> dict:
     with db.session(s.db_path) as conn:
         rows = conn.execute(
             "SELECT c.id, c.created_at, c.has_back, c.back_blank, c.status, c.last_error, "
-            "c.last_error_detail, "
+            "c.last_error_detail, c.progress_json, "
             "e.fields_json, e.flags_json FROM cards c LEFT JOIN extractions e ON e.rowid = ("
             "SELECT rowid FROM extractions WHERE card_id = c.id ORDER BY rowid DESC LIMIT 1) "
             "WHERE c.status IN ('review', 'extract_pending', 'extract_failed') ORDER BY c.id"
@@ -212,6 +232,7 @@ def review_queue(s: SettingsDep) -> dict:
                 "flags": json.loads(r["flags_json"]) if r["flags_json"] else [],
                 "error": r["last_error"],
                 "error_detail": r["last_error_detail"] or "",
+                "progress": _progress(r["progress_json"]),
             }
         )
     return {"items": items, "ready": sum(i["status"] == "review" for i in items)}
@@ -224,6 +245,7 @@ def approve(
     _card_id(card_id)
     data = body.model_dump()
     data["socials"] = [(x["platform"], x["handle"]) for x in data["socials"]]
+    data["note"] = data["note"] or None  # an empty note from review keeps any existing note
     reviewed = ReviewedContact(**data, source="scan", has_scan=True)
     try:
         uid = approve_card(s, client, card_id, reviewed)
@@ -347,6 +369,7 @@ def card_original(card_id: str, role: Literal["front", "back", "scan"], s: Setti
 def _reviewed(body: ContactIn, **extra) -> ReviewedContact:
     data = body.model_dump()
     data["socials"] = [(x["platform"], x["handle"]) for x in data["socials"]]
+    data["note"] = data["note"] or None  # an empty note from review keeps any existing note
     return ReviewedContact(**data, **extra)
 
 

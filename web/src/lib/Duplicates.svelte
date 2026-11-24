@@ -86,6 +86,8 @@
       title: side('title').title,
       organization: side('organization').organization,
       address: side('address').address,
+      about: side('about').about || p.a.about || p.b.about,
+      note: [...new Set([p.a.note, p.b.note].filter(Boolean))].join('\n\n'),
       event: side('event').event,
       met_on: side('met_on').met_on,
       emails: chosen('emails'),

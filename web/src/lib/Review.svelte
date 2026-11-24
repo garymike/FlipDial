@@ -28,6 +28,8 @@
       websites: f?.websites.map((x) => x.value) ?? [],
       socials: f?.socials.map((s) => ({ platform: s.platform, handle: s.handle })) ?? [],
       address: f?.address.value ?? '',
+      about: f?.about?.value ?? '',
+      note: '',
       event: '',
       met_on: '',
       starred: false,
@@ -48,11 +50,12 @@
     load()
   })
 
-  // While nothing is open for review, check for newly read cards every few seconds.
+  // While no card is open, check for new and newly read cards every few seconds.
   // (Never while a card is open, so edits in progress aren't reset.)
   $effect(() => {
-    if (current || !waiting.length) return
-    const timer = setInterval(load, 4000)
+    if (current) return
+    // Faster while a card shows live progress, so the panel feels live.
+    const timer = setInterval(load, waiting.some((w) => w.progress) ? 1500 : 4000)
     return () => clearInterval(timer)
   })
 
@@ -71,6 +74,19 @@
   })
 
   const failed = $derived(waiting.filter((i) => i.status === 'extract_failed'))
+
+  const STAGES = { waiting: 'Starting the model', reading: 'Reading the card', checking: 'Checking what was read' } as const
+  const FIELD_ORDER = ['full_name', 'title', 'organization', 'emails', 'phones', 'websites', 'address', 'about'] as const
+  const FIELD_NAMES: Record<(typeof FIELD_ORDER)[number], string> = {
+    full_name: 'Name',
+    title: 'Title',
+    organization: 'Company',
+    emails: 'Email',
+    phones: 'Phone',
+    websites: 'Website',
+    address: 'Address',
+    about: 'About',
+  }
 
   async function readAgain(cardId?: string) {
     try {
@@ -193,7 +209,31 @@
               {#if w.error_detail}<span class="said">Ollama said: {w.error_detail}</span>{/if}
               <button type="button" class="secondary" onclick={() => readAgain(w.card_id)}>Read again</button>
             {:else}
-              <span class="reading">{w.error ? `Retrying: ${READ_ERRORS[w.error] ?? w.error}` : 'Reading…'}</span>
+              {#if w.progress}
+                <div class="live" aria-live="polite">
+                  <span class="stage"><span class="pulse" aria-hidden="true"></span>{w.progress.stage === 'reading' && !FIELD_ORDER.some((k) => w.progress?.fields[k]?.length) ? 'Copying the text' : STAGES[w.progress.stage]} · {w.progress.seconds}s</span>
+                  {#if w.progress.stage === 'waiting' && w.progress.seconds > 10}
+                    <span class="reading">Loading the model can take a minute on the first card.</span>
+                  {/if}
+                  {#if w.progress.fields.text?.length && !FIELD_ORDER.some((k) => w.progress?.fields[k]?.length)}
+                    <div class="seeing" aria-label="Text read so far">
+                      {#each w.progress.fields.text as line, i (i + line)}<span>{line}</span>{/each}
+                    </div>
+                  {/if}
+                  {#if FIELD_ORDER.some((k) => w.progress?.fields[k]?.length)}
+                    <dl>
+                      {#each FIELD_ORDER as key (key)}
+                        {#if w.progress.fields[key]?.length}
+                          <dt>{FIELD_NAMES[key]}</dt>
+                          <dd>{Array.isArray(w.progress.fields[key]) ? (w.progress.fields[key] as string[]).join(', ') : w.progress.fields[key]}</dd>
+                        {/if}
+                      {/each}
+                    </dl>
+                  {/if}
+                </div>
+              {:else}
+                <span class="reading">{w.error ? `Retrying: ${READ_ERRORS[w.error] ?? w.error}` : 'Waiting its turn…'}</span>
+              {/if}
             {/if}
           </li>
         {/each}
@@ -453,6 +493,64 @@
   }
   .hint {
     margin: 0;
+  }
+  .live {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .stage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--bone);
+  }
+  .pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--sage);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+  .seeing {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #cfc9bf;
+  }
+  .seeing span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    animation: arrive 0.4s ease-out;
+  }
+  .live dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 10px;
+    margin: 0;
+    font-size: 12px;
+  }
+  .live dt {
+    color: var(--ash);
+  }
+  .live dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    animation: arrive 0.4s ease-out;
+  }
+  @keyframes arrive {
+    from {
+      opacity: 0;
+    }
   }
   .said {
     color: var(--ash);

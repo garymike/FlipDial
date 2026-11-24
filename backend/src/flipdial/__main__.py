@@ -79,14 +79,14 @@ def main(argv: list[str] | None = None) -> None:
     if args.command in {"ingest", "extract", "worker"}:
         from flipdial.extract.worker import Extractor
         from flipdial.ingest.worker import Ingestor
-        from flipdial.status import beat
+        from flipdial.status import keep_beating
 
         if args.command == "worker":
             import logging
 
             ingestor, extractor = Ingestor(settings), Extractor(settings)
+            keep_beating(settings, "worker")
             while True:
-                beat(settings, "worker")
                 for part in (ingestor, extractor):
                     try:
                         part.run_once()
