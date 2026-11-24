@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **Phone setup explains itself:** it starts by saying how phone sync works, asks whether
+  it's an Android or an iPhone/iPad, and lets you name it. The name is what the address
+  book is called on the phone, and the sign-in is named after it (`mikes-pixel`, not
+  `phone2`). It says what the password is for and where you'll enter it, and you can make
+  a new password any time. Renaming replaces the old sign-in and its address book.
+
+### Fixes
+
+- The built-in contacts server keeps working for FlipDial when this computer isn't on the
+  home network, or its address changed. Before, it stopped completely, so edits like
+  starring a contact failed. Now it answers on this computer only until the home address
+  is back.
+- Whether this computer has the home address is now checked on every network connection,
+  not just the main one, so computers with VPNs or virtual network adapters (WSL,
+  Hyper-V, Docker) aren't wrongly treated as away from home.
+
 ## 0.13.0
 
 ### New

@@ -448,15 +448,32 @@ def phone_setup_book(body: PhoneBookIn, s: SettingsDep, client: ClientDep, actor
     return phone_setup.info(s, client)
 
 
+class PhoneAccountIn(BaseModel):
+    name: str = Field(default="My phone", max_length=60)
+
+
 @router.post("/phone/setup/account")
-def phone_setup_account(s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
-    """FlipDial's own contacts server: make a phone account and its phone book. The
-    password is in this answer only; it isn't kept or logged."""
+def phone_setup_account(
+    s: SettingsDep, client: ClientDep, actor: ActorDep, body: PhoneAccountIn | None = None
+) -> dict:
+    """FlipDial's own contacts server: make a phone account and its phone book, named after
+    the phone. The password is in this answer only; it isn't kept or logged."""
     try:
-        out = phone_setup.create_phone_account(s, client)
+        out = phone_setup.create_phone_account(s, client, (body or PhoneAccountIn()).name)
     except (phone_setup.SetupError, contacts_server.ServerSetupError, CardDAVError) as exc:
         raise _setup_errors(exc) from exc
     audit.record(s, actor, "phone.setup_account", out["username"])
+    return out
+
+
+@router.post("/phone/setup/password")
+def phone_setup_password(s: SettingsDep, actor: ActorDep) -> dict:
+    """A new password for the phone account. In this answer only; not kept or logged."""
+    try:
+        out = phone_setup.new_password(s)
+    except (phone_setup.SetupError, contacts_server.ServerSetupError) as exc:
+        raise _setup_errors(exc) from exc
+    audit.record(s, actor, "phone.new_password", out["username"])
     return out
 
 

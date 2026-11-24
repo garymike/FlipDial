@@ -103,7 +103,7 @@ def suggestions() -> list[dict[str, str]]:
             {
                 "host": ip,
                 "note": "This computer's address on your network. Most reliable, and the server "
-                "pauses when you're on another network.",
+                "answers only on this computer when you are on another network.",
             }
         )
     name = socket.gethostname().split(".")[0].lower()
@@ -124,21 +124,26 @@ def port_free() -> bool:
 
 
 def listen_on(settings: Settings) -> str:
-    """Where the built-in server listens: this computer, plus the home network address
-    phones use, and nothing else. With an address (192.168.1.20), it simply doesn't answer
-    on other networks (a café, a hotel), because this computer isn't at that address there.
+    """Where the built-in server listens: always this computer (so FlipDial itself always
+    reaches its contacts), plus the home network address phones use when this computer has
+    that address right now. On other networks (a café, a hotel) it doesn't, so phones and
+    everyone else there can't reach the server, while FlipDial keeps working.
     Docker decides exposure with its published ports, so inside a container it listens on
     the container's own interfaces."""
     port = cs.PORT
     if os.environ.get("FLIPDIAL_INSTALL") == "docker":
         return f"0.0.0.0:{port}"  # noqa: S104  (inside the container only)
-    host = phone_rules.get_setting(settings, HOST_KEY)
-    ip = _address_of(host)
-    return f"127.0.0.1:{port},{ip}:{port}" if ip else f"127.0.0.1:{port}"
+    hosts = [f"127.0.0.1:{port}"]
+    ip = _address_of(phone_rules.get_setting(settings, HOST_KEY))
+    if ip and ip != "127.0.0.1" and _have_address(ip):
+        hosts.append(f"[{ip}]:{port}" if ":" in ip else f"{ip}:{port}")
+    return ",".join(hosts)
 
 
 def _address_of(host: str) -> str:
-    """The network address for the chosen name, if it is this computer's."""
+    """The network address for the chosen name or address."""
+    if not host:
+        return ""
     try:
         ipaddress.ip_address(host)
         return host
@@ -153,14 +158,30 @@ def _address_of(host: str) -> str:
         return ""
 
 
-def at_home(settings: Settings) -> bool:
-    """For a chosen address (not a name): whether this computer has it right now."""
-    host = phone_rules.get_setting(settings, HOST_KEY)
+def _have_address(ip: str) -> bool:
+    """This computer has this address on one of its network connections right now (Wi-Fi,
+    Ethernet, a VPN...). Checked by asking to use it, which sends nothing."""
     try:
-        ipaddress.ip_address(host)
+        addr = ipaddress.ip_address(ip)
     except ValueError:
+        return False
+    if addr.is_loopback:
         return True
-    return host == local_ip() or os.environ.get("FLIPDIAL_INSTALL") == "docker"
+    family = socket.AF_INET6 if addr.version == 6 else socket.AF_INET
+    with socket.socket(family, socket.SOCK_DGRAM) as s:
+        try:
+            s.bind((ip, 0))
+            return True
+        except OSError:
+            return False
+
+
+def at_home(settings: Settings) -> bool:
+    """Phones can reach the server: this computer has the address they use."""
+    if os.environ.get("FLIPDIAL_INSTALL") == "docker":
+        return True
+    ip = _address_of(phone_rules.get_setting(settings, HOST_KEY))
+    return bool(ip) and _have_address(ip)
 
 
 # -- turning it on and off -------------------------------------------------------------
@@ -207,7 +228,8 @@ def status(settings: Settings) -> dict:
         "set_up": (d / "users").is_file(),
         "running": supervisor.running(),
         "listening": listen_on(settings) if is_on(settings) else "",
-        "problem": supervisor.problem,
+        "problem": supervisor.problem
+        or ("away_from_home" if is_on(settings) and not at_home(settings) else ""),
         "host": phone_rules.get_setting(settings, HOST_KEY),
         "port": cs.PORT,
         "suggestions": suggestions(),
@@ -294,6 +316,7 @@ class Supervisor:
         self.proc: subprocess.Popen | None = None
         self.folder: Path | None = None
         self.settings: Settings | None = None
+        self.listening = ""
         self.problem = ""
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -332,6 +355,7 @@ class Supervisor:
         if path.is_file() and path.stat().st_size > LOG_MAX:
             path.replace(path.with_suffix(".log.1"))  # keep one older log, so it can't grow forever
         logfile = open(path, "ab")  # noqa: SIM115  (kept open by the child)
+        self.listening = listen_on(self.settings) if self.settings is not None else ""
         args = [
             sys.executable,
             "-m",
@@ -339,8 +363,8 @@ class Supervisor:
             "--config",
             str(self.folder / "config"),
         ]
-        if self.settings is not None:
-            args += ["--server-hosts", listen_on(self.settings)]
+        if self.listening:
+            args += ["--server-hosts", self.listening]
         self.proc = subprocess.Popen(  # noqa: S603  (fixed arguments)
             args,
             stdin=subprocess.PIPE,  # the server exits when this closes (contacts_child)
@@ -354,13 +378,17 @@ class Supervisor:
         delay, started = 2.0, 0.0
         while not self._stop.is_set():
             with self._lock:
-                away = self.settings is not None and not at_home(self.settings)
-                if away:
-                    self.problem = "away_from_home"  # checked again in a minute
-                    if self.running():
-                        self.proc.terminate()
+                want = listen_on(self.settings) if self.settings is not None else ""
+                if self.running() and want and want != self.listening:
+                    # Joined or left the home network: listen on the right addresses.
+                    log.info("contacts server addresses changed", extra={"listen": want})
+                    self.proc.terminate()  # type: ignore[union-attr]
+                    try:
+                        self.proc.wait(timeout=10)  # type: ignore[union-attr]
+                    except subprocess.TimeoutExpired:
+                        self.proc.kill()  # type: ignore[union-attr]
                     self.proc = None
-                if not away and not self.running() and not self._stop.is_set():
+                if not self.running() and not self._stop.is_set():
                     if self.proc is not None and self.proc.poll() is not None:
                         self.problem = "stopped_unexpectedly"
                         log.warning("contacts server stopped; starting it again")
@@ -371,10 +399,10 @@ class Supervisor:
                         self.problem = "could_not_start"
                         log.error("contacts server could not start", extra={"error": str(exc)})
                         started = 0.0
-            if self._stop.wait(60.0 if away else delay):
+            if self._stop.wait(delay):
                 break
             if self.running() and started and time.monotonic() - started > 30:
-                self.problem, delay = "", 2.0  # healthy again
+                self.problem, delay = "", 10.0  # healthy: check the network every 10 seconds
             else:
                 delay = min(delay * 2, 60.0)
 

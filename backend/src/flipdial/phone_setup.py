@@ -17,6 +17,7 @@ import ssl
 import threading
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -30,6 +31,7 @@ from flipdial.status import where_saved
 LINK_MINUTES = 15
 USERNAME_KEY = "phone_username"
 BOOK_KEY = "phone_addressbook"
+NAME_KEY = "phone_name"
 
 
 class SetupError(ValueError):
@@ -60,6 +62,7 @@ def info(settings: Settings, client: CardDAVClient | None) -> dict[str, Any]:
         "main_book": "",
         "books": [],
         "phone_username": phone_rules.get_setting(settings, USERNAME_KEY),
+        "phone_name": phone_rules.get_setting(settings, NAME_KEY),
         "flipdial_username": settings.carddav_username or "",
         "book_url": "",
         "bundled": bundled(settings),
@@ -92,13 +95,11 @@ def choose_book(settings: Settings, client: CardDAVClient, name: str, create: bo
         client.create_book(name)
     # It has to be there and readable before it is saved.
     CardDAVClient(settings, book=name).list()
-    phone_rules.put_setting(settings, BOOK_KEY, name)
+    _set_book(settings, name)
     return name
 
 
-def create_phone_account(settings: Settings, client: CardDAVClient) -> dict[str, str]:
-    """On FlipDial's own contacts server: a new account for a phone, with its own phone
-    book that FlipDial fills. The password is returned once and not kept."""
+def _own_server_folder(settings: Settings) -> Path:
     if not bundled(settings):
         raise SetupError("no_bundled_server")
     if settings.phone_addressbook:
@@ -106,30 +107,64 @@ def create_phone_account(settings: Settings, client: CardDAVClient) -> dict[str,
     folder = settings.radicale_dir
     if folder is None:
         raise SetupError("no_bundled_server")
-    name = contacts_server.next_phone_name(folder)
-    password = contacts_server.add_user(folder, name)
+    return folder
+
+
+def _set_book(settings: Settings, value: str) -> None:
+    """Point phone sync at an address book. FlipDial's record of what it copied belongs to
+    the old one, so it starts fresh: the new book gets the chosen contacts again."""
+    if phone_rules.get_setting(settings, BOOK_KEY) != value:
+        with db.session(settings.db_path) as conn:
+            conn.execute("DELETE FROM phone_copies")
+    phone_rules.put_setting(settings, BOOK_KEY, value)
+
+
+def create_phone_account(
+    settings: Settings, client: CardDAVClient, name: str = "My phone"
+) -> dict[str, str]:
+    """On FlipDial's own contacts server: an account for your phones, named after them, with
+    its own address book that FlipDial fills. The password is returned once, not kept.
+    An earlier phone account FlipDial made is replaced (its address book held only copies)."""
+    folder = _own_server_folder(settings)
+    name = " ".join(name.split())[:60] or "My phone"
+    old = phone_rules.get_setting(settings, USERNAME_KEY)
+    user = contacts_server.username_for(name, folder)
+    password = contacts_server.add_user(folder, user)
     # Signing in once makes the server create the account's home.
     probe = settings.model_copy(
         update={"carddav_username": None, "carddav_password": None, "carddav_addressbook": None}
     )
-    first = CardDAVClient(probe, book=f"/{name}/")
-    first.http.auth = httpx.BasicAuth(name, password)
+    first = CardDAVClient(probe, book=f"/{user}/")
+    first.http.auth = httpx.BasicAuth(user, password)
     try:
         first._propfind_xml(first.start, "<d:current-user-principal/>", "0")
     finally:
         first.close()
-    path = f"/{name}/contacts/"
-    client.create_book("Phone", url=path)
-    phone_rules.put_setting(settings, BOOK_KEY, path)
-    phone_rules.put_setting(settings, USERNAME_KEY, name)
-    return {"username": name, "password": password, "book": path}
+    path = f"/{user}/contacts/"
+    client.create_book(name, url=path)
+    _set_book(settings, path)
+    phone_rules.put_setting(settings, USERNAME_KEY, user)
+    phone_rules.put_setting(settings, NAME_KEY, name)
+    if old and old != user and old in contacts_server.users(folder):
+        contacts_server.remove_user(folder, old)
+    return {"username": user, "password": password, "book": path, "name": name}
+
+
+def new_password(settings: Settings) -> dict[str, str]:
+    """A new password for the phone account FlipDial made. Phones using the old one ask
+    for the new one."""
+    folder = _own_server_folder(settings)
+    user = phone_rules.get_setting(settings, USERNAME_KEY)
+    if not user:
+        raise SetupError("no_phone_account")
+    return {"username": user, "password": contacts_server.set_password(folder, user)}
 
 
 def forget_book(settings: Settings) -> None:
     """Turn phone sync off. The phone book and its contacts stay on the server."""
     if settings.phone_addressbook:
         raise SetupError("set_in_settings_file")
-    phone_rules.put_setting(settings, BOOK_KEY, "")
+    _set_book(settings, "")
 
 
 def set_username(settings: Settings, username: str) -> None:
@@ -256,7 +291,7 @@ def profile(settings: Settings) -> bytes:
         "PayloadIdentifier": f"app.flipdial.carddav.{account}",
         "PayloadUUID": account,
         "PayloadDisplayName": "FlipDial contacts",
-        "CardDAVAccountDescription": "FlipDial",
+        "CardDAVAccountDescription": phone_rules.get_setting(settings, NAME_KEY) or "FlipDial",
         "CardDAVHostName": book.hostname or "",
         "CardDAVPort": port,
         "CardDAVPrincipalURL": book.path,

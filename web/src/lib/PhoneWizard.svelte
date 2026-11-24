@@ -19,8 +19,9 @@
   let password = $state('')
   let test = $state<{ sees_phone_book: boolean; sees_main_book: boolean } | null>(null)
   let made = $state<{ username: string; password: string } | null>(null)
-  // Step 3
-  let device = $state<'iphone' | 'android'>('iphone')
+  let phoneName = $state('My phone')
+  // Step 3 (chosen in step 1 on FlipDial's own server)
+  let device = $state<'iphone' | 'android'>('android')
   let iosWay = $state<'profile' | 'manual'>('profile')
   let opened = $state<string | null>(null)
   let link = $state<{ url: string; expires_at: string; qr_svg: string; via: 'flipdial' | 'network' } | null>(null)
@@ -32,6 +33,7 @@
       const others = info.books.filter((b) => b !== info?.main_book)
       choice = info.book || (others.length ? others[0] : '__new')
       username = info.phone_username
+      if (info.phone_name) phoneName = info.phone_name
       error = ''
     } catch (e) {
       error = describe(e)
@@ -62,11 +64,20 @@
 
   const makeAccount = () =>
     run(async () => {
-      const r = await api.phoneSetupAccount()
+      const r = await api.phoneSetupAccount(phoneName.trim() || 'My phone')
       made = { username: r.username, password: r.password }
       await load()
       ondone?.()
     })
+
+  const newPassword = () =>
+    run(async () => {
+      made = await api.phoneNewPassword()
+    })
+
+  const hasAccount = $derived(!!info?.phone_username && !!info?.bundled)
+  const renamed = $derived(hasAccount && phoneName.trim() !== (info?.phone_name || ''))
+  const where = $derived(device === 'android' ? 'in the DAVx5 app' : 'on the iPhone or iPad, when it asks')
 
   const check = () =>
     run(async () => {
@@ -131,8 +142,8 @@
 
 <div class="wizard" aria-label="Phone setup">
   <ol class="steps">
-    <li class:on={step === 'book'}>Phone address book</li>
-    <li class:on={step === 'account'}>The phone's account</li>
+    <li class:on={step === 'book'}>{info?.bundled ? 'Your phone' : 'Phone address book'}</li>
+    <li class:on={step === 'account'}>{info?.bundled ? 'Its sign-in' : "The phone's account"}</li>
     <li class:on={step === 'phone'}>Add it to the phone</li>
   </ol>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -146,23 +157,66 @@
     </p>
   {:else if step === 'book' && info.bundled}
     <p class="detail">
-      You're using FlipDial's own contacts server. Each phone gets its own account and its own address book, which
-      FlipDial fills with the contacts you choose. The phone can't see anything else.
+      Here's how it works: FlipDial keeps all your contacts in its main address book. Your phone gets a separate address
+      book with only the contacts you pick (nothing goes to the phone until you pick some). The phone signs in with its
+      own account, which can open that one address book and nothing else.
     </p>
-    <button type="button" class="primary" onclick={() => (step = 'account')}>Next</button>
+    <div class="segmented" role="group" aria-label="What kind of phone?">
+      <button type="button" aria-pressed={device === 'android'} onclick={() => (device = 'android')}>Android</button>
+      <button type="button" aria-pressed={device === 'iphone'} onclick={() => (device = 'iphone')}>iPhone or iPad</button>
+    </div>
+    <div class="grid">
+      <label for="pw-name">Name</label>
+      <input id="pw-name" bind:value={phoneName} maxlength="60" placeholder="My phone" />
+    </div>
+    <p class="hint">
+      This is what the address book is called in the phone's Contacts app. Using a phone and a tablet? Give them one name
+      (like "My devices") and add the same sign-in to each; they'll show the same contacts.
+    </p>
+    <button type="button" class="primary" disabled={!phoneName.trim()} onclick={() => (step = 'account')}>Next</button>
   {:else if step === 'account' && info.bundled}
-    {#if !made}
-      <p class="detail">FlipDial makes the phone's account and its address book, and shows the password once.</p>
-      <button type="button" class="primary" disabled={busy} onclick={makeAccount}>{busy ? 'Making it…' : "Make the phone's account"}</button>
-    {:else}
+    {#if made}
+      <p class="detail">The phone signs in to FlipDial's contacts server with these:</p>
       <div class="grid copy">
         <span>User name</span><code>{made.username}</code>
         <button type="button" class="link" onclick={() => copy(made?.username ?? '', 'user')}>{copied === 'user' ? 'Copied' : 'Copy'}</button>
         <span>Password</span><code>{made.password}</code>
         <button type="button" class="link" onclick={() => copy(made?.password ?? '', 'pass')}>{copied === 'pass' ? 'Copied' : 'Copy'}</button>
       </div>
-      <p class="warn">Shown only now. You'll type it on the phone in the next step, so copy it somewhere safe first.</p>
+      <p class="detail">
+        You'll enter them once, {where}, in the next step. After that the phone remembers them; you don't need to keep the
+        password. If you lose it or add another device later, come back here and make a new one.
+      </p>
+      <p class="warn">The password is shown only now, so keep this page open until the phone is added.</p>
       <button type="button" class="primary" onclick={() => (step = 'phone')}>Next</button>
+    {:else if hasAccount && !renamed}
+      <p class="detail">
+        <strong>{info.phone_name || info.phone_username}</strong> already has a sign-in (user name
+        <code>{info.phone_username}</code>). If you have its password, go on. If not, make a new one; devices already using
+        the old password will ask for the new one.
+      </p>
+      <div class="row">
+        <button type="button" class="primary" onclick={() => (step = 'phone')}>I have the password</button>
+        <button type="button" class="secondary" disabled={busy} onclick={newPassword}>Make a new password</button>
+        <button type="button" class="link" onclick={() => (step = 'book')}>Back</button>
+      </div>
+    {:else}
+      {#if renamed}
+        <p class="detail">
+          This replaces the current sign-in, <code>{info.phone_username}</code>, and its address book with
+          <strong>{phoneName.trim()}</strong>. Your contacts aren't affected; the ones you picked are copied again to the
+          new address book. Remove the old account from the phone afterwards.
+        </p>
+      {:else}
+        <p class="detail">
+          FlipDial now makes the sign-in for <strong>{phoneName.trim()}</strong> and its address book on its contacts server.
+          You'll see the password once, on the next screen.
+        </p>
+      {/if}
+      <div class="row">
+        <button type="button" class="primary" disabled={busy} onclick={makeAccount}>{busy ? 'Making it…' : 'Make the sign-in'}</button>
+        <button type="button" class="link" onclick={() => (step = 'book')}>Back</button>
+      </div>
     {/if}
   {:else if step === 'book'}
     <p class="detail">
@@ -307,7 +361,7 @@
       {/if}
     {:else}
       <ol class="how">
-        <li>Install DAVx5 from Google Play or F-Droid.</li>
+        <li>Install DAVx5 from Google Play or F-Droid. It's a free, open-source app that adds address books like this one to Android's Contacts.</li>
         <li>Tap +, choose <em>Login with URL and user name</em>, and enter:
           <div class="grid copy">
             <span>Address</span><code>{info.book_url}</code>
@@ -315,11 +369,15 @@
             <span>User name</span><code>{info.phone_username}</code>
             <button type="button" class="link" onclick={() => copy(info?.phone_username ?? '', 'user')}>{copied === 'user' ? 'Copied' : 'Copy'}</button>
           </div>
-          and the account's password.</li>
-        <li>Turn on the <strong>{bookName}</strong> address book. In the account settings you can limit syncing to your home Wi-Fi.</li>
+          and the password from the previous step.</li>
+        <li>If it asks about the server's certificate, check it's for <strong>{bookHost}</strong>{#if info.bundled}, issued by <strong>FlipDial contacts server CA</strong>,{/if} and accept it. Do this at home.</li>
+        <li>Turn on the <strong>{info.phone_name || bookName}</strong> address book. In the account settings you can limit syncing to your home Wi-Fi.</li>
       </ol>
     {/if}
-    <p class="hint">Then choose which contacts go to the phone below and press Sync now.</p>
+    <p class="detail">
+      <strong>Next:</strong> nothing is on the phone yet. Below, choose which contacts go to it (one by one, by tag or deck,
+      or all), then press Sync now. They show up in the phone's Contacts app under {info.phone_name || bookName}.
+    </p>
     <button type="button" class="link" onclick={() => (step = 'account')}>Back</button>
   {/if}
 </div>
