@@ -852,7 +852,7 @@
     background: #3a2a1a;
     color: var(--signal);
   }
-  @media (max-width: 900px) {
+  @media (max-width: 700px) {
     .close {
       order: -1; /* Back on the left on a phone */
       margin: 0;

@@ -4,6 +4,8 @@
   import { untrack } from 'svelte'
   import { api, describe, type Contact, type ContactList } from './api'
   import ContactPane from './ContactPane.svelte'
+  import { layout, touch } from './layout.svelte'
+  import Sheet from './Sheet.svelte'
   import { countMatches, letterIndex, mod, nearest, offset, seek, settle, slot } from './dial'
   import FlipCard from './FlipCard.svelte'
   import { href } from './router.svelte'
@@ -63,6 +65,7 @@
 
   // The header search dials to the first match instead of filtering.
   // Runs only when the query or the card list changes, not on every move.
+  let details = $state(false) // phone and tablet: the full pane, opened from the strip
   let noMatch = $state(false)
   const matchCount = $derived(countMatches(query, cards))
 
@@ -286,13 +289,54 @@
         {#if matchCount > 1}
           <a class="towall" href={href({ name: 'wall' })}>Show all {matchCount} matches on the Wall</a>
         {/if}
-        <p class="hint">Drag, scroll or use the arrow keys to dial. Click the front card or press Enter to flip it. Type in search to dial to a name.</p>
+        {#if current && layout.mode !== 'desktop'}
+          <!-- Phone and tablet: a short strip under the dial; Details opens the full pane. -->
+          <div class="strip">
+            <button type="button" class="who" onclick={() => (details = true)}>
+              <strong>{current.full_name}</strong>
+              {#if current.title || (current.organization && current.organization !== current.full_name)}
+                <span>{[current.title, current.organization !== current.full_name ? current.organization : ''].filter(Boolean).join(', ')}</span>
+              {/if}
+            </button>
+            <div class="quick">
+              {#if current.phones[0]}
+                <a class="round" href={`tel:${current.phones[0].value.replace(/[^\d+]/g, '')}`} aria-label={`Call ${current.full_name}`}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" /></svg>
+                </a>
+              {/if}
+              {#if current.emails[0]}
+                <a class="round" href={`mailto:${current.emails[0].value}`} aria-label={`Email ${current.full_name}`}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>
+                </a>
+              {/if}
+              <button type="button" class="primary" onclick={() => (details = true)}>Details</button>
+            </div>
+          </div>
+        {/if}
+        <p class="hint">
+          {#if touch}Swipe up or down to dial. Tap the front card to flip it. Type in search to dial to a name.
+          {:else}Drag, scroll or use the arrow keys to dial. Click the front card or press Enter to flip it. Type in search to dial to a name.{/if}
+        </p>
       </div>
 
-      {#if current}
+      {#if current && layout.mode === 'desktop'}
         <aside aria-label="Current contact">
           <ContactPane uid={current.uid} initial={current} showCard={false} onchange={changed} onforget={forgotten} />
         </aside>
+      {/if}
+      {#if current && details && layout.mode !== 'desktop'}
+        <Sheet onclose={() => (details = false)}>
+          <ContactPane
+            uid={current.uid}
+            initial={current}
+            onclose={() => (details = false)}
+            onchange={changed}
+            onforget={async () => {
+              details = false
+              await forgotten()
+            }}
+          />
+        </Sheet>
       {/if}
     </div>
   {/if}
@@ -544,24 +588,97 @@
   .empty {
     color: var(--ash);
   }
+  .strip {
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--panel);
+    border: 1px solid #2c2f36;
+    box-sizing: border-box;
+  }
+  .strip .who {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .strip .who strong {
+    font-size: 17px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .strip .who span {
+    font-size: 13px;
+    color: var(--ash);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .quick {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .quick .round {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--graphite);
+    color: var(--bone);
+  }
+  .quick button {
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
   @media (max-width: 700px) {
     .page {
-      padding: 16px;
+      padding: 10px 12px 16px;
+      gap: 8px;
     }
     .letters {
       display: none;
     }
+    /* The dial fills what's left of the screen above the strip and the tab bar. */
     .stage {
-      height: 420px;
+      height: clamp(300px, calc(100svh - 360px), 460px);
+    }
+    /* Deck and scan filters in one row that scrolls sideways. */
+    .filters {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
     }
     .decks {
       flex-wrap: nowrap;
-      overflow-x: auto;
-      flex-basis: 100%;
-      padding-bottom: 4px;
+      flex-shrink: 0;
     }
     .segmented {
       margin-left: 0;
+      flex-shrink: 0;
+    }
+    .hint {
+      display: none;
+    }
+    .controls {
+      gap: 8px;
     }
   }
   @media (prefers-reduced-motion: reduce) {
