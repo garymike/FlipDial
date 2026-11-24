@@ -25,9 +25,16 @@ _RESERVED = set(vars(logging.makeLogRecord({}))) | {"message", "asctime"}
 _ID_FIELDS = {"card_id", "vcard_uid", "request_id", "import_id", "merge_id"}
 
 
+_IP = re.compile(r"^\d{1,3}(\.\d{1,3}){3}(:\d+)?$")
+
+
+def _phone(m: re.Match) -> str:
+    return m[0] if _IP.match(m[0]) else "[phone]"  # an IP address, not a phone number
+
+
 def redact(text: str) -> str:
     text = _EMAIL.sub("[email]", text)
-    return _PHONE.sub("[phone]", text)
+    return _PHONE.sub(_phone, text)
 
 
 class RedactFilter(logging.Filter):
@@ -68,3 +75,5 @@ def configure_logging(level: str = "INFO", fmt: str = "json") -> None:
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)
+    # One line per page request is noise; show it only when debugging.
+    logging.getLogger("uvicorn.access").setLevel("DEBUG" if level == "DEBUG" else "WARNING")

@@ -41,3 +41,13 @@ def test_id_fields_kept_intact(capsys):
     configure_logging("INFO", "json")
     logging.getLogger("flipdial.t").info("x", extra={"card_id": "20261124T004812-0866000123"})
     assert "20261124T004812-0866000123" in capsys.readouterr().out
+
+
+def test_ip_addresses_are_not_phone_numbers():
+    from flipdial.logging import redact
+
+    assert (
+        redact('127.0.0.1:62128 - "GET / HTTP/1.1" 200') == '127.0.0.1:62128 - "GET / HTTP/1.1" 200'
+    )
+    assert redact("from 192.168.1.20") == "from 192.168.1.20"
+    assert redact("phone 312.555.0142") == "phone [phone]"
