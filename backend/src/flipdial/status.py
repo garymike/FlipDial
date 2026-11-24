@@ -294,3 +294,27 @@ def check(
         else ("warn" if any(i["state"] == "warn" for i in items) else "ok")
     )
     return {"state": worst, "items": items}
+
+
+def where_saved(settings: Settings) -> dict[str, str]:
+    """Where contacts are saved, for the icons in the reading pane, and when the last backup
+    was made. `server_kind` is a guess from the server address, used only to pick an icon."""
+    from urllib.parse import urlparse
+
+    out = {"server_kind": "", "server_name": "", "last_backup": ""}
+    if settings.carddav_url:
+        host = (urlparse(settings.carddav_url).hostname or "").lower()
+        port = urlparse(settings.carddav_url).port
+        if host.endswith("icloud.com"):
+            kind = "icloud"
+        elif host.endswith("google.com") or host.endswith("googleapis.com"):
+            kind = "google"
+        elif "synology" in host or "quickconnect" in host or port in (5000, 5001):
+            kind = "synology"
+        else:
+            kind = "server"
+        out |= {"server_kind": kind, "server_name": host}
+    with db.session(settings.db_path) as conn:
+        row = conn.execute("SELECT MAX(ts) FROM audit WHERE action = 'export.backup'").fetchone()
+    out["last_backup"] = row[0] or ""
+    return out

@@ -47,6 +47,7 @@ class ContactView:
     source: str = ""
     card_id: str | None = None  # set when the contact has a scan
     has_back: bool = False
+    rev: str = ""  # when the vCard last changed (REV), to tell whether a backup includes it
     card_view: str = ""  # how the scan is shown (turns, swapped sides); see cardview.py
 
     def as_dict(self) -> dict[str, Any]:
@@ -90,6 +91,7 @@ def view(card: VCard) -> ContactView:
         starred="Starred" in cats or card.first("X-FLIPDIAL-STARRED") == "yes",
         source=card.first("X-FLIPDIAL-SOURCE") or "other",
         card_id=card.first("X-FLIPDIAL-CARD-ID") or None,
+        rev=card.first("REV"),
     )
 
 

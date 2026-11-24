@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from flipdial import __version__, audit, auth, db
+from flipdial import __version__, audit, auth, db, status
 from flipdial.api import router
 from flipdial.carddav.client import CardDAVClient
 from flipdial.carddav.local import make_client
@@ -212,7 +212,12 @@ def create_app(
     @app.get("/api/me")
     async def me(request: Request) -> dict:
         storage = "server" if settings.carddav_url else "local"
-        return {"user": request.state.user, "mode": settings.auth_mode, "storage": storage}
+        return {
+            "user": request.state.user,
+            "mode": settings.auth_mode,
+            "storage": storage,
+            **status.where_saved(settings),
+        }
 
     @app.post("/api/logout")
     async def logout(request: Request) -> Response:

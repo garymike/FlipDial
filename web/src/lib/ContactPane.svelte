@@ -9,6 +9,7 @@
     type Contact,
     type ContactInput,
     type RereadState,
+    type Me,
     type Scan,
   } from './api'
   import { changes, patchFor, type Change } from './reread'
@@ -255,10 +256,32 @@
     }
   }
 
-  let storage = $state<'server' | 'local'>('server')
+  // Where this contact lives, and whether the last backup includes it (icons at the top).
+  let me = $state<Me | null>(null)
   $effect(() => {
-    api.me().then((m) => (storage = m.storage)).catch(() => {})
+    api.me().then((m) => (me = m)).catch(() => {})
   })
+  const SERVER_NAMES = { icloud: 'iCloud Contacts', google: 'Google Contacts', synology: 'Synology Contacts', server: 'your contacts server' } as const
+  const savedTo = $derived(
+    !me ? '' : me.storage === 'local' ? 'Saved on this computer. No contacts server is set up yet.' : `Saved to ${SERVER_NAMES[me.server_kind || 'server']}${me.server_name ? ` (${me.server_name})` : ''}.`,
+  )
+  // REV looks like 20261124T062000Z; older apps may write an ISO date.
+  function parseRev(rev: string): number {
+    const m = /^(\d{4})-?(\d{2})-?(\d{2})(?:T(\d{2}):?(\d{2}):?(\d{2}))?/.exec(rev)
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0)) : NaN
+  }
+  const backedUp = $derived.by(() => {
+    if (!me?.last_backup || !contact) return false
+    const changed = parseRev(contact.rev ?? '')
+    return !Number.isNaN(changed) && changed <= Date.parse(me.last_backup)
+  })
+  const backupNote = $derived(
+    !me?.last_backup
+      ? 'Not backed up yet. Make a backup from Import and export.'
+      : backedUp
+        ? `In your backup from ${new Date(me.last_backup).toLocaleDateString()}.`
+        : `Changed since your last backup (${new Date(me.last_backup).toLocaleDateString()}).`,
+  )
 
   const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`)
 </script>
@@ -278,6 +301,21 @@
         <h1>{contact.full_name}</h1>
         <p class="sub">{[contact.title, contact.organization].filter(Boolean).join(', ')}</p>
       </div>
+      <div class="headside">
+      <div class="where">
+        <span class="ico on" role="img" aria-label={savedTo} title={savedTo}>
+          {#if me?.storage === 'local'}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="1.5" /><path d="M2 19h20" /></svg>
+          {:else if me?.server_kind === 'icloud' || me?.server_kind === 'google'}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.2 9.1 4.5 4.5 0 0 0 7 18z" /></svg>
+          {:else}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="7" rx="1.5" /><rect x="4" y="13" width="16" height="7" rx="1.5" /><path d="M8 7.5h.01M8 16.5h.01" /></svg>
+          {/if}
+        </span>
+        <span class="ico" class:on={backedUp} role="img" aria-label={backupNote} title={backupNote}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4" /></svg>
+        </span>
+      </div>
       <div class="headbtns">
         <Star on={contact.starred} label={contact.starred ? 'Unstar' : 'Star'} onclick={toggleStar} />
         {#if !editing}
@@ -292,6 +330,7 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg>
           </button>
         {/if}
+      </div>
       </div>
     </div>
 
@@ -420,22 +459,18 @@
             {/each}
             {#if contact.about}<dt>About</dt><dd class="multiline">{contact.about}</dd>{/if}
             {#if contact.note}<dt>Notes</dt><dd class="multiline">{contact.note}</dd>{/if}
-            <dt>Met at</dt><dd>{contact.event || 'Not set'}</dd>
-            <dt>Met on</dt><dd>{contact.met_on || 'Not set'}</dd>
+            {#if contact.event}<dt>Met at</dt><dd>{contact.event}</dd>{/if}
+            {#if contact.met_on}<dt>Met on</dt><dd>{contact.met_on}</dd>{/if}
           </dl>
           {#if contact.categories.length}
             <ul class="tags">{#each contact.categories as t (t)}<li>{t}</li>{/each}</ul>
           {/if}
-          <div class="panel">
-            <span class="badge" aria-hidden="true">S</span>
-            {storage === 'local' ? 'Saved on this computer (no contacts server set up yet)' : 'Saved to your contacts server'}
-          </div>
           {#if contact.card_id}
-            <div class="originals">
-              <h2>Original scans, never modified</h2>
-              <a href={api.original(shown?.card_id ?? contact.card_id, 'front')} download>Download front</a>
-              {#if shown?.has_back}<a href={api.original(shown?.card_id ?? contact.card_id, 'back')} download>Download back</a>{/if}
-            </div>
+            <p class="originals">
+              Original scan, never modified:
+              <a href={api.original(shown?.card_id ?? contact.card_id, 'front')} download>front</a>{#if shown?.has_back}
+                · <a href={api.original(shown?.card_id ?? contact.card_id, 'back')} download>back</a>{/if}
+            </p>
           {:else}
             <p class="noscan">No card scanned yet. Scan one and it can be attached to this contact.</p>
           {/if}
@@ -679,20 +714,8 @@
     cursor: pointer;
   }
   .originals {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 16px;
-    border: 1px solid #2c2f36;
-    border-radius: 12px;
-  }
-  .originals h2 {
-    flex-basis: 100%;
     margin: 0;
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-size: 13px;
     color: var(--ash);
   }
   .noscan {
@@ -730,6 +753,24 @@
   }
   .icon:hover {
     color: #e5776b;
+  }
+  .headside {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  .where {
+    display: flex;
+    gap: 6px;
+    padding-right: 4px;
+  }
+  .ico {
+    display: inline-flex;
+    color: #5a5e66; /* grey: not there */
+  }
+  .ico.on {
+    color: var(--bone, #f4efe6); /* white: there */
   }
   .headbtns {
     display: flex;
@@ -773,28 +814,6 @@
     border-radius: 999px;
     background: #23262c;
     border: 1px solid var(--line);
-  }
-  .panel {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-    border-radius: 12px;
-    background: var(--panel);
-    border: 1px solid #2c2f36;
-    font-size: 14px;
-  }
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
-    background: #23262c;
-    border: 1px solid var(--line);
-    font-size: 10px;
-    font-weight: 700;
   }
   .buttons {
     display: flex;

@@ -90,3 +90,20 @@ def test_think_switch_falls_back(settings, tmp_path):
     reader = OllamaReader(settings, httpx.Client(transport=httpx.MockTransport(handler)))
     reader.read([img])
     assert bodies[0]["think"] is False and "think" not in bodies[1]
+
+
+def test_where_saved_names_the_server_and_last_backup(api, dav_settings):
+    from flipdial import status as st
+
+    me = api.get("/api/me").json()
+    assert me["storage"] == "server" and me["server_kind"] == "server" and me["last_backup"] == ""
+    for url, kind in [
+        ("https://contacts.icloud.com/", "icloud"),
+        ("https://www.googleapis.com/carddav/v1/principals/x/lists/default/", "google"),
+        ("https://nas.local:5001/carddav/mike/", "synology"),
+        ("https://dav.example/", "server"),
+    ]:
+        s = dav_settings.model_copy(update={"carddav_url": url})
+        assert st.where_saved(s)["server_kind"] == kind
+    assert api.get("/api/export/backup").status_code == 200
+    assert api.get("/api/me").json()["last_backup"]
