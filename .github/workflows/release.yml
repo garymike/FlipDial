@@ -90,6 +90,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.tag.outputs.tag }}
         run: |
+          # Checked again here: this token can also see draft releases.
+          if gh api "repos/$GITHUB_REPOSITORY/releases" --paginate -q '.[].tag_name' | grep -qx "$TAG"; then
+            echo "There is already a release (or draft) for $TAG. Pick a new version."; exit 1
+          fi
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f "sha=$GITHUB_SHA" -F force=true
           else
