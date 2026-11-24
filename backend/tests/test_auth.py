@@ -134,7 +134,8 @@ def test_sign_in_flow(app_client, idp, oidc_settings):
     assert r.status_code == 302 and r.headers["location"] == "/#/review"
     cookie = r.headers["set-cookie"]
     assert "HttpOnly" in cookie and "SameSite=lax" in cookie.replace("Lax", "lax")
-    assert app_client.get("/api/me").json() == {"user": ALLOWED, "mode": "oidc", "storage": "local"}
+    me = app_client.get("/api/me").json()
+    assert (me["user"], me["mode"], me["storage"]) == (ALLOWED, "oidc", "local")
 
     with sqlite3.connect(oidc_settings.db_path) as conn:
         stored = conn.execute("SELECT token_hash FROM sessions").fetchall()

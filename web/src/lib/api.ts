@@ -96,6 +96,7 @@ export interface Contact {
   card_id: string | null
   has_back: boolean
   card_view?: string // how the scan is shown: turns and swapped sides
+  rev?: string // when the vCard last changed
 }
 
 /** "Read again" on a saved contact. `proposed` is only a suggestion until applied. */
@@ -125,6 +126,16 @@ export interface TrashItem {
   card_id: string | null
   trashed_at: string
   days_left: number
+}
+
+/** Who is signed in, and where contacts are saved (for the icons in the reading pane). */
+export interface Me {
+  user: string
+  mode: 'none' | 'oidc' | 'proxy'
+  storage: 'server' | 'local'
+  server_kind?: '' | 'icloud' | 'google' | 'synology' | 'server'
+  server_name?: string
+  last_backup?: string // when the last FlipDial backup was made
 }
 
 export interface ContactList {
@@ -401,7 +412,7 @@ export const api = {
   restoreCard: (cardId: string) => call<{ status: string }>('POST', `/api/review/${cardId}/restore`),
   deleteCard: (cardId: string) => call<{ deleted: string }>('DELETE', `/api/review/${cardId}`),
   retryAll: () => call<{ retrying: number }>('POST', '/api/review/retry'),
-  me: () => call<{ user: string; mode: 'none' | 'oidc' | 'proxy'; storage: 'server' | 'local' }>('GET', '/api/me'),
+  me: () => call<Me>('GET', '/api/me'),
   pushLocal: () =>
     call<{ copied: number; already_there: number; failed: number }>('POST', '/api/contacts/push-local'),
   logout: () => call<{ signed_out: boolean }>('POST', '/api/logout'),
