@@ -42,6 +42,8 @@
 
   const PROBLEMS: Record<string, string> = {
     stopped_unexpectedly: 'It stopped unexpectedly and is being started again.',
+    away_from_home:
+      "Paused: this computer isn't on your home network right now (it doesn't have the address phones use). It starts again when you're back.",
     could_not_start: "It couldn't start. Restart FlipDial; if it keeps happening, see the contacts server log in the data folder.",
   }
 </script>
@@ -76,8 +78,10 @@
         <h3>Good to know</h3>
         <ul>
           <li>
-            <strong>Home network only.</strong> Devices on your Wi-Fi can reach it, but need a password to see anything. Each
-            phone gets its own account that sees only its own contacts. Never forward port {st.port} on your router.
+            <strong>Home network only.</strong> It listens only on this computer and on the address you pick here. If you pick
+            the address (not the name), it simply doesn't run on other networks, like a café or hotel Wi-Fi. Devices on your
+            Wi-Fi can reach it, but need a password to see anything, and each phone's account sees only its own contacts. Never
+            forward port {st.port} on your router.
           </li>
           <li>
             <strong>Encrypted.</strong> It uses HTTPS with a certificate made for this server only. Your phone is asked to

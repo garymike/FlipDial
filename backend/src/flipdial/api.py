@@ -499,10 +499,10 @@ def phone_profile_link(body: ProfileLinkIn, s: SettingsDep, actor: ActorDep) -> 
         if (urlparse(body.base).hostname or "") in ("localhost", "127.0.0.1", "::1"):
             # Opened as localhost: the phone can't reach that, so serve the link on the
             # home network for these 15 minutes instead.
-            host = phone_setup.network_link_host(s)
-            if not host:
+            host, address = phone_setup.network_link_host(s)
+            if not host or not address:
                 raise phone_setup.SetupError("no_network_address")
-            phone_setup.profile_server.start(s)
+            phone_setup.profile_server.start(s, address)
             base, via = f"http://{host}:{phone_setup.PROFILE_PORT}", "network"
     except phone_setup.SetupError as exc:
         raise _setup_errors(exc) from exc
