@@ -14,6 +14,7 @@
   import { changes, patchFor, type Change } from './reread'
   import ContactForm from './ContactForm.svelte'
   import FlipCard from './FlipCard.svelte'
+  import ScanImage from './ScanImage.svelte'
   import Star from './Star.svelte'
 
   // The reading pane: one contact's card, details and notes, edited in place.
@@ -343,7 +344,7 @@
                 flipped = false
               }}
             >
-              <img src={api.image(sc.card_id, 'thumb')} alt="" loading="lazy" />
+              <ScanImage src={api.image(sc.card_id, 'thumb')} fit="fill" />
               {#if sc.card_id === contact.card_id}<span class="tag">Shown</span>{/if}
             </button>
           {/each}
@@ -603,12 +604,6 @@
   }
   .thumb[aria-pressed='true'] {
     border-color: var(--amber);
-  }
-  .thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
   }
   .thumb .tag {
     position: absolute;

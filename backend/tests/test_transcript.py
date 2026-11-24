@@ -138,3 +138,13 @@ def test_worker_records_and_clears_progress(settings, make_card):
             conn.execute("SELECT progress_json FROM cards WHERE id = ?", (card_id,)).fetchone()[0]
             is None
         )
+
+
+def test_line_breaks_never_run_words_together():
+    from flipdial.extract.schema import clean_text, validate
+
+    assert clean_text("Ajo Way\nTucson") == "Ajo Way Tucson"
+    f = validate({"address": {"value": "2500 E Ajo Way\nTucson, AZ 85713", "confidence": 0.9}})
+    assert f.fields.address.value == "2500 E Ajo Way, Tucson, AZ 85713"
+    f = validate({"address": "1 Main St\r\nSpringfield"})
+    assert f.fields.address.value == "1 Main St, Springfield"

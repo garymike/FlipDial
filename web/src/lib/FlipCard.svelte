@@ -3,6 +3,8 @@
   // without a scan show the generated house card.
   import { api, type Contact } from './api'
   import HouseCard from './HouseCard.svelte'
+  import ScanImage from './ScanImage.svelte'
+  import { cardColor, type CardColor } from './cardColor'
 
   let {
     contact,
@@ -14,22 +16,39 @@
     contact.card_id ? api.image(contact.card_id, size === 'large' ? 'front' : 'thumb') : null,
   )
   const back = $derived(contact.card_id && contact.has_back ? api.image(contact.card_id, 'back') : null)
+
+  // A scan with no back: show its details on a back in the front's main color.
+  let tint = $state<CardColor | null>(null)
+  $effect(() => {
+    const id = contact.card_id
+    if (!id || back) {
+      tint = null
+      return
+    }
+    let live = true
+    cardColor(api.image(id, 'thumb')).then((c) => {
+      if (live) tint = c
+    })
+    return () => {
+      live = false
+    }
+  })
 </script>
 
 <div class="frame">
   <div class="inner" class:flipped>
     <div class="face">
       {#if front}
-        <img src={front} alt={`Front of ${contact.full_name}'s card`} loading="lazy" draggable="false" />
+        <ScanImage src={front} alt={`Front of ${contact.full_name}'s card`} fit="fill" />
       {:else}
         <HouseCard {contact} />
       {/if}
     </div>
     <div class="face backface">
       {#if back}
-        <img src={back} alt={`Back of ${contact.full_name}'s card`} loading="lazy" draggable="false" />
+        <ScanImage src={back} alt={`Back of ${contact.full_name}'s card`} fit="fill" />
       {:else}
-        <HouseCard {contact} side="back" />
+        <HouseCard {contact} side="back" {tint} />
       {/if}
     </div>
   </div>
@@ -64,12 +83,26 @@
   .backface {
     transform: rotateY(180deg);
   }
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-    -webkit-user-drag: none;
-    user-select: none;
+  /* Animations turned off in the system: swap sides with a quick fade instead of a turn. */
+  @media (prefers-reduced-motion: reduce) {
+    .inner {
+      transition: none;
+    }
+    .face {
+      transition: opacity 0.2s ease;
+    }
+    .inner.flipped {
+      transform: none;
+    }
+    .backface {
+      transform: none;
+      opacity: 0;
+    }
+    .inner.flipped .face:not(.backface) {
+      opacity: 0;
+    }
+    .inner.flipped .backface {
+      opacity: 1;
+    }
   }
 </style>

@@ -35,11 +35,14 @@ _STEERING = re.compile(
 
 
 def clean_text(value: Any, limit: int = MAX_TEXT) -> str:
-    """Plain, single-line text: control characters removed, whitespace collapsed, capped."""
+    """Plain, single-line text: control characters removed, whitespace collapsed, capped.
+
+    Line breaks and other control characters become spaces, so two lines never run
+    together ("Ajo Way" + "Tucson" must not become "Ajo WayTucson")."""
     if value is None:
         return ""
     text = unicodedata.normalize("NFKC", str(value))
-    text = "".join(ch for ch in text if unicodedata.category(ch)[0] != "C" or ch in " ")
+    text = "".join(ch if unicodedata.category(ch)[0] != "C" else " " for ch in text)
     return " ".join(text.split())[:limit]
 
 
@@ -173,6 +176,11 @@ _SCALARS = ("full_name", "given_name", "family_name", "title", "organization", "
 _LISTS = ("emails", "phones", "websites", "socials")
 
 
+def _join_lines(text: str) -> str:
+    """An address the model gave on several lines, as one line with commas."""
+    return ", ".join(x.strip(" ,") for x in text.splitlines() if x.strip(" ,"))
+
+
 def _coerce(raw: Any) -> dict[str, Any]:
     """Reshape loose model output so validation never crashes: wrong types become empty."""
     if not isinstance(raw, dict):
@@ -182,6 +190,11 @@ def _coerce(raw: Any) -> dict[str, Any]:
         out["text"] = raw["text"]
     if isinstance(raw.get("address_parts"), dict):
         out["address_parts"] = raw["address_parts"]
+    addr = raw.get("address")
+    if isinstance(addr, dict) and isinstance(addr.get("value"), str):
+        addr["value"] = _join_lines(addr["value"])
+    elif isinstance(addr, str):
+        raw = {**raw, "address": _join_lines(addr)}
     for name in _SCALARS:
         v = raw.get(name)
         if isinstance(v, dict):
