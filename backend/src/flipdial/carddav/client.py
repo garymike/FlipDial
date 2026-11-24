@@ -57,7 +57,13 @@ def _propfind(props: str) -> bytes:
 
 
 class CardDAVClient:
-    def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        transport: httpx.BaseTransport | None = None,
+        book: str | None = None,
+    ):
+        """`book` picks another address book on the same server (the phone book)."""
         if not settings.carddav_url:
             raise CardDAVError("carddav_not_configured")
         auth = None
@@ -69,7 +75,11 @@ class CardDAVClient:
         if settings.carddav_ca_bundle:
             verify = str(settings.carddav_ca_bundle)
         self.start = settings.carddav_url
-        self.wanted = settings.carddav_addressbook
+        self.wanted = book or settings.carddav_addressbook
+        # The phone book is never picked as the main address book by default.
+        self.avoid = None if book else settings.phone_addressbook
+        if not book and self.avoid and self.wanted == self.avoid:
+            raise CardDAVError("phone_book_is_main_book")
         self.version = settings.vcard_version
         self.http = httpx.Client(
             auth=auth,
@@ -129,11 +139,18 @@ class CardDAVClient:
         books = self._find_books()
         if not books:
             raise CardDAVError("no_address_book")
+
+        def named(b: AddressBook, name: str) -> bool:
+            return name in (b.name, urlparse(b.url).path, b.url)
+
         if self.wanted:
-            match = [b for b in books if self.wanted in (b.name, urlparse(b.url).path, b.url)]
-            if not match:
+            books = [b for b in books if named(b, self.wanted)]
+            if not books:
                 raise CardDAVError("address_book_not_found")
-            books = match
+        elif self.avoid:
+            books = [b for b in books if not named(b, self.avoid)]
+            if not books:
+                raise CardDAVError("no_address_book")
         self._book = books[0]
         return self._book
 

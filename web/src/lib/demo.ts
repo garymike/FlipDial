@@ -132,6 +132,41 @@ function fromInput(input: ContactInput, base: Partial<Contact>): Contact {
   }
 }
 
+// Phone sync, kept in memory like everything else in the demo.
+const phoneTags: Record<string, 'on' | 'off'> = {}
+const phoneChoice = new Map<string, 'on' | 'off'>()
+let phoneEverything = false
+let onPhone = new Set<string>()
+let phoneSynced: string | null = null
+
+function phoneOf(c: Contact): { phone: 'on' | 'off'; phone_why: string } {
+  const choice = phoneChoice.get(c.uid)
+  if (choice) return { phone: choice, phone_why: 'contact' }
+  const cats = [...c.categories, ...(c.starred ? ['Starred'] : [])]
+  const on = cats.find((t) => phoneTags[t] === 'on')
+  if (on) return { phone: 'on', phone_why: `tag:${on}` }
+  const off = cats.find((t) => phoneTags[t] === 'off')
+  if (off) return { phone: 'off', phone_why: `tag:${off}` }
+  return { phone: phoneEverything ? 'on' : 'off', phone_why: 'everything' }
+}
+const withPhone = (c: Contact): Contact => ({ ...c, ...phoneOf(c), phone_choice: phoneChoice.get(c.uid) ?? '' })
+
+function phoneStatus() {
+  return {
+    enabled: true,
+    book: 'Phone',
+    everything: phoneEverything,
+    tags: { ...phoneTags },
+    on_phone: onPhone.size,
+    wanted: contacts.filter((c) => phoneOf(c).phone === 'on').length,
+    last_run: phoneSynced,
+    last_success: phoneSynced,
+    problem: null,
+    pending: null,
+    check_hour: 3,
+  }
+}
+
 function list(q: URLSearchParams) {
   const needle = fold(q.get('q') ?? '').trim()
   const deck = q.get('deck') ?? ''
@@ -149,7 +184,7 @@ function list(q: URLSearchParams) {
   const decks = new Map<string, number>()
   for (const c of contacts) if (c.event) decks.set(c.event, (decks.get(c.event) ?? 0) + 1)
   return {
-    contacts: out,
+    contacts: out.map(withPhone),
     total: contacts.length,
     starred: contacts.filter((c) => c.starred).length,
     trashed: trashed.size,
@@ -236,7 +271,41 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     case 'GET /contacts':
       if (seg[2] === 'scans') return { scans: scansOf(find(seg[1])) }
       if (seg[2] === 'reread') return rereadState(find(seg[1]))
-      return seg[1] ? find(seg[1]) : list(url.searchParams)
+      return seg[1] ? withPhone(find(seg[1])) : list(url.searchParams)
+    case 'GET /phone':
+      return phoneStatus()
+    case 'PUT /phone': {
+      const { name, state } = body as { name: string; state: 'on' | 'off' | 'follow' }
+      if (name === '*') phoneEverything = state === 'on'
+      else if (state === 'follow') delete phoneTags[name]
+      else phoneTags[name] = state
+      record('phone.rule', name, { state })
+      return phoneStatus()
+    }
+    case 'POST /phone': {
+      const want = new Set(contacts.filter((c) => phoneOf(c).phone === 'on').map((c) => c.uid))
+      const add = [...want].filter((u) => !onPhone.has(u))
+      const remove = [...onPhone].filter((u) => !want.has(u))
+      const { confirm } = (body ?? {}) as { confirm?: string }
+      if (!onPhone.size && add.length && confirm !== 'demo') {
+        const named = (u: string) => ({ uid: u, name: find(u).full_name })
+        const pending = { token: 'demo', first: true, add: add.map(named), update: 0, remove: [], gone: [] }
+        return { status: 'confirm', ...pending, state: { ...phoneStatus(), pending } }
+      }
+      onPhone = want
+      phoneSynced = new Date().toISOString()
+      record('phone.sync', '', { added: add.length, removed: remove.length })
+      return { status: 'done', added: add.length, updated: 0, removed: remove.length, switched_off: 0, state: phoneStatus() }
+    }
+    case 'PUT /contacts': {
+      if (seg[2] !== 'phone') throw new ApiError(404, 'not_found')
+      const c = find(seg[1])
+      const { state } = body as { state: 'on' | 'off' | 'follow' }
+      if (state === 'follow') phoneChoice.delete(c.uid)
+      else phoneChoice.set(c.uid, state)
+      record('phone.choice', c.uid, { state })
+      return withPhone(c)
+    }
     case 'PATCH /contacts': {
       const c = find(seg[1])
       const changes = body as Partial<ContactInput>
@@ -251,7 +320,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       if (changes.tags || changes.event !== undefined)
         c.categories = [...new Set([...(c.event ? [c.event] : []), ...(changes.tags ?? c.categories)])]
       record('contact.edit', c.uid, { fields: Object.keys(changes).sort() })
-      return c
+      return withPhone(c)
     }
     case 'DELETE /contacts': {
       if (seg[2] === 'reread') {

@@ -84,12 +84,24 @@ def main(argv: list[str] | None = None) -> None:
         if args.command == "worker":
             import logging
 
+            from flipdial import contacts, phone
+            from flipdial.carddav.local import make_client
+
             ingestor, extractor = Ingestor(settings), Extractor(settings)
+
+            def phone_pass() -> None:
+                phone.tick(settings, lambda: contacts.sync(settings, make_client(settings)))
+
             keep_beating(settings, "worker")
+            last_phone = 0.0
             while True:
-                for part in (ingestor, extractor):
+                parts = [ingestor.run_once, extractor.run_once]
+                if time.monotonic() - last_phone >= 60:  # phone book: at most once a minute
+                    parts.append(phone_pass)
+                    last_phone = time.monotonic()
+                for part in parts:
                     try:
-                        part.run_once()
+                        part()
                     except Exception:  # keep running; one bad pass shouldn't stop the worker
                         logging.getLogger("flipdial.worker").exception("worker pass failed")
                 time.sleep(settings.poll_seconds)

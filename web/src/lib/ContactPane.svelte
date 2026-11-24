@@ -250,6 +250,25 @@
     }
   }
 
+  // Phone sync: this contact's own choice wins over its tags (docs/sync.md).
+  async function setPhone(state: 'on' | 'off' | 'follow') {
+    if (!contact) return
+    try {
+      contact = await api.contactPhone(contact.uid, state)
+      onchange?.(contact)
+    } catch (e) {
+      error = describe(e)
+    }
+  }
+  const phoneWhy = (c: Contact) =>
+    c.phone_why === 'contact'
+      ? 'set for this contact'
+      : c.phone_why?.startsWith('tag:')
+        ? `from ${c.phone_why.slice(4)}`
+        : c.phone === 'on'
+          ? 'every contact is on'
+          : 'off by default'
+
   // Trash: off the contacts server now, restorable from Trash for 30 days.
   let trashing = $state(false)
   async function moveToTrash() {
@@ -478,6 +497,17 @@
           </dl>
           {#if contact.categories.length}
             <ul class="tags">{#each contact.categories as t (t)}<li>{t}</li>{/each}</ul>
+          {/if}
+          {#if contact.phone}
+            <div class="phone-row">
+              <label for="pane-phone">On your phone</label>
+              <select id="pane-phone" value={contact.phone_choice || 'follow'} onchange={(e) => setPhone(e.currentTarget.value as 'on' | 'off' | 'follow')}>
+                <option value="follow">Follow tags</option>
+                <option value="on">Always</option>
+                <option value="off">Never</option>
+              </select>
+              <span class="why">{contact.phone === 'on' ? 'On the phone' : 'Not on the phone'}, {phoneWhy(contact)}</span>
+            </div>
           {/if}
           {#if contact.card_id}
             <p class="originals">
@@ -818,6 +848,31 @@
   dd {
     margin: 0;
     overflow-wrap: anywhere;
+  }
+  .phone-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .phone-row label {
+    color: var(--ash);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .phone-row select {
+    min-height: 32px;
+    padding: 0 8px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--graphite);
+    color: var(--bone);
+    font: inherit;
+  }
+  .phone-row .why {
+    color: var(--ash);
   }
   .tags {
     list-style: none;

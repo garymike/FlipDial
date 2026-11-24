@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     carddav_verify_tls: bool = True
     carddav_ca_bundle: Path | None = None  # for servers with their own certificate
     vcard_version: Literal["3.0", "4.0"] = "3.0"  # 3.0 works with the widest range of apps
+
+    # Phone sync (docs/sync.md): a second address book on the same server that phones use.
+    # Only contacts switched on for the phone are copied there. Empty: phone sync is off.
+    phone_addressbook: str | None = None  # display name or path
+    phone_check_hour: int = Field(default=3, ge=0, le=23)  # daily check, server local time
 
     # Extraction model
     model_backend: Literal["ollama", "openai_compatible"] = "ollama"

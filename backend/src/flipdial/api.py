@@ -28,6 +28,8 @@ from flipdial import (
     db,
     duplicates,
     forget,
+    phone,
+    phone_rules,
     reread,
     status,
     trash,
@@ -296,6 +298,67 @@ def reread_discard(uid: str, s: SettingsDep) -> dict:
     except reread.RereadError as exc:
         raise HTTPException(409, str(exc)) from exc
     return {"discarded": True}
+
+
+class PhoneChoiceIn(BaseModel):
+    state: Literal["on", "off", "follow"]
+
+
+@router.put("/contacts/{uid}/phone")
+def contact_phone(uid: str, body: PhoneChoiceIn, s: SettingsDep, actor: ActorDep) -> dict:
+    """Put this contact on the phone, keep it off, or follow its tags (docs/sync.md)."""
+    if not phone_rules.enabled(s):
+        raise HTTPException(409, "phone_sync_off")
+    found = contacts.get_contact(s, uid)
+    if found is None:
+        raise HTTPException(404, "not_found")
+    phone_rules.set_choice(s, uid, body.state)
+    audit.record(s, actor, "phone.choice", uid, state=body.state)
+    return contacts.full_view(s, found[0]).as_dict()
+
+
+# -- phone sync (docs/sync.md) --------------------------------------------------------
+
+
+class PhoneRuleIn(BaseModel):
+    name: Short = Field(min_length=1)  # a tag or deck, "Starred", or "*" for everything
+    state: Literal["on", "off", "follow"]
+
+
+class PhoneSyncIn(BaseModel):
+    confirm: Annotated[str, StringConstraints(max_length=64)] = ""
+    accept_drop: bool = False
+
+
+@router.get("/phone")
+def phone_status(s: SettingsDep) -> dict:
+    return phone.status(s)
+
+
+@router.put("/phone/rules")
+def phone_rule(body: PhoneRuleIn, s: SettingsDep, actor: ActorDep) -> dict:
+    """Change a tag's or deck's rule, or the Everything switch. Nothing is sent to the phone
+    until the next sync, which asks first when it would remove many contacts."""
+    if not phone_rules.enabled(s):
+        raise HTTPException(409, "phone_sync_off")
+    phone_rules.set_rule(s, body.name, body.state)
+    audit.record(s, actor, "phone.rule", body.name, state=body.state)
+    return phone.status(s)
+
+
+@router.post("/phone/sync")
+def phone_sync(body: PhoneSyncIn, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
+    """Sync now. Returns the changes waiting for confirmation when they need it."""
+    if not phone_rules.enabled(s):
+        raise HTTPException(409, "phone_sync_off")
+    try:
+        contacts.sync(s, client)  # the master book as it is now
+        out = phone.run(s, phone.phone_client(s), body.confirm, body.accept_drop)
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    if body.confirm or body.accept_drop:
+        audit.record(s, actor, "phone.confirm", "", accepted_drop=body.accept_drop)
+    return {**out, "state": phone.status(s)}
 
 
 @router.get("/contacts/{uid}/scans")
