@@ -273,8 +273,25 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       if (seg[2] === 'reread') return rereadState(find(seg[1]))
       return seg[1] ? withPhone(find(seg[1])) : list(url.searchParams)
     case 'GET /phone':
+      if (seg[1] === 'setup')
+        return {
+          server: true,
+          server_kind: 'synology',
+          server_name: 'nas.example',
+          book: 'Phone',
+          book_from_settings_file: false,
+          book_url: 'https://nas.example:5001/carddav/phone/',
+          main_book: 'Contacts',
+          books: ['Contacts', 'Phone'],
+          phone_username: 'phone',
+          flipdial_username: 'flipdial',
+          error: '',
+        }
       return seg[1] === 'inbox' ? { items: [] } : phoneStatus()
+    case 'DELETE /phone':
+      return readonly()
     case 'PUT /phone': {
+      if (seg[1] === 'setup') return readonly()
       const { name, state } = body as { name: string; state: 'on' | 'off' | 'follow' }
       if (name === '*') phoneEverything = state === 'on'
       else if (state === 'follow') delete phoneTags[name]
@@ -283,6 +300,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       return phoneStatus()
     }
     case 'POST /phone': {
+      if (seg[1] !== 'sync') return readonly()
       const want = new Set(contacts.filter((c) => phoneOf(c).phone === 'on').map((c) => c.uid))
       const add = [...want].filter((u) => !onPhone.has(u))
       const remove = [...onPhone].filter((u) => !want.has(u))

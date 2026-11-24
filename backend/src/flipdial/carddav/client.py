@@ -10,6 +10,7 @@ Safety choices:
 
 from __future__ import annotations
 
+import ssl
 from dataclasses import dataclass
 from urllib.parse import unquote, urljoin, urlparse
 
@@ -48,6 +49,10 @@ class AddressBook:
     name: str
 
 
+def escape_xml(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _propfind(props: str) -> bytes:
     return (
         '<?xml version="1.0" encoding="utf-8"?>'
@@ -71,13 +76,15 @@ class CardDAVClient:
             auth = httpx.BasicAuth(
                 settings.carddav_username, settings.carddav_password.get_secret_value()
             )
-        verify: bool | str = settings.carddav_verify_tls
+        verify: bool | ssl.SSLContext = settings.carddav_verify_tls
         if settings.carddav_ca_bundle:
-            verify = str(settings.carddav_ca_bundle)
+            verify = ssl.create_default_context(cafile=str(settings.carddav_ca_bundle))
         self.start = settings.carddav_url
         self.wanted = book or settings.carddav_addressbook
         # The phone book is never picked as the main address book by default.
-        self.avoid = None if book else settings.phone_addressbook
+        from flipdial.phone_rules import book_name
+
+        self.avoid = None if book else (book_name(settings) or None)
         if not book and self.avoid and self.wanted == self.avoid:
             raise CardDAVError("phone_book_is_main_book")
         self.version = settings.vcard_version
@@ -153,6 +160,44 @@ class CardDAVClient:
                 raise CardDAVError("no_address_book")
         self._book = books[0]
         return self._book
+
+    def books(self) -> list[AddressBook]:
+        """Every address book this account can see."""
+        try:
+            home = self._home()
+        except CardDAVError:
+            return self._find_books()
+        return self._books_at(home, "1")
+
+    def create_book(self, name: str) -> AddressBook:
+        """Make a new address book next to the others (RFC 5689 extended MKCOL)."""
+        slug = "".join(ch for ch in name.lower() if ch.isalnum()) or "phone"
+        url = urljoin(self._home(), slug + "/")
+        body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<d:mkcol xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav"><d:set><d:prop>'
+            "<d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>"
+            f"<d:displayname>{escape_xml(name)}</d:displayname>"
+            "</d:prop></d:set></d:mkcol>"
+        ).encode()
+        r = self._request(
+            "MKCOL", url, content=body, headers={"Content-Type": "application/xml; charset=utf-8"}
+        )
+        if r.status_code == 405:
+            raise CardDAVError("book_exists", 405)
+        if r.status_code not in (200, 201):
+            raise CardDAVError("cannot_create_book", r.status_code)
+        return AddressBook(url, name)
+
+    def _home(self) -> str:
+        root = self._propfind_xml(self.start, "<d:current-user-principal/>", "0")
+        href = root.findtext(".//d:current-user-principal/d:href", namespaces=NS)
+        principal = urljoin(self.start, href) if href else self.start
+        root = self._propfind_xml(principal, "<c:addressbook-home-set/>", "0")
+        home = root.findtext(".//c:addressbook-home-set/d:href", namespaces=NS)
+        if not home:
+            raise CardDAVError("no_address_book_home")
+        return urljoin(principal, home)
 
     def _find_books(self) -> list[AddressBook]:
         here = self._books_at(self.start, "0")

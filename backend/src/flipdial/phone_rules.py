@@ -21,8 +21,31 @@ class Rules:
     choices: dict[str, str]  # uid -> 'on' or 'off'
 
 
+def get_setting(settings: Settings, key: str) -> str:
+    with db.session(settings.db_path) as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else ""
+
+
+def put_setting(settings: Settings, key: str, value: str) -> None:
+    with db.session(settings.db_path) as conn:
+        if value:
+            conn.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+        else:
+            conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+
+
+def book_name(settings: Settings) -> str:
+    """The phone book: FLIPDIAL_PHONE_ADDRESSBOOK if set, otherwise the one chosen in Setup."""
+    return settings.phone_addressbook or get_setting(settings, "phone_addressbook")
+
+
 def enabled(settings: Settings) -> bool:
-    return bool(settings.carddav_url and settings.phone_addressbook)
+    return bool(settings.carddav_url and book_name(settings))
 
 
 def load(settings: Settings) -> Rules:

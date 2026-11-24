@@ -142,6 +142,21 @@ export interface PhoneStatus {
   waiting?: number // in Review: added on the phone, or changed in both places
 }
 
+/** The phone setup wizard's view of the contacts server. */
+export interface PhoneSetupInfo {
+  server: boolean
+  server_kind: string
+  server_name: string
+  book: string
+  book_from_settings_file: boolean
+  book_url: string
+  main_book: string
+  books: string[]
+  phone_username: string
+  flipdial_username: string
+  error: string
+}
+
 /** Something from the phone that needs a decision (shown at the top of Review). */
 export interface PhoneInboxItem {
   id: number
@@ -447,6 +462,18 @@ export const api = {
     call<PhoneStatus>('PUT', '/api/phone/rules', { name, state }),
   phoneSync: (body: { confirm?: string; accept_drop?: boolean } = {}) =>
     call<PhoneSyncResult>('POST', '/api/phone/sync', body),
+  phoneSetup: () => call<PhoneSetupInfo>('GET', '/api/phone/setup'),
+  phoneSetupBook: (name: string, create: boolean) =>
+    call<PhoneSetupInfo>('POST', '/api/phone/setup/book', { name, create }),
+  phoneSetupOff: () => call<{ enabled: false }>('DELETE', '/api/phone/setup/book'),
+  phoneSetupUsername: (username: string) => call<{ username: string }>('PUT', '/api/phone/setup/username', { username }),
+  phoneSetupTest: (username: string, password: string) =>
+    call<{ books: string[]; sees_phone_book: boolean; sees_main_book: boolean }>('POST', '/api/phone/setup/test', {
+      username,
+      password,
+    }),
+  phoneProfileLink: (base: string) =>
+    call<{ url: string; expires_at: string; qr_svg: string }>('POST', '/api/phone/profile-link', { base }),
   phoneInbox: () => call<{ items: PhoneInboxItem[] }>('GET', '/api/phone/inbox'),
   phoneInboxAction: (id: number, action: 'accept' | 'dismiss') =>
     call<{ uid: string }>('POST', `/api/phone/inbox/${id}/${action}`),
@@ -565,6 +592,11 @@ export function describe(err: unknown): string {
     changed_on_phone_again: 'It changed on the phone again. Sync, then decide on the newest version.',
     too_old: 'That is more than 30 days old and can no longer be undone.',
     invalid_contact: "That contact can't be saved: it has no usable name.",
+    cannot_create_book: "The contacts server didn't let FlipDial make the address book. Make it on the server, then pick it here.",
+    book_exists: 'An address book with that name is already there. Pick it from the list instead.',
+    set_in_settings_file: 'The phone book is set in the settings file (FLIPDIAL_PHONE_ADDRESSBOOK). Change it there.',
+    username_required: "Enter the phone's user name first.",
+    name_required: 'Enter a name.',
     demo_readonly: 'That is turned off in the demo. Install FlipDial to use it with your own contacts.',
     not_supported: 'This install updates differently. See the release notes.',
     no_update: 'You already have the newest version.',
@@ -583,6 +615,7 @@ export function describe(err: unknown): string {
     changed_on_server: 'This contact was changed on the contacts server. Reload it and try again.',
     already_exists: 'A contact with that ID already exists on the contacts server.',
     address_book_not_found: "The address book in your settings wasn't found on the contacts server.",
+    phone_book_is_main_book: "That's your main address book. The phone needs a separate one.",
     no_address_book: 'No address book was found on the contacts server.',
     put_failed: "The contacts server didn't accept the change. Try again in a moment.",
     get_failed: "The contacts server didn't return the contact. Try again in a moment.",

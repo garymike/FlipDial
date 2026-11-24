@@ -737,7 +737,7 @@ def undo(settings: Settings, master: CardDAVClient, undo_id: int) -> str:
 
 def status(settings: Settings) -> dict[str, Any]:
     on = phone_rules.enabled(settings)
-    out: dict[str, Any] = {"enabled": on, "book": settings.phone_addressbook or ""}
+    out: dict[str, Any] = {"enabled": on, "book": phone_rules.book_name(settings)}
     if not on:
         return out
     state = _state(settings)
@@ -764,7 +764,7 @@ def waiting_count(settings: Settings) -> int:
 
 
 def phone_client(settings: Settings) -> CardDAVClient:
-    return CardDAVClient(settings, book=settings.phone_addressbook)
+    return CardDAVClient(settings, book=phone_rules.book_name(settings))
 
 
 def dirty(settings: Settings) -> bool:
