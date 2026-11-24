@@ -91,11 +91,18 @@ def test_new_address_means_new_certificates(builtin):
     s = builtin
     builtin_server.turn_on(s, HOME)
     before = (builtin_server.folder(s) / "ca.pem").read_bytes()
+    _wait_up(s)  # running with the first certificate
     builtin_server.turn_on(s, "nas.local")
     after = (builtin_server.folder(s) / "ca.pem").read_bytes()
     assert before != after
     assert s.phone_server_url == f"https://nas.local:{cs.PORT}/"
     _wait_up(s)
+    # The running server was restarted, so it now uses the new certificate.
+    import ssl
+
+    served = ssl.get_server_certificate(("127.0.0.1", cs.PORT))
+    leaf = (builtin_server.folder(s) / "server.pem").read_text()
+    assert ssl.PEM_cert_to_DER_cert(served) == ssl.PEM_cert_to_DER_cert(leaf)
 
 
 def test_api_and_loading_settings(builtin, monkeypatch):

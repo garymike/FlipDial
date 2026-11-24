@@ -178,8 +178,14 @@ def turn_on(settings: Settings, host: str) -> None:
         cs.write_private_note(d, PASSWORD_FILE, out["password"])
     elif phone_rules.get_setting(settings, HOST_KEY) != host:
         cs.renew_certificates(d, [host])
-    if not supervisor.running() and not port_free():
-        raise cs.ServerSetupError("port_in_use")
+    # Restart our own server so a new address and certificate take effect; then make
+    # sure nothing else is using the port.
+    supervisor.stop()
+    end = time.monotonic() + 5
+    while not port_free():
+        if time.monotonic() > end:
+            raise cs.ServerSetupError("port_in_use")
+        time.sleep(0.2)
     phone_rules.put_setting(settings, HOST_KEY, host)
     phone_rules.put_setting(settings, ON_KEY, "on")
     apply(settings)
