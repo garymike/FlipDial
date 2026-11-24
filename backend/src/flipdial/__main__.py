@@ -79,12 +79,19 @@ def main(argv: list[str] | None = None) -> None:
     if args.command in {"ingest", "extract", "worker"}:
         from flipdial.extract.worker import Extractor
         from flipdial.ingest.worker import Ingestor
+        from flipdial.status import beat
 
         if args.command == "worker":
+            import logging
+
             ingestor, extractor = Ingestor(settings), Extractor(settings)
             while True:
-                ingestor.run_once()
-                extractor.run_once()
+                beat(settings, "worker")
+                for part in (ingestor, extractor):
+                    try:
+                        part.run_once()
+                    except Exception:  # keep running; one bad pass shouldn't stop the worker
+                        logging.getLogger("flipdial.worker").exception("worker pass failed")
                 time.sleep(settings.poll_seconds)
         worker = Ingestor(settings) if args.command == "ingest" else Extractor(settings)
         if args.once:

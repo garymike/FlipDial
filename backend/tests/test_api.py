@@ -161,3 +161,27 @@ def test_forget_removes_every_trace(api, dav_settings, make_card):
     assert any(e["action"] == "contact.forget" and e["target"] == uid for e in entries)
     assert "Fay" not in str(api.get("/api/audit").json())
     assert api.delete(f"/api/contacts/{uid}", headers=H).status_code == 404
+
+
+def test_read_failed_cards_again(api, dav_settings, make_card):
+    from flipdial import db
+
+    card_id = _scan_and_read(dav_settings, make_card, seed=9)
+    with db.session(dav_settings.db_path) as conn:
+        conn.execute(
+            "UPDATE cards SET status = 'extract_failed', attempts = 3, "
+            "last_error = 'model_not_installed' WHERE id = ?",
+            (card_id,),
+        )
+    item = next(i for i in api.get("/api/review").json()["items"] if i["card_id"] == card_id)
+    assert item["status"] == "extract_failed" and item["error"] == "model_not_installed"
+
+    assert api.post(f"/api/review/{card_id}/retry", headers=H).json() == {"retrying": 1}
+    item = next(i for i in api.get("/api/review").json()["items"] if i["card_id"] == card_id)
+    assert item["status"] == "extract_pending" and item["error"] is None
+    assert api.post(f"/api/review/{card_id}/retry", headers=H).status_code == 409
+
+    with db.session(dav_settings.db_path) as conn:
+        conn.execute("UPDATE cards SET status = 'extract_failed' WHERE id = ?", (card_id,))
+    assert api.post("/api/review/retry", headers=H).json()["retrying"] >= 1
+    assert api.get("/api/audit").json()["entries"][0]["action"] == "card.retry"

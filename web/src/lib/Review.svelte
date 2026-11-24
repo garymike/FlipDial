@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { api, describe, REASONS, type ContactInput, type Match, type ReviewItem } from './api'
+  import { api, describe, READ_ERRORS, REASONS, type ContactInput, type Match, type ReviewItem, type SetupItem } from './api'
+  import { href } from './router.svelte'
   import ContactForm from './ContactForm.svelte'
 
   let { onchange }: { onchange?: () => void } = $props()
@@ -46,6 +47,39 @@
   $effect(() => {
     load()
   })
+
+  // While nothing is open for review, check for newly read cards every few seconds.
+  // (Never while a card is open, so edits in progress aren't reset.)
+  $effect(() => {
+    if (current || !waiting.length) return
+    const timer = setInterval(load, 4000)
+    return () => clearInterval(timer)
+  })
+
+  // When cards are stuck, say why: the first setup problem, if any.
+  let problem = $state<SetupItem | null>(null)
+  $effect(() => {
+    if (!waiting.length) {
+      problem = null
+      return
+    }
+    api
+      .status()
+      .then((s) => (problem = s.items.find((i) => i.state === 'fail') ?? null))
+      .catch(() => (problem = null))
+  })
+
+  const failed = $derived(waiting.filter((i) => i.status === 'extract_failed'))
+
+  async function readAgain(cardId?: string) {
+    try {
+      if (cardId) await api.retry(cardId)
+      else await api.retryAll()
+      await load()
+    } catch (e) {
+      error = describe(e)
+    }
+  }
 
   let lastEvent = ''
   $effect(() => {
@@ -124,11 +158,50 @@
 </script>
 
 <div class="wrap">
-  <h1>Review <span class="count">{ready.length} ready{waiting.length ? `, ${waiting.length} being read` : ''}</span></h1>
+  <h1>
+    Review
+    <span class="count">
+      {ready.length} ready{waiting.length - failed.length ? `, ${waiting.length - failed.length} being read` : ''}{failed.length
+        ? `, ${failed.length} couldn't be read`
+        : ''}
+    </span>
+  </h1>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 
+  {#if problem}
+    <div class="problem" role="status">
+      <strong>Cards can't be read right now.</strong>
+      <span>{problem.label}: {problem.detail}</span>
+      {#if problem.fix}<span class="fix">{problem.fix}</span>{/if}
+      <a href={href({ name: 'setup' })}>Open the setup check</a>
+    </div>
+  {/if}
+
+  {#if waiting.length && !current}
+    <section class="waiting" aria-label="Cards being read">
+      <div class="waiting-head">
+        <h2>{failed.length ? `${failed.length} couldn't be read` : 'Reading your cards'}</h2>
+        {#if failed.length > 1}<button type="button" class="secondary all" onclick={() => readAgain()}>Read all again</button>{/if}
+      </div>
+      <ul>
+        {#each waiting as w (w.card_id)}
+          <li>
+            <img src={api.image(w.card_id, 'thumb')} alt="Scanned card" loading="lazy" />
+            {#if w.status === 'extract_failed'}
+              <span class="why">{READ_ERRORS[w.error ?? ''] ?? "Couldn't be read."}</span>
+              <button type="button" class="secondary" onclick={() => readAgain(w.card_id)}>Read again</button>
+            {:else}
+              <span class="reading">{w.error ? `Retrying: ${READ_ERRORS[w.error] ?? w.error}` : 'Reading…'}</span>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+      {#if !failed.length}<p class="hint">The first card can take a minute while the model loads. This page updates by itself.</p>{/if}
+    </section>
+  {/if}
+
   {#if !current}
-    <p class="empty">Nothing to review. New scans appear here after they are read.</p>
+    {#if !waiting.length}<p class="empty">Nothing to review. New scans appear here after they are read.</p>{/if}
   {:else if form}
     <div class="layout">
       <section class="images" aria-label="Card images">
@@ -312,5 +385,75 @@
   }
   .empty {
     color: var(--ash);
+  }
+  .problem {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #3a2422;
+    border: 1px solid #6b3a35;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .problem .fix {
+    color: #f0d6cf;
+  }
+  .waiting {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .waiting-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .waiting .all {
+    flex: 0 0 auto;
+    width: auto;
+  }
+  .waiting h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 19px;
+  }
+  .waiting ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+  }
+  .waiting li {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid #2c2f36;
+  }
+  .waiting img {
+    width: 100%;
+    aspect-ratio: 1.75;
+    object-fit: contain;
+    border-radius: 6px;
+    background: #111;
+  }
+  .reading,
+  .hint {
+    color: var(--ash);
+    font-size: 13px;
+  }
+  .hint {
+    margin: 0;
+  }
+  .why {
+    color: #f0b3a8;
+    font-size: 13px;
   }
 </style>

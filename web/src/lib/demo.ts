@@ -117,6 +117,17 @@ export async function handle(method: string, path: string, body?: unknown): Prom
   const route = `${method} /${seg[0] ?? ''}`
 
   switch (route) {
+    case 'GET /status':
+      return {
+        state: 'ok',
+        items: [
+          { id: 'model_server', label: 'Ollama', state: 'ok', detail: 'Running (in the real app, on your computer).', fix: '' },
+          { id: 'model_installed', label: 'Card-reading model', state: 'ok', detail: 'Installed.', fix: '' },
+          { id: 'model_vision', label: 'Model can read images', state: 'ok', detail: 'Yes.', fix: '' },
+          { id: 'worker', label: 'Scan worker', state: 'ok', detail: 'Running.', fix: '' },
+          { id: 'contacts_server', label: 'Contacts server', state: 'ok', detail: 'In the demo, contacts live in your browser.', fix: '' },
+        ],
+      }
     case 'GET /me':
       return { user: 'demo', mode: 'none' }
     case 'POST /sync':

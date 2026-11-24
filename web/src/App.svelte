@@ -6,6 +6,7 @@
   import Review from './lib/Review.svelte'
   import Transfer from './lib/Transfer.svelte'
   import Activity from './lib/Activity.svelte'
+  import Setup from './lib/Setup.svelte'
   import { href, router } from './lib/router.svelte'
   import Wall from './lib/Wall.svelte'
 
@@ -27,6 +28,15 @@
   let me = $state<{ user: string; mode: string } | null>(null)
   $effect(() => {
     api.me().then((m) => (me = m)).catch(() => (me = null))
+  })
+
+  // A plain warning across the app when something essential is broken (checked once per load).
+  let broken = $state<string | null>(null)
+  $effect(() => {
+    api
+      .status()
+      .then((s) => (broken = s.items.find((i) => i.state === 'fail')?.label ?? null))
+      .catch(() => (broken = null))
   })
 
   async function signOut() {
@@ -72,12 +82,20 @@
   {/if}
 </header>
 
+{#if broken && router.route.name !== 'setup'}
+  <p class="attention" role="status">
+    FlipDial needs attention: {broken}. <a href={href({ name: 'setup' })}>Open the setup check</a>
+  </p>
+{/if}
+
 {#if router.route.name === 'wall'}
   <Wall {query} />
 {:else if router.route.name === 'dial'}
   <Dial {query} />
 {:else if router.route.name === 'duplicates'}
   <Duplicates />
+{:else if router.route.name === 'setup'}
+  <Setup />
 {:else if router.route.name === 'activity'}
   <Activity />
 {:else if router.route.name === 'transfer'}
@@ -94,6 +112,16 @@
 {/if}
 
 <style>
+  .attention {
+    margin: 0;
+    padding: 10px 32px;
+    background: #3a2422;
+    border-bottom: 1px solid #6b3a35;
+    font-size: 14px;
+  }
+  .attention a {
+    margin-left: 6px;
+  }
   .demo-banner {
     margin: 0;
     padding: 8px 16px;

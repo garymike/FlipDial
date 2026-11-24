@@ -132,6 +132,19 @@ export interface ImportRecord {
   undone: boolean
 }
 
+export interface SetupItem {
+  id: string
+  label: string
+  state: 'ok' | 'warn' | 'fail'
+  detail: string
+  fix: string
+}
+
+export interface SetupStatus {
+  state: 'ok' | 'warn' | 'fail'
+  items: SetupItem[]
+}
+
 export interface AuditEntry {
   id: number
   ts: string
@@ -237,6 +250,9 @@ export const api = {
   exportUrl: (kind: 'vcf' | 'csv' | 'backup') => urls.exportUrl(kind),
   forget: (uid: string) =>
     call<{ forgotten: string; scans: number }>('DELETE', `/api/contacts/${encodeURIComponent(uid)}`),
+  status: () => call<SetupStatus>('GET', '/api/status'),
+  retry: (cardId: string) => call<{ retrying: number }>('POST', `/api/review/${cardId}/retry`),
+  retryAll: () => call<{ retrying: number }>('POST', '/api/review/retry'),
   me: () => call<{ user: string; mode: 'none' | 'oidc' | 'proxy' }>('GET', '/api/me'),
   logout: () => call<{ signed_out: boolean }>('POST', '/api/logout'),
   audit: (before?: number) =>
@@ -254,6 +270,20 @@ export const REASONS: Record<string, string> = {
   same_name: 'Same name',
   similar_name: 'Similar name',
   same_company: 'Same company',
+}
+
+/** Why a card couldn't be read, in plain words. */
+export const READ_ERRORS: Record<string, string> = {
+  model_unreachable: "Couldn't reach Ollama. Is it running?",
+  model_not_installed: "The card-reading model isn't installed in Ollama.",
+  model_not_vision: "The chosen model can't read images.",
+  model_timeout: 'Reading took too long.',
+  model_error: 'The model reported an error.',
+  image_missing: 'The scan image is missing.',
+  unexpected_response: "The model's answer couldn't be used.",
+  response_not_json: "The model's answer couldn't be used.",
+  response_not_object: "The model's answer couldn't be used.",
+  response_too_large: "The model's answer was too long.",
 }
 
 /** Plain-language messages for error codes. */
@@ -275,6 +305,7 @@ export function describe(err: unknown): string {
     no_contacts_found: 'No contacts were found in that file.',
     empty_file: 'That file is empty.',
     demo_readonly: 'That is turned off in the demo. Install FlipDial to use it with your own contacts.',
+    not_failed: 'That card is already being read.',
     bad_mapping: 'The column choices do not match the file. Pick the file again.',
   }
   return messages[code] ?? `Something went wrong (${code}).`
