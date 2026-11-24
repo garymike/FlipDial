@@ -430,6 +430,7 @@
   li {
     display: flex;
     flex-direction: column;
+    justify-content: flex-end; /* cards of other shapes line up at the bottom, names in a row */
     gap: 10px;
   }
   .tile {

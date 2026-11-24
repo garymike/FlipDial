@@ -263,9 +263,9 @@
                 style:opacity={s.opacity}
                 style:z-index={s.zIndex}
                 style:pointer-events={s.visible ? 'auto' : 'none'}
+                style:filter={s.shade > 0.01 ? `brightness(${(1 - s.shade).toFixed(2)})` : undefined}
               >
                 <FlipCard contact={c} flipped={i === index && flipped} size="large" />
-                <span class="shade" style:opacity={s.shade}></span>
               </div>
             {/each}
           </div>
@@ -464,18 +464,11 @@
     will-change: transform, opacity;
     transition:
       transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 0.45s ease;
+      opacity 0.45s ease,
+      filter 0.45s ease;
   }
   .dragging .slot {
     transition: none;
-  }
-  .shade {
-    position: absolute;
-    inset: 0;
-    border-radius: 10px;
-    background: #0b0c0f;
-    pointer-events: none;
-    transition: opacity 0.45s ease;
   }
   .controls {
     display: flex;
@@ -623,7 +616,6 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .slot,
-    .shade,
     .fill {
       transition: none;
     }

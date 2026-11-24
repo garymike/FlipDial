@@ -17,6 +17,7 @@
     aspect = 1.75,
     lazy = true,
     onratio,
+    card = false,
   }: {
     src: string
     alt?: string
@@ -24,6 +25,7 @@
     aspect?: number
     lazy?: boolean
     onratio?: (r: number) => void
+    card?: boolean // rounded corners and a shadow on the picture itself
   } = $props()
 
   let ratio = $state(1.75)
@@ -36,7 +38,7 @@
   }
 </script>
 
-<span class="scan {fit}" style:--frame={aspect} style:--r={ratio}>
+<span class="scan {fit}" class:card style:--frame={aspect} style:--r={ratio}>
   <span class="box">
     <img {src} {alt} loading={lazy ? 'lazy' : 'eager'} draggable="false" onload={loaded} />
   </span>
@@ -67,6 +69,10 @@
     /* object-fit: contain, done by hand so the box hugs the picture */
     width: min(100cqw, 100cqh * var(--r));
     height: min(100cqh, 100cqw / var(--r));
+  }
+  .card .box {
+    border-radius: 10px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
   }
   img {
     position: absolute;
