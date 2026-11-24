@@ -401,6 +401,9 @@ export const api = {
   approve: (cardId: string, input: ContactInput) =>
     call<Contact & { uid: string }>('POST', `/api/review/${cardId}/approve`, input),
   dismiss: (cardId: string) => call('POST', `/api/review/${cardId}/dismiss`),
+  /** The back is a different card: make it its own card. Both are read again. */
+  split: (cardId: string) =>
+    call<{ card_id: string; new_card_id: string }>('POST', `/api/review/${cardId}/split`),
   duplicates: () => call<{ pairs: DuplicatePair[]; count: number }>('GET', '/api/duplicates'),
   notDuplicates: (uid_a: string, uid_b: string) =>
     call('POST', '/api/duplicates/dismiss', { uid_a, uid_b }),

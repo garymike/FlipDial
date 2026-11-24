@@ -248,6 +248,7 @@
   }
   const restore = (id: string) => act(async () => { await api.restoreCard(id); if (undoId === id) undoId = null })
   const reread = (id: string) => act(async () => { await api.retry(id); confirmReread = false; if (undoId === id) undoId = null })
+  const split = (id: string) => act(async () => { await api.split(id); showBack = false })
   const remove = (id: string) => act(async () => { await api.deleteCard(id); confirmDelete = null })
 
   async function dismiss() {
@@ -369,7 +370,19 @@
         {#if current.flags.includes('sideways:front') && /f0/.test(current.view ?? 'f0')}
           <p class="flags">This card looks sideways. Use Rotate until it reads upright.</p>
         {/if}
-        {#if current.flags.some((f) => f !== 'sideways:front')}
+        {#if current.has_back && current.flags.includes('back_mismatch:back')}
+          <div class="mismatch" role="note">
+            <p>
+              The back looks like a different card. This usually means the scanner skipped a blank
+              back, so cards scanned after this one may be paired wrong too. Turning off blank-page
+              removal on the scanner stops it.
+            </p>
+            <button type="button" class="secondary small" onclick={() => current && split(current.card_id)} disabled={busy}>
+              Split into two cards
+            </button>
+          </div>
+        {/if}
+        {#if current.flags.some((f) => f !== 'sideways:front' && f !== 'back_mismatch:back')}
           <p class="flags">Check the highlighted fields before saving.</p>
         {/if}
         <nav class="pager" aria-label="Cards to review">
@@ -565,6 +578,22 @@
     border: 1px solid var(--line);
     background: var(--graphite);
     color: var(--bone);
+  }
+  .mismatch {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--amber);
+    background: #2a241a;
+  }
+  .mismatch p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
   }
   .match {
     display: flex;
