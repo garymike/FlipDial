@@ -21,6 +21,24 @@
     run()
   })
 
+  let pushing = $state(false)
+  let pushed = $state('')
+  async function pushLocal() {
+    pushing = true
+    try {
+      const r = await api.pushLocal()
+      pushed =
+        `Copied ${r.copied} to the server.` +
+        (r.already_there ? ` ${r.already_there} were already there.` : '') +
+        (r.failed ? ` ${r.failed} couldn't be copied; try again.` : '')
+      await run()
+    } catch (e) {
+      error = describe(e)
+    } finally {
+      pushing = false
+    }
+  }
+
   const ICON = { ok: '✓', warn: '!', fail: '✕' } as const
   const SUMMARY = {
     ok: 'Everything FlipDial needs is in place.',
@@ -40,6 +58,7 @@
   </p>
 
   {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if pushed}<p class="summary ok" role="status">{pushed}</p>{/if}
   {#if status}
     <p class="summary {status.state}" role="status">{SUMMARY[status.state]}</p>
     <ul class="items">
@@ -50,6 +69,11 @@
             <strong>{item.label}</strong>
             <span class="detail">{item.detail}</span>
             {#if item.fix}<span class="fix">{item.fix}</span>{/if}
+            {#if item.action === 'push_local'}
+              <button type="button" class="secondary act" onclick={pushLocal} disabled={pushing}>
+                {pushing ? 'Copying…' : item.action_label}
+              </button>
+            {/if}
           </div>
         </li>
       {/each}
@@ -155,6 +179,10 @@
     font-size: 13px;
     line-height: 1.5;
     overflow-wrap: anywhere;
+  }
+  .act {
+    align-self: flex-start;
+    margin-top: 6px;
   }
   .secondary {
     min-height: 44px;

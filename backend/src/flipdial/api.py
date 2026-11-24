@@ -191,6 +191,23 @@ def forget_contact(uid: str, s: SettingsDep, client: ClientDep, actor: ActorDep)
     return {"forgotten": uid} | counts
 
 
+@router.post("/contacts/push-local")
+def push_local(s: SettingsDep, actor: ActorDep) -> dict:
+    """Copy contacts saved on this computer to the contacts server, once it's set up."""
+    from flipdial.carddav.local import push_to_server
+
+    if not s.carddav_url:
+        raise HTTPException(409, "carddav_not_configured")
+    try:
+        server = CardDAVClient(s)
+        counts = push_to_server(s, server)
+        contacts.sync(s, server)
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+    audit.record(s, actor, "contacts.copy_to_server", **counts)
+    return counts
+
+
 @router.post("/sync")
 def sync(s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
     try:

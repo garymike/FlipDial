@@ -158,6 +158,8 @@ export interface SetupItem {
   state: 'ok' | 'warn' | 'fail'
   detail: string
   fix: string
+  action?: 'push_local'
+  action_label?: string
 }
 
 export interface SetupStatus {
@@ -288,7 +290,9 @@ export const api = {
   restoreCard: (cardId: string) => call<{ status: string }>('POST', `/api/review/${cardId}/restore`),
   deleteCard: (cardId: string) => call<{ deleted: string }>('DELETE', `/api/review/${cardId}`),
   retryAll: () => call<{ retrying: number }>('POST', '/api/review/retry'),
-  me: () => call<{ user: string; mode: 'none' | 'oidc' | 'proxy' }>('GET', '/api/me'),
+  me: () => call<{ user: string; mode: 'none' | 'oidc' | 'proxy'; storage: 'server' | 'local' }>('GET', '/api/me'),
+  pushLocal: () =>
+    call<{ copied: number; already_there: number; failed: number }>('POST', '/api/contacts/push-local'),
   logout: () => call<{ signed_out: boolean }>('POST', '/api/logout'),
   audit: (before?: number) =>
     call<{ entries: AuditEntry[] }>('GET', `/api/audit${before ? `?before=${before}` : ''}`),
