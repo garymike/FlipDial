@@ -64,6 +64,16 @@ describe('seek', () => {
     expect(seek('zzz', cards)).toBe(-1)
     expect(seek('  ', cards)).toBe(-1)
   })
+  it('falls back to words anywhere: title, email, event, About', () => {
+    const more = [
+      { full_name: 'Noor Gems', organization: 'Noor Gems', about: 'Precious stones, emerald', emails: [{ value: 'noor@gems.example' }] },
+      { full_name: 'Café Ñandú', organization: '', title: 'Owner', event: 'Art Fair 2026' },
+    ]
+    expect(seek('precious', more)).toBe(0)
+    expect(seek('noor@', more)).toBe(0)
+    expect(seek('art fair', more)).toBe(1)
+    expect(seek('nandu', more)).toBe(1) // accents ignored
+  })
 })
 
 describe('slot', () => {

@@ -355,6 +355,30 @@ export function describe(err: unknown): string {
     not_dismissed: 'That card is already back in Review.',
     cannot_delete: 'Saved cards are removed with Forget on the contact page.',
     bad_mapping: 'The column choices do not match the file. Pick the file again.',
+    not_found: "That contact isn't in your address book any more. It may have been deleted or merged.",
+    unknown_card: "That card isn't in FlipDial any more.",
+    changed_on_server: 'This contact was changed on the contacts server. Reload it and try again.',
+    already_exists: 'A contact with that ID already exists on the contacts server.',
+    address_book_not_found: "The address book in your settings wasn't found on the contacts server.",
+    no_address_book: 'No address book was found on the contacts server.',
+    put_failed: "The contacts server didn't accept the change. Try again in a moment.",
+    get_failed: "The contacts server didn't return the contact. Try again in a moment.",
+    delete_failed: "The contacts server didn't delete the contact. Try again in a moment.",
+    propfind_failed: "The contacts server didn't list the address book. Check the address in Setup.",
+    not_allowed: "You don't have permission to do that.",
+    sign_in_required: 'Your sign-in has ended. Reload the page to sign in again.',
+    unsupported_format: "FlipDial can't read that kind of file. Use a .vcf or .csv file.",
+    not_a_vcard: "That file doesn't look like a vCard (.vcf).",
+    vcard_too_large: 'One of the contacts in that file is too large to import.',
+    unreadable: "That file couldn't be read. Save it again as UTF-8 and retry.",
+    too_large: 'That file is too large.',
+    empty: 'That file is empty.',
+    not_a_backup: "That file isn't a FlipDial backup.",
+    http_422: "Some values weren't accepted. Check them and try again.",
+    http_413: 'That is too large to send.',
+    http_429: 'Too many requests at once. Wait a moment and try again.',
   }
-  return messages[code] ?? `Something went wrong (${code}).`
+  if (messages[code]) return messages[code]
+  if (err instanceof ApiError && err.status >= 500) return 'FlipDial hit an error. Try again; if it keeps happening, the details are in the server log.'
+  return `Something went wrong (${code}).`
 }

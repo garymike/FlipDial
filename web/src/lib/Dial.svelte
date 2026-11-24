@@ -42,14 +42,20 @@
     cards.length > 1 ? [1, 2, 3].map((k) => cards[mod(index + k, cards.length)]).slice(0, cards.length - 1) : [],
   )
 
+  // Only the newest request may update the dial. Switching filters quickly sends several,
+  // and an older, slower answer must not land on top of the newer one.
+  let latest = 0
   async function load() {
+    const ticket = ++latest
     try {
-      data = await api.contacts({ deck, scan, starred: starredOnly })
+      const next = await api.contacts({ deck, scan, starred: starredOnly })
+      if (ticket !== latest) return
+      data = next
       pos = 0
       flipped = false
       error = ''
     } catch (e) {
-      error = describe(e)
+      if (ticket === latest) error = describe(e)
     }
   }
 
@@ -60,8 +66,10 @@
 
   // The header search dials to the first match instead of filtering.
   // Runs only when the query or the card list changes, not on every move.
+  let noMatch = $state(false)
   $effect(() => {
     const i = seek(query, cards)
+    noMatch = !!query.trim() && cards.length > 0 && i < 0
     if (i >= 0) untrack(() => goTo(i))
   })
 
@@ -204,7 +212,13 @@
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 
   {#if data && cards.length === 0}
-    <p class="empty">No contacts in this deck.</p>
+    <p class="empty">
+      {#if starredOnly}No starred contacts yet. Use the star on a contact to add it here.
+      {:else if scan === 'yes'}No contacts with a scanned card{deck ? ' in this deck' : ''}.
+      {:else if scan === 'no'}Every contact{deck ? ' in this deck' : ''} has a scanned card.
+      {:else if deck}No contacts in this deck.
+      {:else}No contacts yet. Scan some cards, then approve them in Review.{/if}
+    </p>
   {:else}
     <div class="layout">
       <nav class="letters" aria-label="Jump to letter">
@@ -273,6 +287,7 @@
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5" /></svg>
           </button>
         </div>
+        {#if noMatch}<p class="nomatch" role="status">Nothing matches “{query.trim()}” here. Try part of a name, company, email or event.</p>{/if}
         <p class="hint">Drag, scroll or use the arrow keys to dial. Click the front card or press Enter to flip it. Type in search to dial to a name.</p>
       </div>
 
@@ -608,6 +623,12 @@
     border-radius: 10px;
     background: #3a2a1a;
     color: var(--signal);
+  }
+  .nomatch {
+    margin: 0;
+    color: var(--amber);
+    font-size: 14px;
+    text-align: center;
   }
   .empty {
     color: var(--ash);

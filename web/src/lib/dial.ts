@@ -41,18 +41,38 @@ export function letterIndex(names: string[]): Map<string, number> {
   return out
 }
 
-/** First card whose name, any word of the name, or company starts with the query. */
-export function seek(query: string, cards: { full_name: string; organization: string }[]): number {
-  const q = query.trim().toLowerCase()
+type Seekable = {
+  full_name: string
+  organization: string
+  title?: string
+  event?: string
+  about?: string
+  emails?: ({ value: string } | string)[]
+}
+
+const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/**
+ * The card to dial to for a search. Best first: a name or company that starts with the
+ * query, then any word of them, then the query anywhere in the name, company, title,
+ * email, event or About text. -1 when nothing matches.
+ */
+export function seek(query: string, cards: Seekable[]): number {
+  const q = fold(query.trim())
   if (!q) return -1
-  return cards.findIndex((c) => {
-    const name = c.full_name.toLowerCase()
-    return (
-      name.startsWith(q) ||
-      name.split(/\s+/).some((w) => w.startsWith(q)) ||
-      c.organization.toLowerCase().startsWith(q)
-    )
-  })
+  const tests: ((c: Seekable) => boolean)[] = [
+    (c) => fold(c.full_name).startsWith(q) || fold(c.organization).startsWith(q),
+    (c) => [c.full_name, c.organization].some((t) => fold(t).split(/[\s\-&.,]+/).some((w) => w.startsWith(q))),
+    (c) =>
+      [c.full_name, c.organization, c.title ?? '', c.event ?? '', c.about ?? '',
+        ...(c.emails ?? []).map((e) => (typeof e === 'string' ? e : e.value))]
+        .some((t) => fold(t).includes(q)),
+  ]
+  for (const test of tests) {
+    const i = cards.findIndex(test)
+    if (i >= 0) return i
+  }
+  return -1
 }
 
 export interface SlotStyle {
