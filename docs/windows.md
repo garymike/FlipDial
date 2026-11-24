@@ -60,6 +60,8 @@ Until the first release is published, `update.cmd` installs the latest code inst
 
 ## When cards aren't being read
 
+**No contacts server?** In Setup, **Contacts server**, one button turns on FlipDial's built-in one so phones can sync. The first time, Windows Security asks whether to allow Python on networks: choose **Private networks** only (details in [Bundled contacts server](contacts-server.md)).
+
 Open **Setup check** (Wall sidebar, or the link in the red bar FlipDial shows when something is wrong). It checks Ollama, the card-reading model, whether that model can read images, the scan worker, the inbox and your contacts server, and says what to do for anything that isn't right. If the model you've set isn't installed, it lists the installed models that can read images.
 
 After fixing the problem, use **Read again** on the Review page for cards that failed.

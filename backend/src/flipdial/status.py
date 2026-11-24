@@ -218,9 +218,9 @@ def check(
                 "Contacts server",
                 "warn",
                 f"Not set up, so contacts are saved on this computer ({on_computer} so far).",
-                "To see them on your phone, add FLIPDIAL_CARDDAV_URL, _USERNAME and _PASSWORD "
-                "to backend\\.env (see docs/carddav.md) and restart. You can then copy them "
-                "to the server from here.",
+                "To see them on your phone, turn on FlipDial's built-in contacts server under "
+                "Contacts server below, or connect your own (docs/carddav.md). You can then "
+                "copy them to the server from here.",
             )
         )
     elif carddav_factory is not None:

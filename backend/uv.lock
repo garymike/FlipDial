@@ -317,14 +317,12 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "pypdfium2" },
+    { name = "radicale", extra = ["bcrypt"] },
     { name = "segno" },
     { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
-contacts-server = [
-    { name = "radicale", extra = ["bcrypt"] },
-]
 dev = [
     { name = "httpx" },
     { name = "pytest" },
@@ -351,7 +349,7 @@ requires-dist = [
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15" },
     { name = "pypdfium2", specifier = ">=4.30" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3" },
-    { name = "radicale", extras = ["bcrypt"], marker = "extra == 'contacts-server'", specifier = ">=3.5" },
+    { name = "radicale", extras = ["bcrypt"], specifier = ">=3.5" },
     { name = "radicale", extras = ["bcrypt"], marker = "extra == 'dev'", specifier = ">=3.5" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "segno", specifier = ">=1.6" },

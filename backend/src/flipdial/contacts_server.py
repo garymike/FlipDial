@@ -122,6 +122,19 @@ def _names(hosts: list[str]) -> list[x509.GeneralName]:
     return out
 
 
+def _constraints(hosts: list[str]) -> x509.NameConstraints:
+    """Limit the authority to this server's names, so even a stolen key couldn't vouch for
+    any other website (for devices that check name constraints, which iOS and OpenSSL do)."""
+    permitted: list[x509.GeneralName] = []
+    for name in _names(hosts):
+        if isinstance(name, x509.IPAddress):
+            ip = name.value
+            permitted.append(x509.IPAddress(ipaddress.ip_network(f"{ip}/{ip.max_prefixlen}")))
+        else:
+            permitted.append(name)
+    return x509.NameConstraints(permitted_subtrees=permitted, excluded_subtrees=None)
+
+
 def make_certificates(folder: Path, hosts: list[str]) -> None:
     """A certificate authority for this server only, and the server's certificate."""
     now = datetime.now(UTC)
@@ -136,6 +149,7 @@ def make_certificates(folder: Path, hosts: list[str]) -> None:
         .not_valid_before(now - timedelta(minutes=5))
         .not_valid_after(now + timedelta(days=365 * CERT_YEARS))
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .add_extension(_constraints(hosts), critical=True)
         .add_extension(
             x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False
         )
@@ -187,7 +201,15 @@ def make_certificates(folder: Path, hosts: list[str]) -> None:
             serialization.NoEncryption(),
         ),
     )
-    # The CA key is not kept: a new server certificate means running init --renew.
+    # The CA key is not kept: a new address means new certificates (renew_certificates).
+
+
+def renew_certificates(folder: Path, hosts: list[str]) -> None:
+    """New certificates for new addresses. Accounts and contacts are kept; phones need the
+    new certificate (set them up again)."""
+    if not (folder / "users").is_file():
+        raise ServerSetupError("not_set_up")
+    make_certificates(folder, hosts)
 
 
 def init(folder: Path, hosts: list[str], config_dir: str | None = None) -> dict[str, str]:

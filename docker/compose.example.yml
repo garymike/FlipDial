@@ -12,6 +12,9 @@ services:
       FLIPDIAL_ALLOW_NO_AUTH: "true"
     ports:
       - "127.0.0.1:8080:8080"   # localhost only, unless sign-in is set up
+      # Uncomment if you turn on the built-in contacts server (Setup > Contacts server), so
+      # phones on your home network can reach it. Never forward this port on your router.
+      # - "5232:5232"
     volumes:
       - ./data:/data
     read_only: true
@@ -22,7 +25,8 @@ services:
     cap_drop:
       - ALL
 
-  # Optional: a contacts server for people who don't have one (docs/contacts-server.md).
+  # Optional, for running the contacts server separately (docs/contacts-server.md). Most
+  # people use the built-in one instead: Setup > Contacts server, one button.
   # Set it up once:  docker compose run --rm flipdial flipdial contacts-server init --host <this computer's name or address>
   # Then start it:   docker compose --profile contacts-server up -d
   contacts:

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Setup check: everything FlipDial needs, whether it's in place, and what to do if not.
   import { api, describe, type SetupStatus, type UpdateInfo } from './api'
+  import ContactsServer from './ContactsServer.svelte'
   import PhoneSync from './PhoneSync.svelte'
 
   let status = $state<SetupStatus | null>(null)
@@ -20,6 +21,9 @@
   }
   $effect(() => {
     run()
+    const again = () => run()
+    window.addEventListener('flipdial:server-changed', again)
+    return () => window.removeEventListener('flipdial:server-changed', again)
   })
 
   // Updates: the version running here, and a way to look for a new release right now.
@@ -122,6 +126,7 @@
     {/if}
   </section>
 
+  <ContactsServer />
   <PhoneSync />
 </div>
 

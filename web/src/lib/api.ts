@@ -142,6 +142,20 @@ export interface PhoneStatus {
   waiting?: number // in Review: added on the phone, or changed in both places
 }
 
+/** FlipDial's built-in contacts server. */
+export interface BuiltinServer {
+  available: boolean // false when a contacts server is set in the settings file
+  on: boolean
+  set_up: boolean
+  running: boolean
+  problem: string
+  host: string
+  port: number
+  suggestions: { host: string; note: string }[]
+  windows: boolean
+  docker: boolean
+}
+
 /** The phone setup wizard's view of the contacts server. */
 export interface PhoneSetupInfo {
   server: boolean
@@ -475,6 +489,9 @@ export const api = {
     call<PhoneStatus>('PUT', '/api/phone/rules', { name, state }),
   phoneSync: (body: { confirm?: string; accept_drop?: boolean } = {}) =>
     call<PhoneSyncResult>('POST', '/api/phone/sync', body),
+  builtinServer: () => call<BuiltinServer>('GET', '/api/contacts-server'),
+  builtinServerOn: (host: string) => call<BuiltinServer>('POST', '/api/contacts-server/on', { host }),
+  builtinServerOff: () => call<BuiltinServer>('POST', '/api/contacts-server/off'),
   phoneSetup: () => call<PhoneSetupInfo>('GET', '/api/phone/setup'),
   phoneSetupBook: (name: string, create: boolean) =>
     call<PhoneSetupInfo>('POST', '/api/phone/setup/book', { name, create }),
@@ -616,6 +633,9 @@ export function describe(err: unknown): string {
     set_in_settings_file: 'The phone book is set in the settings file (FLIPDIAL_PHONE_ADDRESSBOOK). Change it there.',
     username_required: "Enter the phone's user name first.",
     no_bundled_server: "FlipDial's own contacts server isn't set up here.",
+    port_in_use: 'Something else on this computer is already using port 5232. Stop it, or set up that server in the settings file instead.',
+    bad_address: 'Enter just a name or address, like 192.168.1.20 or mycomputer.local.',
+    server_in_settings_file: 'A contacts server is set in the settings file, so the built-in one is not used.',
     name_required: 'Enter a name.',
     demo_readonly: 'That is turned off in the demo. Install FlipDial to use it with your own contacts.',
     not_supported: 'This install updates differently. See the release notes.',
