@@ -15,6 +15,9 @@ services:
       # Uncomment if you turn on the built-in contacts server (Setup > Contacts server), so
       # phones on your home network can reach it. Never forward this port on your router.
       # - "5232:5232"
+      # Also for setting up an iPhone while FlipDial is opened as localhost: the one-time
+      # profile link is offered here for 15 minutes.
+      # - "5233:5233"
     volumes:
       - ./data:/data
     read_only: true

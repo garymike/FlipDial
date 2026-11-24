@@ -281,9 +281,22 @@ def test_audit_chain_and_append_only(settings):
 
 
 def test_api_actions_are_audited(tmp_path):
-    s = Settings(_env_file=None, data_dir=tmp_path / "d")
+    s = Settings(_env_file=None, data_dir=tmp_path / "d", allowed_hosts="testserver")
     client = TestClient(create_app(s))
     client.get("/api/export/contacts.csv")
     entries = client.get("/api/audit").json()["entries"]
     assert entries[0]["action"] == "export.csv" and entries[0]["actor"] == "local"
     assert client.get("/api/audit/verify").json()["ok"] is True
+
+
+def test_unknown_host_names_refused_without_sign_in(tmp_path):
+    """DNS rebinding: a website pointing its own name at FlipDial gets nothing."""
+    s = Settings(_env_file=None, data_dir=tmp_path / "d")
+    client = TestClient(create_app(s))
+    for host in ("evil.example", "evil.example:8080", "rebind.attacker.test"):
+        r = client.get("/api/contacts", headers={"Host": host})
+        assert r.status_code == 421, host
+    for host in ("localhost:8080", "127.0.0.1:8080", "[::1]:8080", "192.168.1.20:8080"):
+        assert client.get("/api/contacts", headers={"Host": host}).status_code == 200, host
+    s.allowed_hosts = "flipdial.home"
+    assert client.get("/api/contacts", headers={"Host": "flipdial.home"}).status_code == 200

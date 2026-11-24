@@ -372,6 +372,11 @@ def run(
             return {"status": "confirm", **_summary(p, masters)}
         if p.first or p.changes > CONFIRM_REMOVALS:
             _backup(settings, masters)
+        with db.session(settings.db_path) as conn:  # undo is kept for 30 days, then dropped
+            conn.execute(
+                "DELETE FROM phone_undo WHERE created_at < ?",
+                ((_now() - timedelta(days=UNDO_DAYS)).isoformat(),),
+            )
         done = _apply(settings, phone, master or CardDAVClient(settings), p, masters)
         _finish(
             settings,

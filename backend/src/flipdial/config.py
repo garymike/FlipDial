@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     # Only contacts switched on for the phone are copied there. Empty: phone sync is off.
     phone_addressbook: str | None = None  # display name or path
     phone_check_hour: int = Field(default=3, ge=0, le=23)  # daily check, server local time
+    # Extra names FlipDial may be opened by, without sign-in (comma-separated). Addresses
+    # (127.0.0.1, 192.168.1.20), localhost and this computer's own name always work.
+    allowed_hosts: str = ""
     # The address phones use for the contacts server, when it differs from the one FlipDial
     # uses (FlipDial may reach it by a name that only works inside Docker, say).
     phone_server_url: str | None = None

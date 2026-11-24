@@ -28,7 +28,11 @@ def _log_everything(caplog):
 @pytest.fixture
 def settings(tmp_path):
     return Settings(
-        _env_file=None, data_dir=tmp_path / "data", settle_seconds=0, pair_timeout_seconds=0
+        _env_file=None,
+        data_dir=tmp_path / "data",
+        settle_seconds=0,
+        pair_timeout_seconds=0,
+        allowed_hosts="testserver",  # the test client's name for the app
     )
 
 
