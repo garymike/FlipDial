@@ -379,15 +379,20 @@
     flex-wrap: wrap;
     gap: 24px;
   }
+  /* Centered on the dial itself, not on the row, which grows with the reading pane:
+     the letters stay put and only the highlight moves. Same height as .stage. */
   .letters {
+    align-self: flex-start;
+    height: 600px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     gap: 1px;
   }
   .letters button {
+    flex: 0 0 auto;
     width: 36px;
-    height: 24px;
+    height: 22px;
     padding: 0;
     border: 0;
     border-radius: 5px;
