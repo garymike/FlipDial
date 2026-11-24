@@ -2,7 +2,7 @@
 
 Status: proposed. Nothing here is built yet. This page is the spec the code and tests are written against.
 
-FlipDial keeps every contact and card. Your phone only gets the contacts you choose, so its address book stays short. Nothing is connected to your Google or Apple account.
+FlipDial keeps every contact and card. Your phone only gets the contacts you choose, so its address book stays short. Nothing is connected to your Google or Apple account, and nothing is reachable from the internet: the phone syncs when it is on your home network.
 
 ```mermaid
 flowchart LR
@@ -38,7 +38,7 @@ The reading pane shows whether a contact is on the phone and why ("On: Art Fair 
 
 ## What sync does
 
-FlipDial syncs every few minutes and when you press **Sync now**. The phone syncs on its own schedule.
+FlipDial updates the phone book as soon as you change a contact, and checks it for edits made on the phone once a day (the time is a setting) and when you press **Sync now**. The phone syncs on its own schedule whenever it is on your home network; away from home it simply keeps the contacts it has.
 
 | Change | What happens |
 |---|---|
@@ -85,14 +85,15 @@ Each rule has a test.
 
 The profile link works once, only for the signed-in user, and expires after 15 minutes.
 
-### Reaching the server from the phone
+### Home network only
 
-At home, the phone reaches the server on your network. Away from home it needs a private connection.
+By design, the contacts server is reachable only on your home network. Nothing is opened to the internet, and the wizard never suggests port forwarding.
 
-- **Tailscale (recommended):** install it on the server and the phone. It also gives the server an HTTPS certificate the phone trusts, with no extra setup.
-- **Not recommended:** opening the contacts server to the internet. If you must, use a reverse proxy with HTTPS and rate limiting.
+- The phone needs HTTPS it trusts on the home network. A home server usually has its own certificate, so the wizard offers it to the phone: inside the iPhone profile, and as a certificate DAVx5 asks you to accept once on Android.
+- DAVx5 can be limited to your home Wi-Fi, so it doesn't try to sync elsewhere.
+- Away from home, contacts already on the phone keep working. Changes wait until you are back.
 
-The wizard checks the address works over HTTPS before showing it to the phone.
+Syncing away from home (for example through Tailscale) may come in a later release as an option you turn on.
 
 ## Bundled Radicale
 
@@ -101,7 +102,7 @@ An optional service in `docker/compose.yml`, for people with no contacts server.
 - Built from the Radicale package on PyPI at a pinned version, with hashes checked. No third-party image.
 - Runs as a non-root user with a read-only filesystem and no added privileges.
 - Passwords stored as bcrypt hashes. Access rules limit each account to its own address books.
-- Reachable only by FlipDial unless you publish its port (for the phone, through Tailscale or a reverse proxy).
+- Reachable only by FlipDial unless you publish its port on your home network for the phone, with a certificate the wizard creates.
 - Data is plain `.vcf` files in the data folder, included in FlipDial's backups.
 
 ## Google
@@ -124,3 +125,4 @@ No sign-in to Google, by design.
 - Whether Synology Contacts lets FlipDial create an address book over CardDAV, and whether it can share one address book with another DSM user while keeping the master private.
 - How quickly Radicale picks up a new account from its users file.
 - The exact DAVx5 login steps and whether it accepts a link or QR code.
+- How the iPhone handles a home server's own certificate: whether the profile alone is enough, or the user also has to turn on full trust in Settings (General > About > Certificate Trust Settings). The wizard's iPhone steps depend on this.
