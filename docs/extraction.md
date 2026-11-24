@@ -59,7 +59,24 @@ If the reader cannot be reached or returns something unusable, the card stays qu
 
 ## Measuring accuracy
 
-Keep a set of your own scanned cards in a folder **outside this repository**:
+Keep a set of your own scanned cards in a folder **outside this repository**. The easy way is to scan them, then let FlipDial build the folders:
+
+```sh
+# Scanner (duplex JPEGs, front then back). Your raw scans are left untouched.
+flipdial testset make D:\flipdial-testset\raw D:\flipdial-testset\cards
+# Phone photos go into the same test set; numbering continues
+flipdial testset make D:\flipdial-testset\phone D:\flipdial-testset\cards --mode single
+```
+
+This runs the real ingest steps (pairing, blank-back detection, cropping) on a copy of the scans, so the test uses exactly the images the reader sees in normal use. Each card gets a folder with a blank `expected.json`. Fill each one in by hand from the physical card, not from what FlipDial reads, then check your progress:
+
+```sh
+flipdial testset check D:\flipdial-testset\cards
+```
+
+`make` refuses to write inside a git repository, so a test set can't end up committed by accident.
+
+The layout, if you build one by hand:
 
 ```
 my-testset/
@@ -72,5 +89,7 @@ my-testset/
 ```sh
 flipdial eval --testset /path/to/my-testset
 ```
+
+Aim for the mix in the [release checklist](release-checklist.md): at least 30 cards, including artistic cards, cards with backs, tall or square cards, and a few phone photos.
 
 The report lists, per field, how many values were expected, how many were right, and how many extra values appeared that are not on the card. It never prints names, values or folder names, so it is safe to share.

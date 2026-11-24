@@ -11,6 +11,8 @@ flipdial export --out FILE    export contacts as .vcf or .csv (by the file's ext
 flipdial backup --out FILE    write a full backup zip (contacts, scans, database)
 flipdial restore FILE         restore a backup zip into an empty data folder
 flipdial audit verify         check the audit log has not been altered
+flipdial testset make RAW OUT build a private accuracy test set from raw scans
+flipdial testset check OUT    show which test cards still need answers
 """
 
 from __future__ import annotations
@@ -49,6 +51,19 @@ def main(argv: list[str] | None = None) -> None:
     bak.add_argument("--out", type=Path, required=True)
     res = sub.add_parser("restore", help="restore a backup zip into an empty data folder")
     res.add_argument("file", type=Path)
+    ts = sub.add_parser("testset", help="build or check a private accuracy test set")
+    ts_sub = ts.add_subparsers(dest="ts_action", required=True)
+    ts_make = ts_sub.add_parser("make", help="turn a folder of raw scans into test cards")
+    ts_make.add_argument("raw", type=Path, help="folder of scans or photos (left untouched)")
+    ts_make.add_argument("out", type=Path, help="test set folder, outside any git repository")
+    ts_make.add_argument(
+        "--mode",
+        choices=["duplex", "named", "single", "auto"],
+        default="duplex",
+        help="duplex: scanner, front then back (default); named or single: phone photos",
+    )
+    ts_check = ts_sub.add_parser("check", help="show which cards still need answers")
+    ts_check.add_argument("out", type=Path)
     aud = sub.add_parser("audit", help="audit log tools")
     aud.add_argument("action", choices=["verify"])
     args = parser.parse_args(argv)
@@ -92,6 +107,36 @@ def main(argv: list[str] | None = None) -> None:
         if not args.testset or not Path(args.testset).is_dir():
             sys.exit("Set --testset or FLIPDIAL_PRIVATE_TESTSET to a folder outside the repo.")
         print(json.dumps(evaluate(Path(args.testset), make_reader(settings)), indent=2))
+        return
+
+    if args.command == "testset":
+        from flipdial.extract import testset
+
+        try:
+            if args.ts_action == "make":
+                r = testset.make(args.raw, args.out, args.mode, settings)
+                print(
+                    f"Added {r['cards_added']} cards ({r['with_back']} with a back, "
+                    f"{r['blank_backs_dropped']} blank backs left out). "
+                    f"The test set now has {r['total_cards']} cards."
+                )
+                if r["refused_files"]:
+                    print("Could not read: " + ", ".join(r["refused_files"]))
+                print(f"Next: fill in each expected.json (see {args.out / 'README.txt'}).")
+            else:
+                r = testset.check(args.out)
+                print(
+                    f"{r['filled_in']} of {r['cards']} cards filled in, "
+                    f"{r['with_back']} with a back."
+                )
+                for name, problem in r["problems"].items():
+                    print(f"  {name}: {problem}")
+                if r["ready_for_eval"]:
+                    print(f"Ready: flipdial eval --testset {args.out}")
+                elif r["cards"] < 30:
+                    print(f"The release gate needs at least 30 cards; add {30 - r['cards']} more.")
+        except testset.TestsetError as exc:
+            sys.exit(str(exc))
         return
 
     if args.command == "audit":

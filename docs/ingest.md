@@ -42,6 +42,25 @@ If a front is waiting for its back, the worker waits `FLIPDIAL_PAIR_TIMEOUT_SECO
 - **Save as JPEG or PDF** into the inbox folder. A single PDF holding a whole stack works.
 - Auto-crop and deskew in the scanner are fine to leave on.
 
+### Fujitsu ScanSnap (for example the S1500 with ScanSnap Manager)
+
+Make a separate scan profile for FlipDial (Scan Button Settings; labels vary a little by version):
+
+| Setting | Value |
+|---|---|
+| Image quality | Superfine (300 dpi) |
+| Color mode | Color |
+| Scanning side | Duplex |
+| Allow automatic blank page removal | Off (Option button) |
+| Correct skewed text / rotate automatically | On |
+| Reduce bleed-through | Off: it can wash out light text |
+| Paper size | Automatic detection |
+| File format | JPEG, compression at the lowest or second-lowest setting |
+| Save to | FlipDial's inbox folder (or a private test-set folder) |
+| Multifeed detection | On; turn off only if thick or textured cards trigger false alarms |
+
+Load cards face down, top edge first, 10 to 15 at a time with the side guides snug. Feed very thick or oddly shaped cards one at a time. Set `FLIPDIAL_INGEST_MODE=duplex`.
+
 ## What gets refused
 
 Files are checked by content, not by name. Refused files move to the `rejected` folder with a `reason.json`:
