@@ -99,10 +99,30 @@
   }
 
   let lastEvent = ''
+  // Unsaved edits, kept per card so moving to another card and back loses nothing.
+  // A plain Map, not state, so writing to it never reruns the effect below.
+  const drafts = new Map<string, ContactInput>()
+
+  function go(step: number) {
+    if (!current || ready.length < 2) return
+    if (form) drafts.set(current.card_id, form)
+    index = (index + step + ready.length) % ready.length
+  }
+
+  function onkey(e: KeyboardEvent) {
+    if (!current || e.altKey || e.ctrlKey || e.metaKey) return
+    const t = e.target as HTMLElement | null
+    if (t?.closest('input, textarea, select, [contenteditable]')) return
+    if (e.key === 'ArrowLeft') go(-1)
+    else if (e.key === 'ArrowRight') go(1)
+    else return
+    e.preventDefault()
+  }
+
   $effect(() => {
     if (current) {
-      const next = toForm(current)
-      next.event = lastEvent // keep the deck while working through a stack
+      const next = drafts.get(current.card_id) ?? toForm(current)
+      if (!drafts.has(current.card_id)) next.event = lastEvent // keep the deck while working through a stack
       form = next
       showBack = false
       matches = []
@@ -133,6 +153,7 @@
     try {
       lastEvent = form.event
       await api.attach(current.card_id, uid, cleaned(form))
+      drafts.delete(current.card_id)
       await load()
       if (index >= ready.length) index = Math.max(0, ready.length - 1)
       onchange?.()
@@ -149,6 +170,7 @@
     try {
       lastEvent = form.event
       await api.approve(current.card_id, cleaned(form))
+      drafts.delete(current.card_id)
       await load()
       if (index >= ready.length) index = Math.max(0, ready.length - 1)
       onchange?.()
@@ -206,6 +228,8 @@
     }
   }
 </script>
+
+<svelte:window onkeydown={onkey} />
 
 <div class="wrap">
   {#if undoId}
@@ -299,7 +323,11 @@
         {#if current.flags.length}
           <p class="flags">Check the highlighted fields before saving.</p>
         {/if}
-        <p class="pos">{index + 1} of {ready.length}</p>
+        <nav class="pager" aria-label="Cards to review">
+          <button type="button" class="secondary" onclick={() => go(-1)} disabled={ready.length < 2} aria-label="Previous card">‹ Previous</button>
+          <p class="pos" aria-live="polite">{index + 1} of {ready.length}</p>
+          <button type="button" class="secondary" onclick={() => go(1)} disabled={ready.length < 2} aria-label="Next card">Next ›</button>
+        </nav>
       </section>
       <section class="details" aria-label="Contact details">
         {#each matches as m (m.contact.uid)}
@@ -441,6 +469,14 @@
     margin: 0;
     color: var(--amber);
     font-size: 14px;
+  }
+  .pager {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .pager button {
+    min-height: 44px;
   }
   .pos {
     margin: 0;
