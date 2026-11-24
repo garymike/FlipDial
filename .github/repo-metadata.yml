@@ -1,0 +1,12 @@
+# Declare the intended visibility and purpose of this repo.
+# The github-security-audit skill checks this against actual GitHub settings
+# and flags any mismatch as a finding.
+#
+# visibility: public | private
+# purpose: free-text description of what this repo is for
+
+visibility: public
+purpose: >
+  Self-hosted, visual contact manager for collected business cards: scans are
+  read on your own hardware, reviewed before saving, and synced as vCards to
+  any CardDAV server. Public live demo runs on GitHub Pages with invented people.
