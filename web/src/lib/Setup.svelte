@@ -1,6 +1,7 @@
 <script lang="ts">
   // Setup check: everything FlipDial needs, whether it's in place, and what to do if not.
   import { api, describe, type SetupStatus, type UpdateInfo } from './api'
+  import PhoneSync from './PhoneSync.svelte'
 
   let status = $state<SetupStatus | null>(null)
   let error = $state('')
@@ -120,6 +121,8 @@
       </div>
     {/if}
   </section>
+
+  <PhoneSync />
 </div>
 
 <style>

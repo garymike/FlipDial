@@ -172,6 +172,37 @@ MIGRATIONS: list[str] = [
         trashed_at    TEXT NOT NULL
     );
     """,
+    # 14: phone sync (docs/sync.md). Rules for which contacts go to the phone book, and a
+    # record of every copy FlipDial put there: it only ever changes or removes those.
+    """
+    CREATE TABLE phone_rules (
+        name   TEXT PRIMARY KEY,   -- '*' for everything, otherwise a tag or deck
+        state  TEXT NOT NULL CHECK (state IN ('on', 'off'))
+    );
+    CREATE TABLE phone_choice (
+        uid    TEXT PRIMARY KEY,
+        state  TEXT NOT NULL CHECK (state IN ('on', 'off'))
+    );
+    CREATE TABLE phone_copies (
+        uid        TEXT PRIMARY KEY,
+        href       TEXT NOT NULL,
+        etag       TEXT,
+        hash       TEXT NOT NULL,  -- of the copy as FlipDial last wrote it
+        pushed_at  TEXT NOT NULL
+    );
+    CREATE TABLE phone_state (
+        id            INTEGER PRIMARY KEY CHECK (id = 1),
+        last_run      TEXT,
+        last_success  TEXT,
+        master_count  INTEGER,
+        phone_count   INTEGER,
+        problem       TEXT,     -- why the last run stopped, if it did
+        pending_json  TEXT,     -- changes waiting for confirmation
+        running_until TEXT,     -- lease so two runs never overlap
+        last_daily    TEXT      -- the last daily check (refresh plus full sync)
+    );
+    INSERT INTO phone_state (id) VALUES (1);
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

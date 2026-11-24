@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from flipdial import db
+from flipdial import db, phone_rules
 from flipdial.carddav.client import CardDAVClient, CardDAVError
 from flipdial.carddav.contact import ReviewedContact, apply
 from flipdial.carddav.person import read_birthday, read_name, read_org
@@ -58,6 +58,11 @@ class ContactView:
     has_back: bool = False
     rev: str = ""  # when the vCard last changed (REV), to tell whether a backup includes it
     card_view: str = ""  # how the scan is shown (turns, swapped sides); see cardview.py
+    # Phone sync (docs/sync.md), set only when it is turned on: whether this contact goes to
+    # the phone, why ("contact", "tag:<name>" or "everything"), and its own choice if any.
+    phone: str = ""
+    phone_why: str = ""
+    phone_choice: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -170,8 +175,26 @@ def _cards_by_id(settings: Settings) -> dict[str, dict]:
         }
 
 
+def _with_phone(v: ContactView, rules: phone_rules.Rules | None) -> ContactView:
+    if rules is None:
+        return v
+    cats = [*v.categories, *(["Starred"] if v.starred else [])]
+    on, why = phone_rules.decide(v.uid, cats, rules)
+    v.phone, v.phone_why, v.phone_choice = (
+        ("on" if on else "off"),
+        why,
+        rules.choices.get(v.uid, ""),
+    )
+    return v
+
+
+def _phone_rules(settings: Settings) -> phone_rules.Rules | None:
+    return phone_rules.load(settings) if phone_rules.enabled(settings) else None
+
+
 def list_contacts(settings: Settings) -> list[ContactView]:
     cards = _cards_by_id(settings)
+    rules = _phone_rules(settings)
     with db.session(settings.db_path) as conn:
         rows = conn.execute("SELECT vcard FROM contacts ORDER BY sort_name").fetchall()
     out = []
@@ -180,7 +203,7 @@ def list_contacts(settings: Settings) -> list[ContactView]:
             v = view(VCard.parse(r["vcard"]))
         except VCardError:
             continue
-        out.append(_with_scan(v, cards))
+        out.append(_with_phone(_with_scan(v, cards), rules))
     return out
 
 
@@ -198,7 +221,7 @@ def _with_scan(v: ContactView, cards: dict[str, dict]) -> ContactView:
 
 def full_view(settings: Settings, card: VCard) -> ContactView:
     """A contact as the app shows it, with its scan's details filled in."""
-    return _with_scan(view(card), _cards_by_id(settings))
+    return _with_phone(_with_scan(view(card), _cards_by_id(settings)), _phone_rules(settings))
 
 
 def get_contact(settings: Settings, uid: str) -> tuple[VCard, str, str | None] | None:

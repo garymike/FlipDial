@@ -1,6 +1,15 @@
 # Phone sync
 
-Status: proposed. Nothing here is built yet. This page is the spec the code and tests are written against.
+Status: step 1 of the build order is in (the phone book, its rules, and sync to it). The rest is planned. This page is the spec the code and tests are written against.
+
+To turn it on, make a second address book on your contacts server (for example "Phone") and set:
+
+```sh
+FLIPDIAL_PHONE_ADDRESSBOOK=Phone
+FLIPDIAL_PHONE_CHECK_HOUR=3        # the daily check, server time
+```
+
+FlipDial never picks the phone book as its main address book. Then choose what goes to the phone in **Setup > Phone**, or in a contact's card.
 
 FlipDial keeps every contact and card. Your phone only gets the contacts you choose, so its address book stays short. Nothing is connected to your Google or Apple account, and nothing is reachable from the internet: the phone syncs when it is on your home network.
 
@@ -34,7 +43,7 @@ Off by default. Three levels, the most specific wins:
 2. **Tag or deck:** On or Off. A contact with any tag that's On goes to the phone, unless the contact itself is set Off.
 3. **Everything:** one switch for all contacts, Off by default.
 
-The reading pane shows whether a contact is on the phone and why ("On: Art Fair 2026 deck"). Before the first sync, and before any change to a tag or the Everything switch, FlipDial shows how many contacts will be added or removed and waits for you to confirm.
+Starred can be switched on like a tag. The reading pane shows whether a contact is on the phone and why ("On the phone, from Art Fair 2026"). Changing a rule shows the new count straight away. The first sync, and any sync that would remove more than 10 contacts, lists the changes and waits for you to confirm.
 
 ## What sync does
 
@@ -45,10 +54,10 @@ FlipDial updates the phone book as soon as you change a contact, and checks it f
 | Contact switched on | A copy is added to the phone book |
 | Contact edited in FlipDial | The phone copy is updated |
 | Contact switched off | The phone copy is removed. The contact stays in FlipDial |
-| Edited on the phone | The changed fields are copied to the master contact and shown in Activity |
+| Edited on the phone | The changed fields are copied to the master contact and shown in Activity (step 2; until then the phone copy is left alone, never overwritten) |
 | Edited in both places since the last sync | Nothing is overwritten. The contact appears in Review with both versions to choose from |
 | Deleted on the phone | The contact is switched Off for the phone. The master contact is not touched |
-| Added on the phone | It goes to Review as "Added on your phone". It is saved to the master book only if you approve it |
+| Added on the phone | It goes to Review as "Added on your phone". It is saved to the master book only if you approve it (step 2) |
 
 Phone copies carry the standard fields: name and its parts, company, department, title, phones, emails, websites, addresses, socials, nickname, birthday and notes. FlipDial's own fields (deck, star, scans, About) stay in the master book, and the phone cannot change them.
 

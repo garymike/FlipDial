@@ -13,6 +13,14 @@
     'card.approve': 'Saved a scanned card',
     'card.dismiss': 'Dismissed a scanned card',
     'card.split': 'Split a card from the wrong back',
+    'phone.sync': 'Synced the phone book',
+    'phone.add': 'Added to the phone book',
+    'phone.update': 'Updated on the phone book',
+    'phone.remove': 'Removed from the phone book (still in FlipDial)',
+    'phone.off': 'Deleted on the phone, so switched off for the phone',
+    'phone.rule': 'Changed which contacts go to the phone',
+    'phone.choice': 'Changed whether a contact goes to the phone',
+    'phone.confirm': 'Confirmed phone book changes',
     'card.attach': 'Added a scan to a contact',
     'duplicate.not_same': 'Marked two contacts as different people',
     import: 'Imported contacts',
@@ -58,6 +66,11 @@
         return Array.isArray(d.fields) ? `Changed: ${(d.fields as string[]).join(', ').replaceAll('_', ' ')}` : ''
       case 'contacts.sync':
         return `${n('added')} added, ${n('updated')} updated, ${n('removed')} removed`
+      case 'phone.sync':
+        return `${n('added')} added, ${n('updated')} updated, ${n('removed')} removed, ${n('switched_off')} switched off`
+      case 'phone.rule':
+      case 'phone.choice':
+        return `${e.action === 'phone.rule' ? (e.target === '*' ? 'Every contact' : e.target) + ': ' : ''}${d.state === 'follow' ? 'follow tags' : d.state === 'on' ? 'on the phone' : 'off the phone'}`
       case 'import':
         return `${n('created')} added, ${n('skipped')} skipped (${String(d.format ?? '')})`
       case 'import.undo':

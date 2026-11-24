@@ -105,6 +105,49 @@ export interface Contact {
   has_back: boolean
   card_view?: string // how the scan is shown: turns and swapped sides
   rev?: string // when the vCard last changed
+  // Phone sync, only when it is turned on: on the phone or not, why, and the contact's own choice
+  phone?: '' | 'on' | 'off'
+  phone_why?: string // "contact", "tag:<name>" or "everything"
+  phone_choice?: '' | 'on' | 'off'
+}
+
+export interface PhoneChange {
+  uid: string
+  name: string
+}
+
+/** Changes the phone sync is waiting for you to confirm. */
+export interface PhonePending {
+  token: string
+  first: boolean
+  add: PhoneChange[]
+  update: number
+  remove: PhoneChange[]
+  gone: PhoneChange[]
+}
+
+export interface PhoneStatus {
+  enabled: boolean
+  book: string
+  everything?: boolean
+  tags?: Record<string, 'on' | 'off'>
+  on_phone?: number
+  wanted?: number
+  last_run?: string | null
+  last_success?: string | null
+  problem?: { code: string; before?: number; now?: number } | null
+  pending?: PhonePending | null
+  check_hour?: number
+}
+
+export interface PhoneSyncResult {
+  status: 'done' | 'confirm' | 'stopped' | 'busy'
+  added?: number
+  updated?: number
+  removed?: number
+  switched_off?: number
+  problem?: string
+  state: PhoneStatus
 }
 
 /** "Read again" on a saved contact. `proposed` is only a suggestion until applied. */
@@ -386,6 +429,13 @@ export const api = {
     return call('GET', `/api/contacts${qs ? `?${qs}` : ''}`)
   },
   contact: (uid: string) => call<Contact>('GET', `/api/contacts/${encodeURIComponent(uid)}`),
+  phone: () => call<PhoneStatus>('GET', '/api/phone'),
+  phoneRule: (name: string, state: 'on' | 'off' | 'follow') =>
+    call<PhoneStatus>('PUT', '/api/phone/rules', { name, state }),
+  phoneSync: (body: { confirm?: string; accept_drop?: boolean } = {}) =>
+    call<PhoneSyncResult>('POST', '/api/phone/sync', body),
+  contactPhone: (uid: string, state: 'on' | 'off' | 'follow') =>
+    call<Contact>('PUT', `/api/contacts/${encodeURIComponent(uid)}/phone`, { state }),
   update: (uid: string, changes: Partial<ContactInput> & { card_id?: string }) =>
     call<Contact>('PATCH', `/api/contacts/${encodeURIComponent(uid)}`, changes),
   reread: (uid: string) => call<RereadState>('POST', `/api/contacts/${encodeURIComponent(uid)}/reread`),
@@ -494,6 +544,7 @@ export function describe(err: unknown): string {
     too_many_cards: 'That file has too many contacts (10,000 limit).',
     no_contacts_found: 'No contacts were found in that file.',
     empty_file: 'That file is empty.',
+    phone_sync_off: 'Phone sync is not set up. See Setup.',
     demo_readonly: 'That is turned off in the demo. Install FlipDial to use it with your own contacts.',
     not_supported: 'This install updates differently. See the release notes.',
     no_update: 'You already have the newest version.',
