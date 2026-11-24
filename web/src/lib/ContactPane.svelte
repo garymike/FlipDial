@@ -287,22 +287,11 @@
 </script>
 
 <article class="pane" aria-label={contact ? `Contact: ${contact.full_name}` : 'Contact'}>
-  {#if onclose}
-    <button type="button" class="close" aria-label="Close" onclick={onclose}>
-      <span class="phone-only">← Back</span><span class="wide-only" aria-hidden="true">×</span>
-    </button>
-  {/if}
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#if !contact && !error}<p class="loading">Loading…</p>{/if}
-
-  {#if contact}
-    <div class="head">
-      <div>
-        <h1>{contact.full_name}</h1>
-        <p class="sub">{[contact.title, contact.organization].filter(Boolean).join(', ')}</p>
-      </div>
-      <div class="headside">
-      <div class="where">
+  <div class="topbar">
+    {#if contact}
+      <span class="eyebrow">{contact.event || 'No event'} · {contact.card_id ? 'Scan' : contact.source}</span>
+      <div class="actions">
+        <div class="where">
         <span class="ico on" role="img" aria-label={savedTo} title={savedTo}>
           {#if me?.storage === 'local'}
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="1.5" /><path d="M2 19h20" /></svg>
@@ -316,7 +305,6 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4" /></svg>
         </span>
       </div>
-      <div class="headbtns">
         <Star on={contact.starred} label={contact.starred ? 'Unstar' : 'Star'} onclick={toggleStar} />
         {#if !editing}
           <button type="button" class="secondary" onclick={startEdit}>Edit</button>
@@ -331,7 +319,20 @@
           </button>
         {/if}
       </div>
-      </div>
+    {/if}
+    {#if onclose}
+      <button type="button" class="close" aria-label="Close" onclick={onclose}>
+        <span class="phone-only">← Back</span><span class="wide-only" aria-hidden="true">×</span>
+      </button>
+    {/if}
+  </div>
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if !contact && !error}<p class="loading">Loading…</p>{/if}
+
+  {#if contact}
+    <div class="head">
+      <h1>{contact.full_name}</h1>
+      <p class="sub">{[contact.title, contact.organization].filter(Boolean).join(', ')}</p>
     </div>
 
     {#if showCard && shown}
@@ -505,10 +506,9 @@
     min-width: 0;
   }
   .close {
-    align-self: flex-end;
     min-height: 40px;
     min-width: 40px;
-    margin: -8px -8px -12px 0;
+    margin: 0 -8px 0 0;
     padding: 0 10px;
     border: 0;
     border-radius: 10px;
@@ -729,10 +729,7 @@
     gap: 22px;
   }
   .head {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 12px;
+    margin-top: -6px;
   }
   h1 {
     margin: 0;
@@ -754,11 +751,25 @@
   .icon:hover {
     color: #e5776b;
   }
-  .headside {
+  .topbar {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+  }
+  .eyebrow {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ash);
+    font-weight: 600;
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .where {
     display: flex;
@@ -771,11 +782,6 @@
   }
   .ico.on {
     color: var(--bone, #f4efe6); /* white: there */
-  }
-  .headbtns {
-    display: flex;
-    align-items: center;
-    gap: 8px;
   }
   dl {
     margin: 0;
@@ -848,9 +854,19 @@
   }
   @media (max-width: 900px) {
     .close {
-      align-self: flex-start;
+      order: -1; /* Back on the left on a phone */
       margin: 0;
       font-size: 15px;
+    }
+    .topbar {
+      flex-wrap: wrap;
+    }
+    .topbar .actions {
+      margin-left: auto;
+    }
+    .topbar .eyebrow {
+      order: 1; /* its own line under Back and the buttons */
+      flex-basis: 100%;
     }
     .close .phone-only {
       display: inline;
