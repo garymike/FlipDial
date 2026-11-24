@@ -118,7 +118,7 @@ def create_app(
 
         if builtin_server.is_on(settings) and not builtin_server.from_settings_file(settings):
             builtin_server.apply(settings)
-            builtin_server.supervisor.start(builtin_server.folder(settings))
+            builtin_server.supervisor.start(builtin_server.folder(settings), settings)
         yield
         builtin_server.supervisor.stop()
 

@@ -9,6 +9,7 @@ Passwords typed to test the phone's account are used for that one check and neve
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import os
 import plistlib
 import secrets
@@ -293,7 +294,8 @@ class _ProfileServer:
         self.server = None
         self.lock = threading.Lock()
 
-    def start(self, settings: Settings) -> None:
+    def start(self, settings: Settings, address: str) -> None:
+        """Listen on `address` only: this computer's address on the home network."""
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
         outer = self
@@ -326,7 +328,7 @@ class _ProfileServer:
             if self.server is not None:
                 return
             try:
-                self.server = ThreadingHTTPServer(("0.0.0.0", PROFILE_PORT), Handler)  # noqa: S104
+                self.server = ThreadingHTTPServer((address, PROFILE_PORT), Handler)
             except OSError as exc:
                 raise SetupError("profile_port_in_use") from exc
             threading.Thread(target=self.server.serve_forever, daemon=True).start()
@@ -345,15 +347,20 @@ class _ProfileServer:
 profile_server = _ProfileServer()
 
 
-def network_link_host(settings: Settings) -> str:
-    """The address the phone uses for this computer."""
+def network_link_host(settings: Settings) -> tuple[str, str]:
+    """The name the phone uses for this computer, and the address to listen on for it."""
     from flipdial import builtin_server
 
+    ip = builtin_server.local_ip()
     if settings.phone_server_url:
         host = urlparse(settings.phone_server_url).hostname or ""
         if host:
-            return host
-    return builtin_server.local_ip()
+            try:
+                ipaddress.ip_address(host)
+                return host, host
+            except ValueError:
+                return host, ip
+    return ip, ip
 
 
 def qr_svg(text: str) -> str:

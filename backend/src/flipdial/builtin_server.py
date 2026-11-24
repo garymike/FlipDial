@@ -12,6 +12,7 @@ Nextcloud or separately run server is used.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
 import socket
@@ -98,7 +99,13 @@ def suggestions() -> list[dict[str, str]]:
     out = []
     ip = local_ip()
     if ip and not ip.startswith("127."):
-        out.append({"host": ip, "note": "This computer's address on your network. Most reliable."})
+        out.append(
+            {
+                "host": ip,
+                "note": "This computer's address on your network. Most reliable, and the server "
+                "pauses when you're on another network.",
+            }
+        )
     name = socket.gethostname().split(".")[0].lower()
     if name and name != "localhost":
         out.append(
@@ -108,16 +115,52 @@ def suggestions() -> list[dict[str, str]]:
 
 
 def port_free() -> bool:
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    if sys.platform != "win32":  # ignore connections just closed (on Windows it means more)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    """Nothing is answering on the server's port here already."""
     try:
-        s.bind(("0.0.0.0", cs.PORT))  # noqa: S104  (checking the port the server will use)
-        return True
+        with socket.create_connection(("127.0.0.1", cs.PORT), timeout=1):
+            return False
     except OSError:
-        return False
-    finally:
-        s.close()
+        return True
+
+
+def listen_on(settings: Settings) -> str:
+    """Where the built-in server listens: this computer, plus the home network address
+    phones use, and nothing else. With an address (192.168.1.20), it simply doesn't answer
+    on other networks (a café, a hotel), because this computer isn't at that address there.
+    Docker decides exposure with its published ports, so inside a container it listens on
+    the container's own interfaces."""
+    port = cs.PORT
+    if os.environ.get("FLIPDIAL_INSTALL") == "docker":
+        return f"0.0.0.0:{port}"  # noqa: S104  (inside the container only)
+    host = phone_rules.get_setting(settings, HOST_KEY)
+    ip = _address_of(host)
+    return f"127.0.0.1:{port},{ip}:{port}" if ip else f"127.0.0.1:{port}"
+
+
+def _address_of(host: str) -> str:
+    """The network address for the chosen name, if it is this computer's."""
+    try:
+        ipaddress.ip_address(host)
+        return host
+    except ValueError:
+        pass
+    me = socket.gethostname().split(".")[0].lower()
+    if host in (me, f"{me}.local"):
+        return local_ip()
+    try:
+        return socket.gethostbyname(host)
+    except OSError:
+        return ""
+
+
+def at_home(settings: Settings) -> bool:
+    """For a chosen address (not a name): whether this computer has it right now."""
+    host = phone_rules.get_setting(settings, HOST_KEY)
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return host == local_ip() or os.environ.get("FLIPDIAL_INSTALL") == "docker"
 
 
 # -- turning it on and off -------------------------------------------------------------
@@ -140,7 +183,7 @@ def turn_on(settings: Settings, host: str) -> None:
     phone_rules.put_setting(settings, HOST_KEY, host)
     phone_rules.put_setting(settings, ON_KEY, "on")
     apply(settings)
-    supervisor.start(d)
+    supervisor.start(d, settings)
 
 
 def turn_off(settings: Settings) -> None:
@@ -157,6 +200,7 @@ def status(settings: Settings) -> dict:
         "on": is_on(settings) and not from_settings_file(settings),
         "set_up": (d / "users").is_file(),
         "running": supervisor.running(),
+        "listening": listen_on(settings) if is_on(settings) else "",
         "problem": supervisor.problem,
         "host": phone_rules.get_setting(settings, HOST_KEY),
         "port": cs.PORT,
@@ -175,6 +219,7 @@ class Supervisor:
     def __init__(self) -> None:
         self.proc: subprocess.Popen | None = None
         self.folder: Path | None = None
+        self.settings: Settings | None = None
         self.problem = ""
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -183,9 +228,10 @@ class Supervisor:
     def running(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
-    def start(self, folder: Path) -> None:
+    def start(self, folder: Path, settings: Settings | None = None) -> None:
         with self._lock:
             self.folder = folder
+            self.settings = settings
             self._stop.clear()
             if self._thread is None or not self._thread.is_alive():
                 self._thread = threading.Thread(
@@ -210,8 +256,11 @@ class Supervisor:
         if path.is_file() and path.stat().st_size > LOG_MAX:
             path.replace(path.with_suffix(".log.1"))  # keep one older log, so it can't grow forever
         logfile = open(path, "ab")  # noqa: SIM115  (kept open by the child)
+        args = [sys.executable, "-m", "radicale", "--config", str(self.folder / "config")]
+        if self.settings is not None:
+            args += ["--server-hosts", listen_on(self.settings)]
         self.proc = subprocess.Popen(  # noqa: S603  (fixed arguments)
-            [sys.executable, "-m", "radicale", "--config", str(self.folder / "config")],
+            args,
             stdout=logfile,
             stderr=subprocess.STDOUT,
         )
@@ -221,8 +270,14 @@ class Supervisor:
         delay, started = 2.0, 0.0
         while not self._stop.is_set():
             with self._lock:
-                if not self.running() and not self._stop.is_set():
-                    if self.proc is not None:
+                away = self.settings is not None and not at_home(self.settings)
+                if away:
+                    self.problem = "away_from_home"  # checked again in a minute
+                    if self.running():
+                        self.proc.terminate()
+                    self.proc = None
+                if not away and not self.running() and not self._stop.is_set():
+                    if self.proc is not None and self.proc.poll() is not None:
                         self.problem = "stopped_unexpectedly"
                         log.warning("contacts server stopped; starting it again")
                     try:
@@ -232,7 +287,7 @@ class Supervisor:
                         self.problem = "could_not_start"
                         log.error("contacts server could not start", extra={"error": str(exc)})
                         started = 0.0
-            if self._stop.wait(delay):
+            if self._stop.wait(60.0 if away else delay):
                 break
             if self.running() and started and time.monotonic() - started > 30:
                 self.problem, delay = "", 2.0  # healthy again
