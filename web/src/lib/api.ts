@@ -3,7 +3,14 @@
 export interface Social {
   platform: string
   handle: string
+  url?: string
 }
+
+/** Platforms offered in the form (the server tidies names and builds profile links). */
+export const PLATFORMS = [
+  'Instagram', 'Facebook', 'X', 'TikTok', 'LinkedIn', 'Bluesky', 'Threads', 'Mastodon', 'YouTube',
+  'Pinterest', 'Behance', 'Dribbble', 'Etsy', 'GitHub', 'Snapchat', 'WhatsApp', 'Signal', 'Telegram',
+] as const
 
 export interface Contact {
   uid: string

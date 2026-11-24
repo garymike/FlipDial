@@ -43,7 +43,8 @@ Full name, given and family name, title, company, email addresses, phone numbers
 
 1. The model first copies every printed line of the card, top to bottom, then fills in the fields from that copy. Copying first makes it much less likely to skip a value.
 2. **Safety net:** any email address, phone number or website in the copied text that isn't in a field is added by FlipDial and highlighted ("Found in the card's text") for you to check.
-3. While a card is read, Review shows live progress: the stage, a timer, the lines being copied, then each field as it's found. This is a preview only; the final answer is checked in full before anything is shown for review.
+3. **Social profiles:** any platform, each with a handle. A row of platform icons next to one handle becomes one entry per platform. Names are tidied (Twitter becomes X), and profile links are built for the contact page. A handle seen only in the card's text is added with the platform left for you to choose. Profiles are saved in the form Apple Contacts uses, so phones show them too.
+4. While a card is read, Review shows live progress: the stage, a timer, the lines being copied, then each field as it's found. This is a preview only; the final answer is checked in full before anything is shown for review.
 
 ## How the output is checked
 
