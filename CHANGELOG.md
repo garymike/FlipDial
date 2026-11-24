@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.12.0
+
+### New
+
+- **Phone sync.** Your phone gets its own address book with only the contacts you choose,
+  so it stays short while FlipDial keeps every card. Everything is off by default: switch
+  on a deck, a tag, Starred, every contact, or one contact from its card (its own choice
+  wins). It works both ways on your home network:
+  - Changes in FlipDial reach the phone within a minute.
+  - Edits made on the phone come back into FlipDial field by field. A field changed in
+    both places waits in Review with both versions side by side.
+  - Contacts added on the phone wait in Review until you save them to FlipDial or leave
+    them on the phone only.
+  - Deleting a contact on the phone only takes it off the phone. Nothing is ever deleted
+    from FlipDial because of the phone, and every change from the phone can be undone
+    from Activity for 30 days.
+  - Sync stops and asks when an address book suddenly shrinks, and the first sync and any
+    large change wait for you to confirm. A backup is taken before big changes.
+  Nothing is connected to your Google or Apple account. See docs/sync.md.
+- **Phone setup wizard** (Setup > Phone): choose or make the phone address book, give the
+  phone its own account (with a check that it can't see your other contacts), then add it
+  to the phone: a QR code and one-tap profile on iPhone, or DAVx5 steps on Android.
+- **Built-in contacts server.** No Synology or Nextcloud? Setup > Contacts server turns on
+  one that FlipDial runs alongside itself, with one button. It uses HTTPS with a
+  certificate made for this server only, gives each phone an account that sees only its
+  own contacts, and is meant for your home network only. The setup explains each choice
+  first, including the Windows firewall question. Power users can still run it
+  separately with `flipdial contacts-server`. See docs/contacts-server.md.
+- **Import updates contacts you already have.** Importing a Google Contacts export (or any
+  file) adds new phones, emails and details to matching contacts and fills in empty
+  fields, without removing anything. FlipDial's value is kept when both differ, unless you
+  choose the file's. Undo puts updated contacts back as they were.
+- **Changes for Google Contacts** (Import / export): a vCard of only the contacts changed
+  since your last download, ready to import at contacts.google.com.
+
+### Improved
+
+- The settings file still decides the contacts server when it names one; everything new
+  here can also be set there (FLIPDIAL_PHONE_ADDRESSBOOK, FLIPDIAL_PHONE_CHECK_HOUR,
+  FLIPDIAL_PHONE_SERVER_URL, FLIPDIAL_RADICALE_DIR).
+- A contacts server with its own certificate is now checked with the current method
+  (no deprecation warning).
+
+### Security
+
+- Without sign-in, FlipDial now answers only to IP addresses, localhost and this
+  computer's own name. Before, another website could point a name it controls at this
+  computer and read your contacts through the browser (DNS rebinding). If you open
+  FlipDial by another name, add it to FLIPDIAL_ALLOWED_HOSTS.
+- The contacts server's folder is limited to your account on Windows (where file modes
+  aren't enforced). If FlipDial's data folder sits outside your user profile, other
+  accounts on the computer may be able to read the rest of it; keep it in your profile
+  or limit it the same way.
+
+### Upgrading
+
+The database is updated automatically on start. Radicale is now installed with FlipDial
+(for the built-in contacts server); nothing else changes unless you turn it on. With
+Docker, publish port 5232 only if you use the built-in contacts server for phones.
+
 ## 0.11.0
 
 ### New
