@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.11.0
+
+### New
+
+- **Phones and tablets.** On a phone, a bottom bar switches between Dial, Wall and Review,
+  with everything else under More. The Dial shows the current contact with call, email and
+  Details buttons, the Wall shows two cards per row, and a contact opens full screen. On an
+  iPad or other touch tablet, a contact slides in from the right. Computers look the same
+  as before.
+- **Vertical cards.** Rotate a card that was scanned sideways, and swap front and back when
+  they were scanned the wrong way round. The card is shown upright everywhere; the scanned
+  files are never changed. Vertical cards are shown larger in the Dial and on the Wall.
+- **Trash.** The trash icon in a contact moves it to Trash after you confirm. It can be
+  restored with everything it had for 30 days, then it is deleted for good.
+- **More contact fields:** middle name, prefix (Dr.), suffix (PhD), nickname, department
+  and birthday, stored the way Apple and Google Contacts store them. Scans read the prefix,
+  middle name, suffix and department. CSV import and export include them, and search
+  matches nickname and department.
+- **A back that is a different card** (usually because the scanner skipped a blank back)
+  is flagged in Review, with a button to split it into two cards.
+- **Check for updates now** on the Setup page.
+
+### Improved
+
+- Cards of any shape fill their frame without dark bars around them.
+- The reading pane shows where the contact is saved and whether it is in your latest
+  backup, hides empty fields, and has Star, Edit and Trash in the top-right corner.
+- Downloads of the original scan are on one line.
+- The "Up next" list is gone from the reading pane.
+- After "nothing newer", FlipDial checks for updates again within the hour instead of the
+  next day.
+
+### Fixed
+
+- Saving an edit dropped a middle name, prefix or suffix set in another app.
+- On a phone, the Wall could be wider than the screen.
+
+### Upgrading
+
+The database is updated automatically on start.
+
 ## 0.10.0
 
 ### New
