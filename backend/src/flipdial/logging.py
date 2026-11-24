@@ -18,8 +18,11 @@ from datetime import UTC, datetime
 request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
-_PHONE = re.compile(r"\+?\d[\d\s().-]{7,}\d")
+# Not inside a longer token, so IDs like 20261124T004812-0866bbd0a5 are left alone.
+_PHONE = re.compile(r"(?<![A-Za-z0-9])\+?\(?\d[\d\s().-]{7,}\d(?![A-Za-z0-9])")
 _RESERVED = set(vars(logging.makeLogRecord({}))) | {"message", "asctime"}
+# Identifiers FlipDial generates itself; they never hold personal data.
+_ID_FIELDS = {"card_id", "vcard_uid", "request_id", "import_id", "merge_id"}
 
 
 def redact(text: str) -> str:
@@ -32,7 +35,7 @@ class RedactFilter(logging.Filter):
         record.msg = redact(record.getMessage())
         record.args = None
         for key, value in list(vars(record).items()):
-            if key not in _RESERVED and isinstance(value, str):
+            if key not in _RESERVED and key not in _ID_FIELDS and isinstance(value, str):
                 setattr(record, key, redact(value))
         return True
 
@@ -58,6 +61,7 @@ class JsonFormatter(logging.Formatter):
 
 def configure_logging(level: str = "INFO", fmt: str = "json") -> None:
     handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(level)
     handler.addFilter(RedactFilter())
     text = logging.Formatter("%(levelname)s %(name)s %(message)s")
     handler.setFormatter(JsonFormatter() if fmt == "json" else text)

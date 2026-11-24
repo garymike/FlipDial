@@ -74,3 +74,14 @@ def test_cli(settings, make_card, tmp_path, monkeypatch, capsys):
     main(["testset", "check", str(tmp_path / "ts")])
     out = capsys.readouterr().out
     assert "0 of 1 cards filled in" in out and "add 29 more" in out
+
+
+def test_cli_is_quiet_by_default(settings, make_card, tmp_path, monkeypatch, capsys):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    make_card().save(raw / "a.jpg")
+    monkeypatch.setenv("FLIPDIAL_DATA_DIR", str(tmp_path / "d"))
+    main(["testset", "make", str(raw), str(tmp_path / "ts"), "--mode", "single"])
+    out = capsys.readouterr().out
+    assert "database migrated" not in out and "card archived" not in out
+    assert out.startswith("Added 1 cards")

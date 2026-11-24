@@ -66,10 +66,15 @@ def main(argv: list[str] | None = None) -> None:
     ts_check.add_argument("out", type=Path)
     aud = sub.add_parser("audit", help="audit log tools")
     aud.add_argument("action", choices=["verify"])
+    for p in (ev, ts_make, ts_check):
+        p.add_argument("--verbose", action="store_true", help="show detailed progress logs")
     args = parser.parse_args(argv)
 
     settings = get_settings()
-    configure_logging(settings.log_level, settings.log_format)
+    if args.command in {"testset", "eval"} and not getattr(args, "verbose", False):
+        configure_logging("WARNING", "text")  # commands run by hand: show problems only
+    else:
+        configure_logging(settings.log_level, settings.log_format)
 
     if args.command in {"ingest", "extract", "worker"}:
         from flipdial.extract.worker import Extractor
