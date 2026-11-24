@@ -58,8 +58,9 @@
 
   // When cards are stuck, say why: the first setup problem, if any.
   let problem = $state<SetupItem | null>(null)
+  const waitingCount = $derived(waiting.length) // a number, so this reruns only when it changes
   $effect(() => {
-    if (!waiting.length) {
+    if (!waitingCount) {
       problem = null
       return
     }
@@ -189,6 +190,7 @@
             <img src={api.image(w.card_id, 'thumb')} alt="Scanned card" loading="lazy" />
             {#if w.status === 'extract_failed'}
               <span class="why">{READ_ERRORS[w.error ?? ''] ?? "Couldn't be read."}</span>
+              {#if w.error_detail}<span class="said">Ollama said: {w.error_detail}</span>{/if}
               <button type="button" class="secondary" onclick={() => readAgain(w.card_id)}>Read again</button>
             {:else}
               <span class="reading">{w.error ? `Retrying: ${READ_ERRORS[w.error] ?? w.error}` : 'Reading…'}</span>
@@ -451,6 +453,12 @@
   }
   .hint {
     margin: 0;
+  }
+  .said {
+    color: var(--ash);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    overflow-wrap: anywhere;
   }
   .why {
     color: #f0b3a8;

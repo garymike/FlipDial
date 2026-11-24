@@ -131,6 +131,10 @@ MIGRATIONS: list[str] = [
     CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit
     BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
     """,
+    # 9: the model server's own error message for a card that couldn't be read
+    """
+    ALTER TABLE cards ADD COLUMN last_error_detail TEXT;
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

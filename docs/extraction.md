@@ -26,8 +26,10 @@ The reader is an Ollama server by default, or any OpenAI-compatible endpoint.
 ```sh
 FLIPDIAL_MODEL_BACKEND=ollama            # or openai_compatible
 FLIPDIAL_MODEL_URL=http://127.0.0.1:11434
-FLIPDIAL_MODEL_NAME=llama3.2-vision
+FLIPDIAL_MODEL_NAME=qwen3.5:9b
 ```
+
+Any vision model works: one whose `ollama show` lists **vision** under Capabilities. The default is `qwen3.5:9b`; `gemma4:12b` is another good candidate. Compare models on your own cards with `flipdial eval` and keep the one that scores best. Newer Ollama versions can no longer run `llama3.2-vision` (it fails with "unknown model architecture: 'mllama'"). The [Setup check](windows.md#when-cards-arent-being-read) shows Ollama's message when a model can't be loaded.
 
 FlipDial refuses to start if the URL points outside your local network, because card images would leave it. Set `FLIPDIAL_ALLOW_REMOTE_MODEL=true` only if you mean to.
 

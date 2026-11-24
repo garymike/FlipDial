@@ -232,3 +232,77 @@ def test_eval_reports_counts_without_values(tmp_path):
     assert report["fields"]["phones"]["extra_values"] == 1
     text = json.dumps(report)
     assert "Ava" not in text and "case-a" not in text
+
+
+MLLAMA = (
+    "llama-server process has terminated: exit status 1: error loading model: "
+    "unknown model architecture: 'mllama'"
+)
+
+
+def test_model_ollama_cannot_load_is_named_with_its_message(settings, tmp_path):
+    resp = httpx.Response(500, json={"error": MLLAMA})
+    reader = OllamaReader(settings, httpx.Client(transport=httpx.MockTransport(lambda r: resp)))
+    with pytest.raises(ModelError) as exc:
+        reader.read([_image(tmp_path)])
+    assert exc.value.args[0] == "model_cannot_load"
+    assert "unknown model architecture" in exc.value.detail
+
+
+def test_retries_without_think_on_any_error_status(settings, tmp_path):
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append("think" in body)
+        if "think" in body:
+            return httpx.Response(500, json={"error": '"x" does not support thinking'})
+        return httpx.Response(200, json={"message": {"content": "{}"}})
+
+    OllamaReader(settings, httpx.Client(transport=httpx.MockTransport(handler))).read(
+        [_image(tmp_path)]
+    )
+    assert seen == [True, False]
+
+
+def test_one_image_models_get_front_and_back_joined(settings, tmp_path):
+    front, back = tmp_path / "f.jpg", tmp_path / "b.jpg"
+    from PIL import Image
+
+    Image.new("RGB", (700, 400), "red").save(front)
+    Image.new("RGB", (350, 200), "blue").save(back)
+    counts = []
+
+    def handler(request):
+        n = len(json.loads(request.content)["messages"][1]["images"])
+        counts.append(n)
+        if n > 1:
+            return httpx.Response(
+                500, json={"error": "this model only supports one image per message"}
+            )
+        return httpx.Response(200, json={"message": {"content": "{}"}})
+
+    OllamaReader(settings, httpx.Client(transport=httpx.MockTransport(handler))).read([front, back])
+    assert counts == [2, 1]
+
+
+def test_failure_message_is_kept_and_masked(settings, make_card):
+    card_id = _ingest_one(settings, make_card)
+    detail = "model said call 312-555-0142"
+
+    class Failing:
+        name = "fake"
+
+        def read(self, images):
+            raise ModelError("model_error", detail)
+
+    Extractor(settings, Failing()).run_once()
+    row = _row(settings, card_id)
+    assert row["last_error"] == "model_error" and row["last_error_detail"] == detail
+
+
+def test_server_message_masks_contact_details():
+    from flipdial.extract.client import _server_message
+
+    resp = httpx.Response(500, json={"error": "bad input near ava@studio.example (312) 555-0142"})
+    assert _server_message(resp) == "bad input near [email] [phone]"

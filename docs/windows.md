@@ -22,7 +22,7 @@ Tip: right-click `start.cmd`, choose **Send to > Desktop (create shortcut)**, an
    winget install OpenJS.NodeJS
    ```
 
-   For reading cards you also need [Ollama](https://ollama.com) with a vision model: `ollama pull llama3.2-vision`.
+   For reading cards you also need [Ollama](https://ollama.com) with a vision model: `ollama pull qwen3.5:9b` (or any model whose `ollama show` lists **vision**; the Setup check confirms it). Newer Ollama versions can no longer run `llama3.2-vision`.
 
 2. Get FlipDial, for example into `C:\_dev`:
 

@@ -195,6 +195,7 @@ def review_queue(s: SettingsDep) -> dict:
     with db.session(s.db_path) as conn:
         rows = conn.execute(
             "SELECT c.id, c.created_at, c.has_back, c.back_blank, c.status, c.last_error, "
+            "c.last_error_detail, "
             "e.fields_json, e.flags_json FROM cards c LEFT JOIN extractions e ON e.rowid = ("
             "SELECT rowid FROM extractions WHERE card_id = c.id ORDER BY rowid DESC LIMIT 1) "
             "WHERE c.status IN ('review', 'extract_pending', 'extract_failed') ORDER BY c.id"
@@ -210,6 +211,7 @@ def review_queue(s: SettingsDep) -> dict:
                 "fields": json.loads(r["fields_json"]) if r["fields_json"] else None,
                 "flags": json.loads(r["flags_json"]) if r["flags_json"] else [],
                 "error": r["last_error"],
+                "error_detail": r["last_error_detail"] or "",
             }
         )
     return {"items": items, "ready": sum(i["status"] == "review" for i in items)}
@@ -270,8 +272,8 @@ def retry_all(s: SettingsDep, actor: ActorDep) -> dict:
     """Read every card that failed again (after fixing the model setup, for example)."""
     with db.session(s.db_path) as conn:
         n = conn.execute(
-            "UPDATE cards SET status = 'extract_pending', attempts = 0, last_error = NULL "
-            "WHERE status = 'extract_failed'"
+            "UPDATE cards SET status = 'extract_pending', attempts = 0, last_error = NULL, "
+            "last_error_detail = NULL WHERE status = 'extract_failed'"
         ).rowcount
     audit.record(s, actor, "card.retry", "", cards=n)
     return {"retrying": n}
@@ -282,8 +284,8 @@ def retry(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
     _card_id(card_id)
     with db.session(s.db_path) as conn:
         n = conn.execute(
-            "UPDATE cards SET status = 'extract_pending', attempts = 0, last_error = NULL "
-            "WHERE id = ? AND status = 'extract_failed'",
+            "UPDATE cards SET status = 'extract_pending', attempts = 0, last_error = NULL, "
+            "last_error_detail = NULL WHERE id = ? AND status = 'extract_failed'",
             (card_id,),
         ).rowcount
     if not n:
