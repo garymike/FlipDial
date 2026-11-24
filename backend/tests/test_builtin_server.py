@@ -49,7 +49,8 @@ def test_one_button_turns_it_on(builtin):
     assert s.carddav_url == f"https://localhost:{cs.PORT}/"
     assert s.phone_server_url == f"https://{HOME}:{cs.PORT}/"
     folder = builtin_server.folder(s)
-    assert (folder / builtin_server.PASSWORD_FILE).stat().st_mode & 0o777 == 0o600
+    if sys.platform != "win32":  # on Windows the folder is locked down with icacls instead
+        assert (folder / builtin_server.PASSWORD_FILE).stat().st_mode & 0o777 == 0o600
     book = _wait_up(s)
     assert book.name == "Contacts"  # FlipDial made its own address book
     assert builtin_server.status(s)["running"] is True
