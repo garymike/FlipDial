@@ -50,6 +50,8 @@
           r.updated && `${r.updated} updated`,
           r.removed && `${r.removed} removed from the phone`,
           r.switched_off && `${r.switched_off} switched off (deleted on the phone)`,
+          r.from_phone && `${r.from_phone} edited on the phone, now in FlipDial`,
+          r.to_review && `${r.to_review} waiting in Review`,
         ].filter(Boolean)
         note = parts.length ? `Synced: ${parts.join(', ')}.` : 'The phone book is up to date.'
       } else if (r.status === 'busy') {
@@ -104,12 +106,17 @@
       </div>
     {/if}
 
+    {#if st.waiting}
+      <p class="detail"><a href="#/review">{st.waiting} from your phone waiting in Review.</a></p>
+    {/if}
+
     {#if pending}
       <div class="box" role="group" aria-label="Changes to confirm">
         <p><strong>{pending.first ? 'First sync to the phone.' : 'Check these changes first.'}</strong></p>
         {#if pending.add.length}<p>Add {pending.add.length}: {listed(pending.add)}</p>{/if}
         {#if pending.update}<p>Update {pending.update}.</p>{/if}
         {#if pending.remove.length}<p>Remove from the phone {pending.remove.length}: {listed(pending.remove)}</p>{/if}
+        {#if pending.pull?.length}<p>Take in edits made on the phone {pending.pull.length}: {listed(pending.pull)}</p>{/if}
         {#if pending.gone.length}<p>Deleted on the phone, so switched off {pending.gone.length}: {listed(pending.gone)}</p>{/if}
         <p class="detail">Contacts stay in FlipDial either way.</p>
         <div class="row">

@@ -203,6 +203,29 @@ MIGRATIONS: list[str] = [
     );
     INSERT INTO phone_state (id) VALUES (1);
     """,
+    # 15: edits and additions from the phone. The copy as last written or read (to see
+    # which fields the phone changed), things waiting in Review, and undo for phone edits.
+    """
+    ALTER TABLE phone_copies ADD COLUMN vcard TEXT;
+    CREATE TABLE phone_inbox (
+        id          INTEGER PRIMARY KEY,
+        kind        TEXT NOT NULL CHECK (kind IN ('added', 'conflict')),
+        href        TEXT NOT NULL UNIQUE,
+        uid         TEXT NOT NULL,
+        etag        TEXT,
+        vcard       TEXT NOT NULL,
+        fields_json TEXT NOT NULL DEFAULT '[]',
+        status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'dismissed', 'done')),
+        seen_at     TEXT NOT NULL
+    );
+    CREATE TABLE phone_undo (
+        id          INTEGER PRIMARY KEY,
+        uid         TEXT NOT NULL,
+        vcard       TEXT NOT NULL,   -- the master contact before the phone edit
+        created_at  TEXT NOT NULL,
+        undone_at   TEXT
+    );
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")

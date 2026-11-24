@@ -21,6 +21,17 @@
     'phone.rule': 'Changed which contacts go to the phone',
     'phone.choice': 'Changed whether a contact goes to the phone',
     'phone.confirm': 'Confirmed phone book changes',
+    'phone.edit': 'Took in an edit made on the phone',
+    'phone.ignored': 'Ignored an edit made on the phone (not usable)',
+    'phone.added': 'A contact was added on the phone (in Review)',
+    'phone.conflict': 'Changed on the phone and in FlipDial (in Review)',
+    'phone.accept': 'Saved a contact added on the phone',
+    'phone.dismiss': 'Left a phone contact out of FlipDial',
+    'phone.use_phone': "Used the phone's version",
+    'phone.keep_flipdial': "Kept FlipDial's version",
+    'phone.undo': 'Undid an edit from the phone',
+    'phone.inbox_accept': 'Decided on a change from the phone',
+    'phone.inbox_dismiss': 'Decided on a change from the phone',
     'card.attach': 'Added a scan to a contact',
     'duplicate.not_same': 'Marked two contacts as different people',
     import: 'Imported contacts',
@@ -68,6 +79,17 @@
         return `${n('added')} added, ${n('updated')} updated, ${n('removed')} removed`
       case 'phone.sync':
         return `${n('added')} added, ${n('updated')} updated, ${n('removed')} removed, ${n('switched_off')} switched off`
+      case 'phone.edit':
+      case 'phone.ignored':
+      case 'phone.use_phone':
+      case 'phone.keep_flipdial':
+      case 'phone.conflict': {
+        const f = Array.isArray(d.fields) ? (d.fields as string[]) : []
+        const ig = Array.isArray(d.ignored) ? (d.ignored as string[]) : []
+        return [f.length && `Fields: ${f.join(', ').replaceAll('_', ' ')}`, ig.length && `ignored: ${ig.join(', ')}`]
+          .filter(Boolean)
+          .join('; ')
+      }
       case 'phone.rule':
       case 'phone.choice':
         return `${e.action === 'phone.rule' ? (e.target === '*' ? 'Every contact' : e.target) + ': ' : ''}${d.state === 'follow' ? 'follow tags' : d.state === 'on' ? 'on the phone' : 'off the phone'}`
@@ -95,9 +117,21 @@
   }
 
   function link(e: AuditEntry): string | null {
-    return e.action.startsWith('contact.') && e.target && !['contact.merge_undo', 'contact.forget'].includes(e.action)
-      ? contactHref(e.target)
-      : null
+    const contact = e.action.startsWith('contact.') && !['contact.merge_undo', 'contact.forget'].includes(e.action)
+    const fromPhone = ['phone.edit', 'phone.use_phone', 'phone.keep_flipdial', 'phone.accept', 'phone.undo'].includes(e.action)
+    return (contact || fromPhone) && e.target ? contactHref(e.target) : null
+  }
+
+  // Edits taken in from the phone can be undone for 30 days.
+  let undone = $state(new Set<number>())
+  async function undoPhone(e: AuditEntry) {
+    try {
+      await api.phoneUndo(Number(e.detail.undo))
+      undone = new Set([...undone, e.id])
+      error = ''
+    } catch (err) {
+      error = describe(err)
+    }
   }
 </script>
 
@@ -122,6 +156,10 @@
         <div class="what">
           {#if link(e)}<a href={link(e)}>{LABELS[e.action] ?? e.action}</a>{:else}{LABELS[e.action] ?? e.action}{/if}
           {#if summary(e)}<span class="detail">{summary(e)}</span>{/if}
+          {#if Number(e.detail.undo) > 0 && e.action !== 'phone.undo'}
+            {#if undone.has(e.id)}<span class="detail">Undone.</span>{:else}
+              <button type="button" class="undo" onclick={() => undoPhone(e)}>Undo</button>{/if}
+          {/if}
         </div>
         <div class="meta"><span>{e.actor}</span><time datetime={e.ts}>{when(e.ts)}</time></div>
       </li>
@@ -135,6 +173,17 @@
 </div>
 
 <style>
+  .undo {
+    margin-left: 8px;
+    padding: 2px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--amber);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
   .wrap {
     max-width: 900px;
     margin: 0 auto;

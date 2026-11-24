@@ -124,6 +124,7 @@ export interface PhonePending {
   update: number
   remove: PhoneChange[]
   gone: PhoneChange[]
+  pull?: PhoneChange[]
 }
 
 export interface PhoneStatus {
@@ -138,6 +139,16 @@ export interface PhoneStatus {
   problem?: { code: string; before?: number; now?: number } | null
   pending?: PhonePending | null
   check_hour?: number
+  waiting?: number // in Review: added on the phone, or changed in both places
+}
+
+/** Something from the phone that needs a decision (shown at the top of Review). */
+export interface PhoneInboxItem {
+  id: number
+  kind: 'added' | 'conflict'
+  uid: string
+  name: string
+  fields: { field: string; phone: string; flipdial?: string }[]
 }
 
 export interface PhoneSyncResult {
@@ -146,6 +157,8 @@ export interface PhoneSyncResult {
   updated?: number
   removed?: number
   switched_off?: number
+  from_phone?: number
+  to_review?: number
   problem?: string
   state: PhoneStatus
 }
@@ -434,6 +447,10 @@ export const api = {
     call<PhoneStatus>('PUT', '/api/phone/rules', { name, state }),
   phoneSync: (body: { confirm?: string; accept_drop?: boolean } = {}) =>
     call<PhoneSyncResult>('POST', '/api/phone/sync', body),
+  phoneInbox: () => call<{ items: PhoneInboxItem[] }>('GET', '/api/phone/inbox'),
+  phoneInboxAction: (id: number, action: 'accept' | 'dismiss') =>
+    call<{ uid: string }>('POST', `/api/phone/inbox/${id}/${action}`),
+  phoneUndo: (id: number) => call<{ uid: string }>('POST', `/api/phone/undo/${id}`),
   contactPhone: (uid: string, state: 'on' | 'off' | 'follow') =>
     call<Contact>('PUT', `/api/contacts/${encodeURIComponent(uid)}/phone`, { state }),
   update: (uid: string, changes: Partial<ContactInput> & { card_id?: string }) =>
@@ -447,7 +464,7 @@ export const api = {
   deleteForever: (uid: string) => call('DELETE', `/api/trash/${encodeURIComponent(uid)}`),
   scans: (uid: string) => call<{ scans: Scan[] }>('GET', `/api/contacts/${encodeURIComponent(uid)}/scans`),
   sync: () => call<Record<string, number>>('POST', '/api/sync'),
-  review: () => call<{ items: ReviewItem[]; ready: number }>('GET', '/api/review'),
+  review: () => call<{ items: ReviewItem[]; ready: number; from_phone?: number }>('GET', '/api/review'),
   approve: (cardId: string, input: ContactInput) =>
     call<Contact & { uid: string }>('POST', `/api/review/${cardId}/approve`, input),
   dismiss: (cardId: string) => call('POST', `/api/review/${cardId}/dismiss`),
@@ -537,7 +554,7 @@ export function describe(err: unknown): string {
     not_in_review: 'This card was already handled.',
     csrf_check_failed: 'The request was blocked. Reload the page and try again.',
     network: 'FlipDial could not be reached.',
-    already_undone: 'That merge was already undone.',
+    already_undone: 'That was already undone.',
     same_contact: 'Pick two different contacts.',
     file_too_large: 'That file is too large (10 MB limit). Split it and import the parts.',
     too_many_rows: 'That file has too many rows (10,000 limit).',
@@ -545,6 +562,9 @@ export function describe(err: unknown): string {
     no_contacts_found: 'No contacts were found in that file.',
     empty_file: 'That file is empty.',
     phone_sync_off: 'Phone sync is not set up. See Setup.',
+    changed_on_phone_again: 'It changed on the phone again. Sync, then decide on the newest version.',
+    too_old: 'That is more than 30 days old and can no longer be undone.',
+    invalid_contact: "That contact can't be saved: it has no usable name.",
     demo_readonly: 'That is turned off in the demo. Install FlipDial to use it with your own contacts.',
     not_supported: 'This install updates differently. See the release notes.',
     no_update: 'You already have the newest version.',

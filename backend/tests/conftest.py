@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
 
 import cv2
 import httpx
@@ -121,3 +122,19 @@ def api(dav_settings):
     from flipdial.carddav.client import CardDAVClient
 
     return TestClient(create_app(dav_settings, lambda: CardDAVClient(dav_settings)))
+
+
+@pytest.fixture
+def ps(dav_settings, radicale):
+    """Settings with a fresh phone book."""
+    name = "Phone " + uuid.uuid4().hex[:6]
+    body = (
+        '<?xml version="1.0"?><d:mkcol xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">'
+        "<d:set><d:prop><d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>"
+        f"<d:displayname>{name}</d:displayname></d:prop></d:set></d:mkcol>"
+    )
+    url = f"{radicale}{USER}/{name.replace(' ', '-').lower()}/"
+    assert httpx.request("MKCOL", url, content=body, auth=(USER, "x")).status_code == 201
+    dav_settings.phone_addressbook = name
+    dav_settings.carddav_addressbook = "Contacts"
+    return dav_settings

@@ -1,6 +1,6 @@
 # Phone sync
 
-Status: step 1 of the build order is in (the phone book, its rules, and sync to it). The rest is planned. This page is the spec the code and tests are written against.
+Status: steps 1 and 2 of the build order are in (the phone book, its rules, sync to it, and edits and additions from the phone). The setup wizard, import updates, export of changes and bundled Radicale are planned. This page is the spec the code and tests are written against.
 
 To turn it on, make a second address book on your contacts server (for example "Phone") and set:
 
@@ -54,10 +54,10 @@ FlipDial updates the phone book as soon as you change a contact, and checks it f
 | Contact switched on | A copy is added to the phone book |
 | Contact edited in FlipDial | The phone copy is updated |
 | Contact switched off | The phone copy is removed. The contact stays in FlipDial |
-| Edited on the phone | The changed fields are copied to the master contact and shown in Activity (step 2; until then the phone copy is left alone, never overwritten) |
-| Edited in both places since the last sync | Nothing is overwritten. The contact appears in Review with both versions to choose from |
+| Edited on the phone | The changed fields are copied to the master contact and shown in Activity |
+| Edited in both places since the last sync | Fields changed on only one side are combined. A field changed on both sides is not overwritten: the contact appears in Review with both versions to choose from |
 | Deleted on the phone | The contact is switched Off for the phone. The master contact is not touched |
-| Added on the phone | It goes to Review as "Added on your phone". It is saved to the master book only if you approve it (step 2) |
+| Added on the phone | It goes to Review as "Added on your phone". It is saved to the master book only if you approve it |
 
 Phone copies carry the standard fields: name and its parts, company, department, title, phones, emails, websites, addresses, socials, nickname, birthday and notes. FlipDial's own fields (deck, star, scans, About) stay in the master book, and the phone cannot change them.
 
@@ -70,8 +70,8 @@ Each rule has a test.
 3. **A sudden drop stops sync.** If the master or phone book has far fewer contacts than last time (more than 10, and more than a fifth), or can't be read, sync stops and shows a warning. An empty or unreachable address book never turns into deletions.
 4. **Large changes need you.** The first sync, and any sync that would remove more than 10 contacts, waits for you to confirm the list.
 5. **Never overwrite blind.** Every write sends the version FlipDial last saw. If the server copy changed since, the write is refused and the contact is checked again.
-6. **Phone edits are untrusted input.** They are parsed, length-limited and validated like scanned values. Fields the phone can't change are ignored.
-7. **Removals can be undone.** Before a phone copy is removed or a master contact is changed by a phone edit, the previous vCard is kept for 30 days and can be restored from Activity.
+6. **Phone edits are untrusted input.** They are parsed, length-limited and checked for control characters field by field; a field that fails is ignored (and logged), never fixed. Fields the phone can't change are ignored. More than 10 contacts edited on the phone at once wait for you to confirm, in case a phone app rewrote them all.
+7. **Phone edits can be undone.** Before a master contact is changed by an edit from the phone, the previous vCard is kept for 30 days, and the change can be undone from Activity. A copy is only removed from the phone book when it has no phone edits, so removing it loses nothing; switching the contact back on puts it back.
 8. **Backups before bulk changes.** A backup of the master book is taken before the first sync and before any change to more than 10 contacts.
 9. **Everything is logged.** Each change made by sync is in Activity, with where it came from. Logs never contain contact details or passwords.
 

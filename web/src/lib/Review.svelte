@@ -17,6 +17,7 @@
   } from './api'
   import { href } from './router.svelte'
   import ContactForm from './ContactForm.svelte'
+  import PhoneInbox from './PhoneInbox.svelte'
   import ScanImage from './ScanImage.svelte'
 
   let { onchange }: { onchange?: () => void } = $props()
@@ -286,6 +287,8 @@
     </span>
   </h1>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
+
+  <PhoneInbox {onchange} />
 
   {#if problem}
     <div class="problem" role="status">
