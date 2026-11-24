@@ -21,6 +21,8 @@
   let made = $state<{ username: string; password: string } | null>(null)
   // Step 3
   let device = $state<'iphone' | 'android'>('iphone')
+  let iosWay = $state<'profile' | 'manual'>('profile')
+  let opened = $state<string | null>(null)
   let link = $state<{ url: string; expires_at: string; qr_svg: string; via: 'flipdial' | 'network' } | null>(null)
   let copied = $state('')
 
@@ -84,7 +86,25 @@
   const makeLink = () =>
     run(async () => {
       link = await api.phoneProfileLink(location.origin)
+      opened = null
     })
+
+  // Show when the link is opened, so it's clear if anything other than your phone did.
+  $effect(() => {
+    const l = link
+    if (!l || opened) return
+    const token = l.url.split('/phone-profile/')[1] ?? ''
+    const every = setInterval(async () => {
+      try {
+        const c = await api.phoneProfileLinkCheck(token)
+        if (c.used_at) opened = c.used_at
+        if (c.used_at || c.expired) clearInterval(every)
+      } catch {
+        clearInterval(every)
+      }
+    }, 3000)
+    return () => clearInterval(every)
+  })
 
   async function copy(text: string, what: string) {
     try {
@@ -223,10 +243,37 @@
       </p>
     {/if}
     <div class="segmented" role="group" aria-label="Phone">
-      <button type="button" aria-pressed={device === 'iphone'} onclick={() => (device = 'iphone')}>iPhone</button>
+      <button type="button" aria-pressed={device === 'iphone'} onclick={() => (device = 'iphone')}>iPhone or iPad</button>
       <button type="button" aria-pressed={device === 'android'} onclick={() => (device = 'android')}>Android</button>
     </div>
     {#if device === 'iphone'}
+      <fieldset class="ways">
+        <label class="opt"><input type="radio" bind:group={iosWay} value="profile" /> <strong>Quick:</strong> scan a code and install a profile</label>
+        <label class="opt"><input type="radio" bind:group={iosWay} value="manual" /> <strong>By hand:</strong> type the account in Settings (no profile to install)</label>
+      </fieldset>
+    {/if}
+    {#if device === 'iphone' && iosWay === 'manual'}
+      <ol class="how">
+        <li>Open Settings, then Apps, Contacts, Contacts Accounts, Add Account (on older versions: Settings, Contacts, Accounts), then Other, then <em>Add CardDAV Account</em>.</li>
+        <li>Enter:
+          <div class="grid copy">
+            <span>Server</span><code>{info.book_url}</code>
+            <button type="button" class="link" onclick={() => copy(info?.book_url ?? '', 'server')}>{copied === 'server' ? 'Copied' : 'Copy'}</button>
+            <span>User name</span><code>{info.phone_username}</code>
+            <button type="button" class="link" onclick={() => copy(info?.phone_username ?? '', 'user')}>{copied === 'user' ? 'Copied' : 'Copy'}</button>
+          </div>
+          the account's password, and FlipDial as the description.</li>
+        <li>
+          If it says <em>Cannot Verify Server Identity</em>, tap Details and check that the certificate is for
+          <strong>{bookHost}</strong>{#if info.bundled} and issued by <strong>FlipDial contacts server CA</strong>{/if}, then Trust or Continue.
+          Do this only at home: it trusts that one server for this account, and nothing else.
+        </li>
+      </ol>
+      <p class="hint">
+        No profile and no certificate authority on the device: the most contained option. The certificate check happens once,
+        when you add the account.
+      </p>
+    {:else if device === 'iphone'}
       {#if local && !link}
         <p class="hint">
           Your phone can't open FlipDial at {location.hostname}, so this computer offers the link on your home network for
@@ -246,6 +293,11 @@
             <li>If the contacts server uses its own certificate: Settings, General, About, Certificate Trust Settings, and turn it on.</li>
           </ol>
         </div>
+        {#if opened}
+          <p class="detail">✓ Opened at {new Date(opened).toLocaleTimeString()}. If that wasn't your device, make a new link and set it up again.</p>
+        {:else}
+          <p class="hint">Waiting for the link to be opened…</p>
+        {/if}
         <p class="hint">
           The link expires at {new Date(link.expires_at).toLocaleTimeString()} and works once.
           {#if link.via === 'network'}Install it right away, at home. iOS shows what the profile adds before installing it: one
@@ -401,6 +453,14 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
+  }
+  .ways {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    border: 0;
   }
   .segmented {
     display: inline-flex;

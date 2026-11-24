@@ -68,6 +68,9 @@ def test_iphone_profile_link_works_once(wiz):
     assert link["qr_svg"].startswith("<svg")
 
     path = "/" + link["url"].split("/", 3)[3]
+    token = path.rsplit("/", 1)[1]
+    check = api.post("/api/phone/profile-link/check", json={"token": token}, headers=H).json()
+    assert check["known"] and check["used_at"] is None
     got = api.get(path)
     assert got.status_code == 200
     assert got.headers["content-type"].startswith("application/x-apple-aspen-config")
@@ -76,6 +79,8 @@ def test_iphone_profile_link_works_once(wiz):
     assert acct["CardDAVUsername"] == "phone-user" and acct["CardDAVPrincipalURL"].endswith("/")
     assert "Password" not in str(prof) and "CardDAVPassword" not in acct
     assert api.get(path).status_code == 404  # one time only
+    check = api.post("/api/phone/profile-link/check", json={"token": token}, headers=H).json()
+    assert check["used_at"]
 
     r = api.post("/api/phone/profile-link", json={"base": "javascript:alert(1)"}, headers=H)
     assert r.status_code == 422

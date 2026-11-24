@@ -47,7 +47,7 @@ Starred can be switched on like a tag. The reading pane shows whether a contact 
 
 ## What sync does
 
-FlipDial updates the phone book as soon as you change a contact, and checks it for edits made on the phone once a day (the time is a setting) and when you press **Sync now**. The phone syncs on its own schedule whenever it is on your home network; away from home it simply keeps the contacts it has.
+FlipDial looks for changes every 5 minutes (7 for more than 1,000 contacts, 10 for more than 5,000, since each look reads every contact), does a full check once a day (the time is a setting), and syncs at once when you press **Sync now**: next to Review at the top of the app (in the More menu on a phone), or in Setup > Phone. The time of the last sync is shown next to it. The phone syncs on its own schedule whenever it is on your home network; away from home it simply keeps the contacts it has.
 
 | Change | What happens |
 |---|---|
@@ -82,7 +82,8 @@ Each rule has a test.
 1. **Phone address book.** Pick an address book on the contacts server, or let FlipDial make one (named "Phone" unless you choose another name). The main address book can't be picked. If the server doesn't let FlipDial make one (Synology may not), the wizard says how to make it there.
 2. **The phone's account.** The wizard explains how to give the phone its own account that can open only the phone book (on Synology: a DSM user, and the phone book shared with it). **Check the account** signs in as the phone would and shows whether it can open the phone book and whether it can also see the main address book, which it shouldn't. The password is used for that check only and never kept. The wizard warns if the phone would use FlipDial's own account.
 3. **Add it to the phone.**
-   - iPhone: **Make the iPhone link** shows a QR code. Scanning it downloads a profile that adds the CardDAV account in one step; the iPhone asks for the password, so the password is never in the file. If the contacts server has its own certificate (FLIPDIAL_CARDDAV_CA_BUNDLE), the profile carries it too. The link works once, expires after 15 minutes, and only a hash of it is stored.
+   - iPhone or iPad, by hand (most contained): add a CardDAV account in Settings with the address and user name the wizard shows. If the device can't verify the server's certificate, it asks once; check the name and accept it for that account only. No profile and no certificate authority on the device.
+   - iPhone or iPad, quick: **Make the iPhone link** shows a QR code. Scanning it downloads a profile that adds the CardDAV account in one step; the iPhone asks for the password, so the password is never in the file. If the contacts server has its own certificate (FLIPDIAL_CARDDAV_CA_BUNDLE), the profile carries it too. The link works once, expires after 15 minutes, and only a hash of it is stored. The wizard shows when it was opened, so you can tell if anything other than your device opened it. When FlipDial is opened as localhost, the link is served on the home network over plain HTTP (port 5233) for those minutes; the profile holds no password, but on a network you don't fully trust, use the by-hand way instead.
    - Android: install DAVx5, choose "Login with URL and user name", and copy the address and user name the wizard shows.
 
 The wizard warns when the phone couldn't reach the address: FlipDial opened as localhost, or the contacts server set as localhost. It also warns when the server uses http, since the phone would send its password unencrypted.
@@ -125,3 +126,6 @@ No sign-in to Google, by design.
 - The exact DAVx5 login steps on a current version, and whether it accepts a link or QR code.
 - That an iPhone installs the profile and finds the phone book from its address (tested so far only by reading the profile back, not on an iPhone).
 - How the iPhone handles a home server's own certificate: whether the profile alone is enough, or the user also has to turn on full trust in Settings (General > About > Certificate Trust Settings). The wizard's iPhone steps depend on this.
+- That the by-hand way on iPhone or iPad offers to accept the server's certificate for the account, and that iOS respects the certificate authority's name constraints.
+
+A step-by-step test list for these is in the [release checklist](release-checklist.md#phone-sync-on-real-devices).

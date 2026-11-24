@@ -55,6 +55,54 @@ Run `flipdial eval` against the private test set (kept outside the repository) w
 - [ ] Full export and restore tested on a copy of real data
 - [ ] Fresh install from the docs works on a clean machine, start to first card
 
+## Phone sync on real devices
+
+Run once per release that changes phone sync, and whenever iOS, Android, DAVx5 or Synology has a major update. Use invented test contacts where you can.
+
+**Before you start**
+- [ ] FlipDial on the new version; Setup check all green (except Ollama, if not needed).
+- [ ] Contacts server: the built-in one (Setup > Contacts server) or your own, reachable from the phones on home Wi-Fi.
+- [ ] Windows: when asked about Python on networks, **Private networks** only. Afterwards, Windows Security > Firewall > Allow an app: Python is ticked for Private, not Public.
+- [ ] Make a FlipDial backup (Import / export > Full backup).
+
+**Setup**
+- [ ] Setup > Phone > Set up phone sync: phone book made (or chosen), phone account made.
+- [ ] Check the account (own server): it opens the phone book and **can't** see the main address book.
+- [ ] Switch on one test deck with 3 to 5 contacts. Sync now: the first sync lists them and waits for confirmation.
+
+**Android (DAVx5)**
+- [ ] DAVx5: Login with URL and user name, using the wizard's address and user name. It asks to accept the certificate: check it names your server, accept.
+- [ ] Only the phone book appears; turn it on. Limit sync to home Wi-Fi in the account settings.
+- [ ] The test contacts appear in the phone's Contacts app, under the DAVx5 account, not in Google.
+
+**iPad or iPhone, by hand**
+- [ ] Settings > Apps > Contacts > Contacts Accounts > Add Account > Other > Add CardDAV Account, with the wizard's server and user name.
+- [ ] If it can't verify the server: Details shows your server's name (and "FlipDial contacts server CA" for the built-in one). Accept. Note what iOS showed.
+- [ ] The test contacts appear in Contacts under that account.
+
+**iPad or iPhone, quick profile** (on a second device, or after removing the account above)
+- [ ] Make the iPhone link; scan the code; the wizard shows "Opened at …".
+- [ ] Settings > Profile Downloaded > Install. It shows one CardDAV account and (built-in server) one certificate. It asks for the password.
+- [ ] Note whether Settings > General > About > Certificate Trust Settings needed turning on.
+- [ ] The test contacts appear. The same link opened again shows it has expired.
+
+**Two-way sync, on each device**
+- [ ] Edit a test contact in FlipDial (title). Sync now; it changes on the device after the device syncs.
+- [ ] Add a phone number on the device. Sync now in FlipDial: it appears in FlipDial; Activity shows it with Undo; Undo works.
+- [ ] Change the same field on both sides: it waits in Review > From your phone with both versions. Try both choices.
+- [ ] Add a new contact on the device: it waits in Review. Save it to FlipDial.
+- [ ] Delete a contact on the device: in FlipDial it is still there, switched off for the phone, and isn't added back.
+- [ ] Switch a contact off in FlipDial: it leaves the device and stays in FlipDial.
+- [ ] Delete 12 or more test contacts on the device at once: sync stops and asks (sudden drop). Choose "I removed them on purpose".
+
+**Security checks**
+- [ ] From another device on the Wi-Fi, open `https://<server>:5232/` with the phone account: it can't open the main address book.
+- [ ] Wrong password is refused, and the server log doesn't contain passwords.
+- [ ] Without sign-in, FlipDial opened by an unknown name (for example a hosts-file entry pointing a made-up name at the computer) answers "unknown_host".
+- [ ] Port 5232 isn't forwarded on the router (router settings, or a port check from outside your network).
+- [ ] On a public network (or with the Windows network set to Public), the phone can't reach the server.
+- [ ] Turn the built-in server off and on: contacts and accounts come back.
+
 ## 4. Docs and demo
 
 - [ ] README, setup guides and screenshots match the release

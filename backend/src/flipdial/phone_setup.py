@@ -197,6 +197,20 @@ def use_link(settings: Settings, token: str) -> bool:
     return n == 1
 
 
+def link_state(settings: Settings, token: str) -> dict[str, Any]:
+    """Whether a profile link was opened, so the wizard can show it (and you can tell if
+    something other than your phone opened it)."""
+    with db.session(settings.db_path) as conn:
+        row = conn.execute(
+            "SELECT expires_at, used_at FROM phone_profile_links WHERE hash = ?",
+            (_hash(token),),
+        ).fetchone()
+    if row is None:
+        return {"known": False, "used_at": None, "expired": True}
+    expired = datetime.fromisoformat(row["expires_at"]) < datetime.now(UTC)
+    return {"known": True, "used_at": row["used_at"], "expired": expired}
+
+
 def _ca_payloads(settings: Settings) -> list[dict]:
     """The server's own certificate, when it has one, so the iPhone can trust it."""
     path = settings.carddav_ca_bundle

@@ -110,12 +110,16 @@ def main(argv: list[str] | None = None) -> None:
                 phone.tick(settings, lambda: contacts.sync(settings, make_client(settings)))
 
             keep_beating(settings, "worker")
-            last_phone = 0.0
+            next_phone = 0.0
             while True:
                 parts = [ingestor.run_once, extractor.run_once]
-                if time.monotonic() - last_phone >= 60:  # phone book: at most once a minute
+                if time.monotonic() >= next_phone:  # every 5 to 10 minutes, by book size
                     parts.append(phone_pass)
-                    last_phone = time.monotonic()
+                    try:
+                        minutes = phone.check_minutes(settings)
+                    except Exception:  # noqa: BLE001  (fall back to the slowest pace)
+                        minutes = 10
+                    next_phone = time.monotonic() + minutes * 60
                 for part in parts:
                     try:
                         part()

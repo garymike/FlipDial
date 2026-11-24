@@ -8,7 +8,9 @@
   so it stays short while FlipDial keeps every card. Everything is off by default: switch
   on a deck, a tag, Starred, every contact, or one contact from its card (its own choice
   wins). It works both ways on your home network:
-  - Changes in FlipDial reach the phone within a minute.
+  - FlipDial looks for changes every 5 to 10 minutes (by address book size). **Sync now**
+    next to Review (in the More menu on a phone) syncs at once, with the time of the last
+    sync beside it.
   - Edits made on the phone come back into FlipDial field by field. A field changed in
     both places waits in Review with both versions side by side.
   - Contacts added on the phone wait in Review until you save them to FlipDial or leave
@@ -21,7 +23,9 @@
   Nothing is connected to your Google or Apple account. See docs/sync.md.
 - **Phone setup wizard** (Setup > Phone): choose or make the phone address book, give the
   phone its own account (with a check that it can't see your other contacts), then add it
-  to the phone: a QR code and one-tap profile on iPhone, or DAVx5 steps on Android.
+  to the phone: on iPhone or iPad, by hand in Settings (no profile to install) or with a
+  QR code and one-tap profile; on Android, DAVx5 steps. The wizard shows when a profile
+  link was opened.
 - **Built-in contacts server.** No Synology or Nextcloud? Setup > Contacts server turns on
   one that FlipDial runs alongside itself, with one button. It uses HTTPS with a
   certificate made for this server only, gives each phone an account that sees only its

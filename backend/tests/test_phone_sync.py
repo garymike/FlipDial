@@ -224,3 +224,14 @@ def test_worker_pushes_soon_after_a_change(ps):
     assert out["status"] == "confirm"  # the first copy still asks
     assert phone.tick(ps, lambda: refreshed.append(1)) is None  # waits for the person
     assert refreshed == [1]
+
+
+def test_check_pace_follows_book_size(ps):
+    assert phone.check_minutes(ps) in (5, 7, 10)
+    with phone.db.session(ps.db_path) as conn:
+        conn.executemany(
+            "INSERT INTO contacts (uid, href, etag, vcard, sort_name, updated_at) "
+            "VALUES (?, ?, '', '', '', '')",
+            [(f"pace-{i}", f"/pace-{i}.vcf") for i in range(6000)],
+        )
+    assert phone.check_minutes(ps) == 10
