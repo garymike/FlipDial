@@ -168,6 +168,7 @@ export interface PhoneSetupInfo {
   main_book: string
   books: string[]
   phone_username: string
+  phone_name: string
   flipdial_username: string
   bundled: boolean // FlipDial's own contacts server: it can make the phone's account
   error: string
@@ -496,8 +497,9 @@ export const api = {
   phoneSetup: () => call<PhoneSetupInfo>('GET', '/api/phone/setup'),
   phoneSetupBook: (name: string, create: boolean) =>
     call<PhoneSetupInfo>('POST', '/api/phone/setup/book', { name, create }),
-  phoneSetupAccount: () =>
-    call<{ username: string; password: string; book: string }>('POST', '/api/phone/setup/account'),
+  phoneSetupAccount: (name: string) =>
+    call<{ username: string; password: string; book: string; name: string }>('POST', '/api/phone/setup/account', { name }),
+  phoneNewPassword: () => call<{ username: string; password: string }>('POST', '/api/phone/setup/password'),
   phoneSetupOff: () => call<{ enabled: false }>('DELETE', '/api/phone/setup/book'),
   phoneSetupUsername: (username: string) => call<{ username: string }>('PUT', '/api/phone/setup/username', { username }),
   phoneSetupTest: (username: string, password: string) =>

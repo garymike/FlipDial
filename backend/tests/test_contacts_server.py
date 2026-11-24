@@ -17,7 +17,7 @@ from pydantic import SecretStr
 from test_api import H
 
 from flipdial import contacts_server as cs
-from flipdial import phone, phone_rules, phone_setup
+from flipdial import db, phone, phone_rules, phone_setup
 from flipdial.app import create_app
 from flipdial.carddav.client import CardDAVClient
 from flipdial.carddav.contact import ReviewedContact, new_card
@@ -76,17 +76,30 @@ def test_setup_files_are_private_and_hold_no_passwords(tmp_path):
     assert cs.next_phone_name(folder) == "phone"
 
 
+def test_readable_usernames(tmp_path):
+    folder = tmp_path / "cs"
+    cs.init(folder, ["nas.example"])
+    assert cs.username_for("Mike's Pixel 9", folder) == "mikes-pixel-9"
+    assert cs.username_for("  ", folder) == "phone"
+    assert cs.username_for("2nd phone", folder) == "phone-2nd-phone"
+    assert cs.username_for("FlipDial", folder) == "flipdial-phone"
+    assert cs.username_for("Ünïcode ☎", folder) == "unicode"
+    cs.add_user(folder, "work-ipad")
+    assert cs.username_for("Work iPad", folder) == "work-ipad-2"
+
+
 def test_wizard_makes_a_phone_account_that_sees_only_its_book(server):
     s, base, ctx = server
     api = TestClient(create_app(s, lambda: CardDAVClient(s)))
     assert api.get("/api/phone/setup").json()["bundled"] is True
-    out = api.post("/api/phone/setup/account", headers=H).json()
-    assert out["username"] == "phone" and out["book"] == "/phone/contacts/"
+    out = api.post("/api/phone/setup/account", json={"name": "Mike's Pixel"}, headers=H).json()
+    assert out["username"] == "mikes-pixel" and out["book"] == "/mikes-pixel/contacts/"
+    assert api.get("/api/phone/setup").json()["phone_name"] == "Mike's Pixel"
     assert out["password"] not in (s.radicale_dir / "users").read_text()
     assert phone_rules.enabled(s)
 
     as_phone = (out["username"], out["password"])
-    own = httpx.request("PROPFIND", base + "phone/contacts/", auth=as_phone, verify=ctx)
+    own = httpx.request("PROPFIND", base + "mikes-pixel/contacts/", auth=as_phone, verify=ctx)
     other = httpx.request("PROPFIND", base + "flipdial/contacts/", auth=as_phone, verify=ctx)
     assert own.status_code == 207 and other.status_code == 403
     test = phone_setup.test_account(s, out["username"], out["password"])
@@ -100,12 +113,32 @@ def test_wizard_makes_a_phone_account_that_sees_only_its_book(server):
     phone_rules.set_rule(s, "Kiln Club", "on")
     first = phone.run(s, phone.phone_client(s))
     assert phone.run(s, phone.phone_client(s), confirm=first["token"])["added"] == 1
-    got = httpx.get(base + f"phone/contacts/{card.uid}.vcf", auth=as_phone, verify=ctx)
+    got = httpx.get(base + f"mikes-pixel/contacts/{card.uid}.vcf", auth=as_phone, verify=ctx)
     assert got.status_code == 200 and "FN:Ida Example" in got.text
 
-    # A second phone gets its own account.
-    api.delete("/api/phone/setup/book", headers=H)
-    assert api.post("/api/phone/setup/account", headers=H).json()["username"] == "phone2"
+    # The book on the phone shows the name it was given.
+    books = CardDAVClient(s, book="/mikes-pixel/contacts/").address_book()
+    assert books.name == "Mike's Pixel"
+
+    # A new password: the old one stops working.
+    again = api.post("/api/phone/setup/password", headers=H).json()
+    assert again["username"] == "mikes-pixel" and again["password"] != out["password"]
+    old = httpx.request("PROPFIND", base + "mikes-pixel/contacts/", auth=as_phone, verify=ctx)
+    new = httpx.request(
+        "PROPFIND",
+        base + "mikes-pixel/contacts/",
+        auth=("mikes-pixel", again["password"]),
+        verify=ctx,
+    )
+    assert old.status_code == 401 and new.status_code == 207
+
+    # Starting over with another name replaces the old account and its copies.
+    redo = api.post("/api/phone/setup/account", json={"name": "Family phones"}, headers=H).json()
+    assert redo["username"] == "family-phones"
+    assert cs.users(s.radicale_dir) == ["flipdial", "family-phones"]
+    assert not (s.radicale_dir / "collections" / "collection-root" / "mikes-pixel").exists()
+    with db.session(s.db_path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM phone_copies").fetchone()[0] == 0
 
 
 def test_profile_uses_the_address_phones_reach(server):
@@ -117,5 +150,6 @@ def test_profile_uses_the_address_phones_reach(server):
         p for p in prof["PayloadContent"] if p["PayloadType"] == "com.apple.carddav.account"
     )
     assert acct["CardDAVHostName"] == "nas.example" and acct["CardDAVPort"] == 5232
-    assert acct["CardDAVPrincipalURL"] == "/phone/contacts/" and acct["CardDAVUseSSL"] is True
+    assert acct["CardDAVPrincipalURL"] == "/my-phone/contacts/" and acct["CardDAVUseSSL"] is True
+    assert acct["CardDAVAccountDescription"] == "My phone"
     assert any(p["PayloadType"] == "com.apple.security.root" for p in prof["PayloadContent"])

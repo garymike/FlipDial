@@ -110,7 +110,7 @@
     {#if !wizard}
       <div class="row">
         <button type="button" class="secondary" onclick={() => (wizard = 'phone')}>Add a phone</button>
-        <button type="button" class="secondary" onclick={() => (wizard = 'book')}>Change the phone book</button>
+        <button type="button" class="secondary" onclick={() => (wizard = 'book')}>Name, sign-in or address book</button>
         <button type="button" class="secondary" onclick={turnOff}>Turn off phone sync</button>
       </div>
     {/if}

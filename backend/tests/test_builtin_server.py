@@ -57,7 +57,7 @@ def test_one_button_turns_it_on(builtin):
 
     # The phone wizard can make the phone's account straight away.
     out = phone_setup.create_phone_account(s, CardDAVClient(s))
-    assert out["username"] == "phone"
+    assert out["username"] == "my-phone"
 
     # The certificate authority can only vouch for this server's names.
     ca = x509.load_pem_x509_certificate((folder / "ca.pem").read_bytes())
@@ -70,7 +70,7 @@ def test_one_button_turns_it_on(builtin):
     # On again: the same accounts and contacts.
     builtin_server.turn_on(s, HOME)
     assert _wait_up(s).name == "Contacts"
-    assert "phone" in cs.users(folder)
+    assert "my-phone" in cs.users(folder)
 
 
 def test_settings_file_server_wins(settings):
@@ -127,14 +127,27 @@ def test_listens_only_here_and_at_home(builtin, monkeypatch):
     builtin_server.turn_on(s, HOME)
     assert builtin_server.listen_on(s) == f"127.0.0.1:{cs.PORT},{HOME}:{cs.PORT}"
     _wait_up(s)
-    # Somewhere else (this computer has another address): it doesn't run at all.
-    monkeypatch.setattr(builtin_server, "local_ip", lambda: "10.9.8.7")
+    # Somewhere else (this computer doesn't have the home address): it keeps serving
+    # FlipDial on this computer only, and says phones can't reach it.
+    monkeypatch.setattr(builtin_server, "_have_address", lambda ip: ip == "127.0.0.1")
     assert builtin_server.at_home(s) is False
-    builtin_server.supervisor.stop()
-    builtin_server.supervisor.start(builtin_server.folder(s), s)
-    time.sleep(1)
-    assert not builtin_server.supervisor.running()
-    assert builtin_server.supervisor.problem == "away_from_home"
+    assert builtin_server.listen_on(s) == f"127.0.0.1:{cs.PORT}"
+    for _ in range(100):
+        if (
+            builtin_server.supervisor.listening == f"127.0.0.1:{cs.PORT}"
+            and builtin_server.supervisor.running()
+        ):
+            break
+        time.sleep(0.2)
+    assert builtin_server.supervisor.listening == f"127.0.0.1:{cs.PORT}"
+    _wait_up(s)  # FlipDial still reaches it
+    assert builtin_server.status(s)["problem"] == "away_from_home"
+
+
+def test_address_checks():
+    assert builtin_server._have_address("127.0.0.1")
+    assert not builtin_server._have_address("192.0.2.123")  # documentation-only, never ours
+    assert not builtin_server._have_address("not an address")
 
 
 def test_server_stops_when_flipdial_is_killed(builtin, tmp_path):

@@ -22,8 +22,10 @@ import logging
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
+import unicodedata
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -305,6 +307,55 @@ def add_user(folder: Path, username: str) -> str:
     with open(folder / "users", "a", encoding="utf-8") as fh:
         fh.write(f"{username}:{_hash(password)}\n")
     return password
+
+
+def set_password(folder: Path, username: str) -> str:
+    """Give an account a new password. Returns it, shown once; the old one stops working."""
+    if username == FLIPDIAL_USER or username not in users(folder):
+        raise ServerSetupError("no_such_user")
+    password = _password()
+    path = folder / "users"
+    lines = [
+        f"{username}:{_hash(password)}" if line.split(":", 1)[0] == username else line
+        for line in path.read_text(encoding="utf-8").splitlines()
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return password
+
+
+def remove_user(folder: Path, username: str) -> None:
+    """Remove a phone's account and its address books (copies FlipDial made; the main
+    address book is never under a phone's account)."""
+    if username == FLIPDIAL_USER or not USERNAME.match(username):
+        raise ServerSetupError("bad_username")
+    path = folder / "users"
+    if path.is_file():
+        keep = [
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.split(":", 1)[0] != username
+        ]
+        path.write_text("\n".join(keep) + ("\n" if keep else ""), encoding="utf-8")
+    home = folder / "collections" / "collection-root" / username
+    if home.is_dir() and home.parent.name == "collection-root":
+        shutil.rmtree(home)
+
+
+def username_for(name: str, folder: Path) -> str:
+    """A readable account name from what the person called the phone: "Mike's Pixel"
+    becomes mikes-pixel (mikes-pixel-2 if taken)."""
+    plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    base = re.sub(r"[^a-z0-9]+", "-", plain.lower().replace("'", "")).strip("-")[:28].strip("-")
+    if not base or not base[0].isalpha():
+        base = ("phone-" + base).strip("-")[:28]
+    if base == FLIPDIAL_USER:
+        base = "flipdial-phone"
+    taken = set(users(folder))
+    out, n = base, 2
+    while out in taken:
+        out = f"{base}-{n}"
+        n += 1
+    return out
 
 
 def next_phone_name(folder: Path) -> str:
