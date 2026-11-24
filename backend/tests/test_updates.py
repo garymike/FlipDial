@@ -134,3 +134,32 @@ def test_launch_failure_reported(settings, monkeypatch, tmp_path):
     monkeypatch.setattr(updates.subprocess, "Popen", no_powershell)
     with pytest.raises(updates.UpdateError, match="launch_failed"):
         updates.start(settings)
+
+
+def test_nothing_new_is_checked_again_within_the_hour(settings, monkeypatch):
+    # A release published after a "nothing new" check shows up the same day, not tomorrow.
+    import time as _time
+
+    monkeypatch.setattr(updates, "__version__", "0.9.0rc1")
+    calls: list = []
+    assert updates.summary(settings, http=_github(None, calls))["release"] is None
+    assert updates.summary(settings, http=_github(None, calls))["release"] is None
+    assert len(calls) == 1  # within the hour: from the cache
+    now = _time.time()
+    monkeypatch.setattr(updates.time, "time", lambda: now + updates.CHECK_AGAIN_SOON + 1)
+    info = updates.summary(settings, http=_github("v0.10.0", calls))
+    assert len(calls) == 2 and info["available"]
+
+
+def test_check_now_route_skips_the_cache(settings, monkeypatch):
+    monkeypatch.setattr(updates, "__version__", "0.9.0rc1")
+    updates.summary(settings, http=_github(None))  # cached: nothing published
+    import types
+
+    fake = _github("v0.10.0")
+    # Only the updates module's httpx is replaced; the test client still uses the real one.
+    stub = types.SimpleNamespace(Client=lambda **kw: fake, HTTPError=httpx.HTTPError)
+    monkeypatch.setattr(updates, "httpx", stub)
+    api = TestClient(create_app(settings))
+    r = api.post("/api/update/check", headers=H)
+    assert r.status_code == 200 and r.json()["available"]

@@ -43,19 +43,26 @@
   let updating = $state<'off' | 'running' | 'slow' | 'rolledback' | 'error'>('off')
   let updateError = $state('')
   const dismissKey = (tag: string) => `flipdial.update.later.${tag}`
+  function showUpdate(u: UpdateInfo, asked = false) {
+    let later = false
+    try {
+      later = !asked && !!u.release && localStorage.getItem(dismissKey(u.release.tag)) === '1'
+    } catch {
+      /* storage unavailable */
+    }
+    update = u.available && !later ? u : null
+  }
   $effect(() => {
     api
       .updateInfo()
-      .then((u) => {
-        let later = false
-        try {
-          later = !!u.release && localStorage.getItem(dismissKey(u.release.tag)) === '1'
-        } catch {
-          /* storage unavailable */
-        }
-        update = u.available && !later ? u : null
-      })
+      .then((u) => showUpdate(u))
       .catch(() => (update = null))
+  })
+  // "Check now" on the Setup page: show the banner even if Later was chosen before.
+  $effect(() => {
+    const onCheck = (e: Event) => showUpdate((e as CustomEvent<UpdateInfo>).detail, true)
+    window.addEventListener('flipdial:update-checked', onCheck)
+    return () => window.removeEventListener('flipdial:update-checked', onCheck)
   })
 
   function later() {

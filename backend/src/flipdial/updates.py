@@ -28,6 +28,9 @@ from flipdial import __version__
 from flipdial.config import Settings
 
 CHECK_EVERY = 24 * 3600
+# When the last check found nothing newer, look again sooner: a release published today
+# should show up the same day, not tomorrow.
+CHECK_AGAIN_SOON = 3600
 TAG = re.compile(r"^v\d+\.\d+\.\d+([-.]?(rc|a|b)\.?\d+)?$")
 
 
@@ -46,6 +49,11 @@ def _version(tag: str) -> Version | None:
         return None
 
 
+def _is_newer(tag: str) -> bool:
+    new, cur = _version(tag), _version(__version__)
+    return bool(new and cur and new > cur)
+
+
 def install_kind() -> str:
     return os.environ.get("FLIPDIAL_INSTALL", "manual")
 
@@ -56,7 +64,9 @@ def latest(s: Settings, force: bool = False, http: httpx.Client | None = None) -
     if not force:
         try:
             data = json.loads(cache.read_text())
-            if time.time() - data.get("checked", 0) < CHECK_EVERY:
+            rel = data.get("release")
+            newer = bool(rel) and _is_newer(rel.get("tag", ""))
+            if time.time() - data.get("checked", 0) < (CHECK_EVERY if newer else CHECK_AGAIN_SOON):
                 return data
         except (OSError, ValueError):
             pass
@@ -110,9 +120,8 @@ def summary(s: Settings, force: bool = False, http: httpx.Client | None = None) 
         out["error"] = "check_failed"
         return out
     if release:
-        new, cur = _version(release["tag"]), _version(__version__)
         out["release"] = release
-        out["available"] = bool(new and cur and new > cur)
+        out["available"] = _is_newer(release["tag"])
     return out
 
 

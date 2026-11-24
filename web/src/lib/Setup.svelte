@@ -1,6 +1,6 @@
 <script lang="ts">
   // Setup check: everything FlipDial needs, whether it's in place, and what to do if not.
-  import { api, describe, type SetupStatus } from './api'
+  import { api, describe, type SetupStatus, type UpdateInfo } from './api'
 
   let status = $state<SetupStatus | null>(null)
   let error = $state('')
@@ -20,6 +20,31 @@
   $effect(() => {
     run()
   })
+
+  // Updates: the version running here, and a way to look for a new release right now.
+  let upd = $state<UpdateInfo | null>(null)
+  let updChecking = $state(false)
+  let updNote = $state('')
+  $effect(() => {
+    api.updateInfo().then((u) => (upd = u)).catch(() => {})
+  })
+  async function checkNow() {
+    updChecking = true
+    updNote = ''
+    try {
+      upd = await api.checkUpdate()
+      window.dispatchEvent(new CustomEvent('flipdial:update-checked', { detail: upd }))
+      updNote = upd.available
+        ? `FlipDial ${upd.release?.tag} is available. See the bar at the top of the page.`
+        : upd.error
+          ? "Couldn't reach GitHub to check. Try again later."
+          : "You have the newest version."
+    } catch (e) {
+      updNote = describe(e)
+    } finally {
+      updChecking = false
+    }
+  }
 
   let pushing = $state(false)
   let pushed = $state('')
@@ -79,9 +104,51 @@
       {/each}
     </ul>
   {/if}
+
+  <section class="updates" aria-label="Updates">
+    <h2>Updates</h2>
+    <p class="detail">
+      You have FlipDial {upd?.current ?? '…'}.
+      {#if upd && !upd.enabled}Checking for new versions is turned off (FLIPDIAL_UPDATE_CHECK=false).{/if}
+    </p>
+    {#if !upd || upd.enabled}
+      <div class="row">
+        <button type="button" class="secondary" onclick={checkNow} disabled={updChecking}>
+          {updChecking ? 'Checking…' : 'Check now'}
+        </button>
+        {#if updNote}<span role="status">{updNote}</span>{/if}
+      </div>
+    {/if}
+  </section>
 </div>
 
 <style>
+  .updates {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 18px 20px;
+    border-radius: 12px;
+    border: 1px solid #2c2f36;
+    background: var(--panel);
+  }
+  .updates h2 {
+    margin: 0;
+    font-size: 16px;
+  }
+  .updates .detail {
+    margin: 0;
+    color: var(--ash);
+    font-size: 14px;
+  }
+  .updates .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+  }
   .wrap {
     max-width: 820px;
     margin: 0 auto;

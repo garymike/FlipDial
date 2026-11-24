@@ -261,6 +261,7 @@ export interface UpdateInfo {
   release: { tag: string; name: string; url: string; published_at: string } | null
   install: string
   can_update: boolean
+  error?: string // check_failed: GitHub couldn't be reached
 }
 
 export interface AuditEntry {
@@ -373,6 +374,7 @@ export const api = {
   forget: (uid: string) =>
     call<{ forgotten: string; scans: number }>('DELETE', `/api/contacts/${encodeURIComponent(uid)}`),
   updateInfo: () => call<UpdateInfo>('GET', '/api/update'),
+  checkUpdate: () => call<UpdateInfo>('POST', '/api/update/check'),
   startUpdate: () => call<{ updating_to: string }>('POST', '/api/update/start'),
   status: () => call<SetupStatus>('GET', '/api/status'),
   retry: (cardId: string) => call<{ retrying: number }>('POST', `/api/review/${cardId}/retry`),
