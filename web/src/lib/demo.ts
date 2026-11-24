@@ -3,7 +3,17 @@
 // Nothing is saved: reloading the page starts over.
 
 import data from '../../../demo/contacts.json'
-import { ApiError, setUrls, type AuditEntry, type Contact, type ContactInput, type ReviewItem } from './api'
+import {
+  addressLine,
+  ApiError,
+  blankAddress,
+  setUrls,
+  type AuditEntry,
+  type Contact,
+  type ContactInput,
+  type ReviewItem,
+  type Typed,
+} from './api'
 
 const images = import.meta.glob('../../../demo/cards/*.svg', {
   eager: true,
@@ -16,7 +26,21 @@ function imageFor(cardId: string, side: string): string {
   return images[`../../../demo/cards/${cardId}-${s}.svg`] ?? ''
 }
 
-let contacts: Contact[] = structuredClone(data.contacts) as Contact[]
+// The sample file stores plain values; give them types the way the server does.
+type Raw = Omit<Contact, 'emails' | 'phones' | 'websites' | 'addresses'> & {
+  emails: string[]
+  phones: string[]
+  websites: string[]
+}
+const typed = (values: string[], first = 'work'): Typed[] =>
+  values.map((value, i) => ({ value, kind: i === 0 ? first : 'mobile', label: '' }))
+let contacts: Contact[] = (structuredClone(data.contacts) as Raw[]).map((c) => ({
+  ...c,
+  emails: typed(c.emails).map((t) => ({ ...t, kind: 'work' })),
+  phones: typed(c.phones),
+  websites: typed(c.websites).map((t) => ({ ...t, kind: 'work' })),
+  addresses: c.address ? [{ ...blankAddress(), street: c.address }] : [],
+}))
 let review: ReviewItem[] = structuredClone(data.review) as ReviewItem[]
 const notSame = new Set<string>()
 const merges: { id: number; keep: Contact; dropped: Contact; undone: boolean; at: string }[] = []
@@ -34,11 +58,11 @@ const words = (s: string) => fold(s).match(/[a-z0-9]+/g)?.sort().join(' ') ?? ''
 function similar(a: Contact, b: Contact): { score: number; reasons: string[] } | null {
   const reasons: string[] = []
   let score = 0
-  if (a.emails.some((e) => b.emails.map(fold).includes(fold(e)))) {
+  if (a.emails.some((e) => b.emails.map((x) => fold(x.value)).includes(fold(e.value)))) {
     reasons.push('same_email')
     score = 0.95
   }
-  if (a.phones.some((p) => digits(p) && b.phones.map(digits).includes(digits(p)))) {
+  if (a.phones.some((p) => digits(p.value) && b.phones.map((x) => digits(x.value)).includes(digits(p.value)))) {
     reasons.push('same_phone')
     score = Math.max(score, 0.85)
   }
@@ -65,6 +89,8 @@ function fromInput(input: ContactInput, base: Partial<Contact>): Contact {
     has_back: base.has_back ?? false,
     categories,
     ...rest,
+    addresses: rest.addresses ?? [],
+    address: rest.addresses?.[0] ? addressLine(rest.addresses[0]) : '',
   }
 }
 
@@ -80,7 +106,7 @@ function list(q: URLSearchParams) {
       !(scan === 'yes' && !c.card_id) &&
       !(scan === 'no' && c.card_id) &&
       (!starred || c.starred) &&
-      (!needle || fold([c.full_name, c.organization, c.title, ...c.emails, c.event].join(' ')).includes(needle)),
+      (!needle || fold([c.full_name, c.organization, c.title, ...c.emails.map((e) => e.value), c.event].join(' ')).includes(needle)),
   )
   const decks = new Map<string, number>()
   for (const c of contacts) if (c.event) decks.set(c.event, (decks.get(c.event) ?? 0) + 1)
@@ -141,6 +167,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       const c = find(seg[1])
       const changes = body as Partial<ContactInput>
       Object.assign(c, changes)
+      if (changes.addresses) c.address = changes.addresses[0] ? addressLine(changes.addresses[0]) : ''
       if (changes.tags || changes.event !== undefined)
         c.categories = [...new Set([...(c.event ? [c.event] : []), ...(changes.tags ?? c.categories)])]
       record('contact.edit', c.uid, { fields: Object.keys(changes).sort() })
@@ -156,7 +183,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
       if (seg[1] === 'dismissed') return { items: [] }
       if (seg[2] === 'matches') {
         const item = review.find((r) => r.card_id === seg[1])
-        const probe = { full_name: item?.fields?.full_name.value ?? '', emails: item?.fields?.emails.map((e) => e.value) ?? [], phones: [] } as unknown as Contact
+        const probe = { full_name: item?.fields?.full_name.value ?? '', emails: item?.fields?.emails ?? [], phones: [] } as unknown as Contact
         return { matches: contacts.flatMap((c) => { const m = similar(probe, c); return m ? [{ ...m, contact: c }] : [] }).slice(0, 3) }
       }
       return { items: review, ready: review.length }

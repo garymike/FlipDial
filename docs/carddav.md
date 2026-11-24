@@ -51,6 +51,24 @@ The URL can be the server's address, your account's address, or one address book
 | `CATEGORIES` | Event deck, tags and `Starred`, merged with categories already there |
 | `X-FLIPDIAL-*` | Event, date met, source, scan status, card ID; see [data model](data-model.md) |
 
+## Phone, email, website and address types
+
+Types are written the way Apple Contacts, Google Contacts, Android, Nextcloud and Outlook
+read them, so they show up correctly in each app:
+
+| In FlipDial | vCard 3 (vCard 4 uses lower case) |
+|---|---|
+| Phone: mobile, work, home | `TEL;TYPE=CELL,VOICE`, `WORK,VOICE`, `HOME,VOICE` |
+| Phone: main, pager | `TEL;TYPE=MAIN` (`main-number` in vCard 4), `PAGER` |
+| Phone: work fax, home fax, other fax | `TEL;TYPE=WORK,FAX`, `HOME,FAX`, `OTHER,FAX` |
+| Email: work, personal | `EMAIL;TYPE=INTERNET,WORK`, `INTERNET,HOME` |
+| Website: work, personal | `URL;TYPE=WORK`, `HOME` |
+| Address: work, home | `ADR;TYPE=WORK:;;street;city;state;ZIP;country` |
+| Homepage, blog, other, or your own label | Apple's label: `item1.URL:...` with `item1.X-ABLabel:_$!<HomePage>!$_` (or `BLOG`, `_$!<Other>!$_`, or the label text) |
+
+When you edit a contact, every value you didn't change keeps the exact line the other app
+wrote, including its preferred flag, Apple's iPhone type and the address country code.
+
 ## What FlipDial leaves alone
 
 When FlipDial updates an existing contact, it only replaces the properties above. Everything else, such as birthdays, photos and fields other apps added, stays exactly as it was. Categories are merged, never replaced.

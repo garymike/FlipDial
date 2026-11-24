@@ -1,5 +1,20 @@
 <script lang="ts">
-  import { api, describe, READ_ERRORS, REASONS, type ContactInput, type Match, type ReviewItem, type SetupItem } from './api'
+  import {
+    api,
+    blankAddress,
+    cleanInput,
+    describe,
+    READ_ERRORS,
+    REASONS,
+    type ContactInput,
+    type Field,
+    type Match,
+    type PostalAddress,
+    type ReviewFields,
+    type ReviewItem,
+    type SetupItem,
+    type Typed,
+  } from './api'
   import { href } from './router.svelte'
   import ContactForm from './ContactForm.svelte'
 
@@ -17,17 +32,26 @@
   const waiting = $derived(items.filter((i) => i.status !== 'review'))
   const current = $derived(ready[index] ?? null)
 
+  // A fax on a business card is a work fax; cards read before types existed default to work.
+  const typed = (x: Field): Typed => ({ value: x.value, kind: x.kind === 'fax' ? 'work_fax' : x.kind || 'work', label: '' })
+
+  function toAddresses(f: ReviewFields): PostalAddress[] {
+    const p = f.address_parts
+    if (p && (p.street || p.city || p.postal_code)) return [{ ...blankAddress(), ...p }]
+    return f.address.value ? [{ ...blankAddress(), street: f.address.value }] : []
+  }
+
   function toForm(item: ReviewItem): ContactInput {
     const f = item.fields
     return {
       full_name: f?.full_name.value ?? '',
       title: f?.title.value ?? '',
       organization: f?.organization.value ?? '',
-      emails: f?.emails.map((x) => x.value) ?? [],
-      phones: f?.phones.map((x) => x.value) ?? [],
-      websites: f?.websites.map((x) => x.value) ?? [],
+      emails: f?.emails.map(typed) ?? [],
+      phones: f?.phones.map(typed) ?? [],
+      websites: f?.websites.map(typed) ?? [],
       socials: f?.socials.map((s) => ({ platform: s.platform, handle: s.handle })) ?? [],
-      address: f?.address.value ?? '',
+      addresses: f ? toAddresses(f) : [],
       about: f?.about?.value ?? '',
       note: '',
       event: '',
@@ -138,14 +162,7 @@
     }
   })
 
-  function cleaned(f: ContactInput): ContactInput {
-    return {
-      ...f,
-      emails: f.emails.filter(Boolean),
-      phones: f.phones.filter(Boolean),
-      websites: f.websites.filter(Boolean),
-    }
-  }
+  const cleaned = (f: ContactInput): ContactInput => cleanInput(f)
 
   async function attach(uid: string) {
     if (!current || !form) return

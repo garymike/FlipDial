@@ -12,16 +12,80 @@ export const PLATFORMS = [
   'Pinterest', 'Behance', 'Dribbble', 'Etsy', 'GitHub', 'Snapchat', 'WhatsApp', 'Signal', 'Telegram',
 ] as const
 
+/** A phone, email or website with its type. Matches the types Apple and Google Contacts use. */
+export interface Typed {
+  value: string
+  kind: string
+  label: string // only when kind is 'custom'
+}
+
+export interface PostalAddress {
+  street: string
+  city: string
+  region: string
+  postal_code: string
+  country: string
+  kind: string
+  label: string
+}
+
+export type TypedField = 'emails' | 'phones' | 'websites'
+
+/** The types offered for each field, with the names shown. 'custom' lets you type a label. */
+export const KINDS: Record<TypedField | 'addresses', [string, string][]> = {
+  phones: [
+    ['mobile', 'Mobile'], ['work', 'Work'], ['home', 'Home'], ['main', 'Main'], ['work_fax', 'Work fax'],
+    ['home_fax', 'Home fax'], ['fax', 'Other fax'], ['pager', 'Pager'], ['other', 'Other'], ['custom', 'Custom…'],
+  ],
+  emails: [['work', 'Work'], ['home', 'Personal'], ['other', 'Other'], ['custom', 'Custom…']],
+  websites: [
+    ['work', 'Work'], ['home', 'Personal'], ['homepage', 'Homepage'], ['blog', 'Blog'], ['other', 'Other'],
+    ['custom', 'Custom…'],
+  ],
+  addresses: [['work', 'Work'], ['home', 'Home'], ['other', 'Other'], ['custom', 'Custom…']],
+}
+
+/** The name to show for a value's type: its custom label, or the standard name. */
+export function kindName(field: TypedField | 'addresses', item: { kind: string; label: string }): string {
+  if (item.kind === 'custom') return item.label || 'Other'
+  return KINDS[field].find(([k]) => k === item.kind)?.[1] ?? 'Other'
+}
+
+export const blankTyped = (kind = 'work'): Typed => ({ value: '', kind, label: '' })
+export const blankAddress = (kind = 'work'): PostalAddress => ({
+  street: '', city: '', region: '', postal_code: '', country: '', kind, label: '',
+})
+
+/** Drop empty rows before saving. */
+export function cleanInput<T extends Pick<ContactInput, TypedField | 'addresses'>>(f: T): T {
+  const keep = (t: Typed) => t.value.trim() !== ''
+  return {
+    ...f,
+    emails: f.emails.filter(keep),
+    phones: f.phones.filter(keep),
+    websites: f.websites.filter(keep),
+    addresses: f.addresses.filter((a) => [a.street, a.city, a.region, a.postal_code, a.country].some((x) => x.trim())),
+  }
+}
+
+/** An address on one line, for lists and cards. */
+export function addressLine(a: PostalAddress): string {
+  const street = a.street.split('\n').map((x) => x.trim()).filter(Boolean).join(', ')
+  const line2 = [a.region, a.postal_code].filter(Boolean).join(' ')
+  return [street, a.city, line2, a.country].filter(Boolean).join(', ')
+}
+
 export interface Contact {
   uid: string
   full_name: string
   title: string
   organization: string
-  emails: string[]
-  phones: string[]
-  websites: string[]
+  emails: Typed[]
+  phones: Typed[]
+  websites: Typed[]
   socials: Social[]
-  address: string
+  addresses: PostalAddress[]
+  address: string // the first address on one line (read only)
   about: string
   note: string
   categories: string[]
@@ -44,6 +108,7 @@ export interface ContactList {
 export interface Field {
   value: string
   confidence: number
+  kind?: string
 }
 
 export interface ReviewFields {
@@ -55,6 +120,7 @@ export interface ReviewFields {
   websites: Field[]
   socials: (Social & { confidence: number })[]
   address: Field
+  address_parts?: Omit<PostalAddress, 'kind' | 'label'>
   about?: Field
   text?: string
 }
@@ -78,7 +144,7 @@ export interface ReadProgress {
     Partial<Record<'emails' | 'phones' | 'websites' | 'text', string[]>>
 }
 
-export type ContactInput = Omit<Contact, 'uid' | 'categories' | 'source' | 'card_id' | 'has_back'> & {
+export type ContactInput = Omit<Contact, 'uid' | 'categories' | 'source' | 'card_id' | 'has_back' | 'address'> & {
   tags: string[]
 }
 

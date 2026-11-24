@@ -8,7 +8,7 @@ describe('demo stand-in server', () => {
   it('lists, filters and searches invented contacts', async () => {
     const all = await get<ContactList>('/api/contacts')
     expect(all.total).toBeGreaterThan(10)
-    expect(all.contacts.every((c) => c.emails.every((e) => e.endsWith('.example')))).toBe(true)
+    expect(all.contacts.every((c) => c.emails.every((e) => e.value.endsWith('.example')))).toBe(true)
     const deck = await get<ContactList>('/api/contacts?deck=SecCon%202026')
     expect(deck.contacts.every((c) => c.event === 'SecCon 2026')).toBe(true)
     const found = await get<ContactList>('/api/contacts?q=letterpress')

@@ -2,7 +2,7 @@
   // Dial view: spin through contacts one card at a time.
   // Drag (with momentum), scroll, arrow keys, A to Z letters and the header search all move it.
   import { untrack } from 'svelte'
-  import { api, describe, type Contact, type ContactList } from './api'
+  import { api, describe, kindName, type Contact, type ContactList } from './api'
   import { letterIndex, mod, nearest, offset, seek, settle, slot } from './dial'
   import FlipCard from './FlipCard.svelte'
   import { href } from './router.svelte'
@@ -287,8 +287,8 @@
             <Star on={current.starred} label={`${current.starred ? 'Unstar' : 'Star'} ${current.full_name}`} onclick={toggleStar} />
           </div>
           <div class="lines">
-            {#each current.emails as e (e)}<a href={`mailto:${e}`}>{e}</a>{/each}
-            {#each current.phones as p (p)}<span>{p}</span>{/each}
+            {#each current.emails as e, i (i)}<a href={`mailto:${e.value}`}>{e.value}</a>{/each}
+            {#each current.phones as p, i (i)}<span>{p.value} <small>{kindName('phones', p)}</small></span>{/each}
           </div>
           <a class="open" href={href({ name: 'contact', uid: current.uid })}>Open card</a>
           {#if upNext.length}
