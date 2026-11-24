@@ -143,6 +143,11 @@ class CardFields(BaseModel):
         description="True if the text on the front runs up or down the image instead of "
         "across, because the card was scanned turned on its side.",
     )
+    back_mismatch: bool = Field(
+        default=False,
+        description="True only if the second image is clearly a different business card, "
+        "for a different person or company, rather than the back of the first card.",
+    )
     about: TextField = TextField()  # printed description: tagline, services
 
     def address_record(self) -> dict[str, str]:
@@ -209,8 +214,9 @@ def _coerce(raw: Any) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if isinstance(raw.get("text"), str):
         out["text"] = raw["text"]
-    if isinstance(raw.get("sideways"), bool):
-        out["sideways"] = raw["sideways"]
+    for key in ("sideways", "back_mismatch"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
     if isinstance(raw.get("address_parts"), dict):
         out["address_parts"] = raw["address_parts"]
     addr = raw.get("address")
@@ -300,6 +306,8 @@ def validate(raw: dict[str, Any]) -> Extraction:
         flags.add("no_name_or_company")
     if fields.sideways:
         flags.add("sideways:front")  # the person turns it; the model can't tell which way
+    if fields.back_mismatch:
+        flags.add("back_mismatch:back")
     if dropped:
         flags.add("values_dropped")
     return Extraction(fields=fields, flags=sorted(flags), dropped=dropped)

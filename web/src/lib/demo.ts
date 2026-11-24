@@ -277,6 +277,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
     case 'POST /review': {
       const item = review.find((r) => r.card_id === seg[1])
       if (!item) throw new ApiError(404, 'not_found')
+      if (seg[2] === 'split') throw new ApiError(403, 'demo_readonly') // drawings, not scans
       review = review.filter((r) => r !== item)
       if (seg[2] === 'dismiss') {
         record('card.dismiss', item.card_id)

@@ -38,6 +38,7 @@ from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
 from flipdial.carddav.typed import values
 from flipdial.config import Settings
+from flipdial.ingest import split
 from flipdial.transfer import backup, importer
 
 CARD_ID = re.compile(r"^\d{8}T\d{6}-[0-9a-f]{10}$")
@@ -527,6 +528,20 @@ def retry(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
         raise HTTPException(409, "cannot_reread")  # being read already, or saved
     audit.record(s, actor, "card.retry", card_id, cards=1)
     return {"retrying": 1}
+
+
+@router.post("/review/{card_id}/split")
+def split_card(card_id: str, s: SettingsDep, actor: ActorDep) -> dict:
+    """The back is a different card: make it its own card. Both are read again."""
+    _card_id(card_id)
+    try:
+        new_id = split.split(s, card_id)
+    except KeyError as exc:
+        raise HTTPException(404, "not_found") from exc
+    except split.SplitError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    audit.record(s, actor, "card.split", card_id, new_card=new_id)
+    return {"card_id": card_id, "new_card_id": new_id}
 
 
 @router.post("/review/{card_id}/dismiss")

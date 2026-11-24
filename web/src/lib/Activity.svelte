@@ -12,6 +12,7 @@
     'contacts.copy_to_server': 'Copied contacts from this computer to the server',
     'card.approve': 'Saved a scanned card',
     'card.dismiss': 'Dismissed a scanned card',
+    'card.split': 'Split a card from the wrong back',
     'card.attach': 'Added a scan to a contact',
     'duplicate.not_same': 'Marked two contacts as different people',
     import: 'Imported contacts',
