@@ -6,6 +6,7 @@ FlipDial work while the server is briefly unreachable. It is refreshed by `sync(
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -233,11 +234,12 @@ def newest_card(settings: Settings, card_ids: list[str]) -> str:
     """The most recently added of these cards (two scans can share the same second)."""
     if not card_ids:
         return ""
-    marks = ",".join("?" * len(card_ids))
     with db.session(settings.db_path) as conn:
+        # One fixed query; the ids go in as a single JSON parameter.
         row = conn.execute(
-            f"SELECT id FROM cards WHERE id IN ({marks}) ORDER BY rowid DESC LIMIT 1",  # noqa: S608
-            card_ids,
+            "SELECT id FROM cards WHERE id IN (SELECT value FROM json_each(?)) "
+            "ORDER BY rowid DESC LIMIT 1",
+            (json.dumps(card_ids),),
         ).fetchone()
     return row["id"] if row else card_ids[-1]
 
