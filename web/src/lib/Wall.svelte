@@ -190,7 +190,7 @@
             aria-current={c.uid === open ? 'true' : undefined}
             onclick={() => show(c.uid)}
           >
-            <FlipCard contact={c} />
+            <FlipCard contact={c} tall={1.25} />
           </button>
           <div class="foot">
             <div class="who">

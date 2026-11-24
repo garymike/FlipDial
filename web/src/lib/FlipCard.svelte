@@ -11,7 +11,14 @@
     flipped = false,
     size = 'thumb',
     adapt = false,
-  }: { contact: Contact; flipped?: boolean; size?: 'thumb' | 'large'; adapt?: boolean } = $props()
+    tall = 1.75,
+  }: {
+    contact: Contact
+    flipped?: boolean
+    size?: 'thumb' | 'large'
+    adapt?: boolean
+    tall?: number // frame shape (width / height) for a tall card; smaller means taller
+  } = $props()
 
 
   const front = $derived(
@@ -25,7 +32,7 @@
   let frontRatio = $state(1.75)
   let backRatio = $state(1.75)
   const shownRatio = $derived(flipped && back ? backRatio : frontRatio)
-  const frameRatio = $derived(adapt || shownRatio >= 1 ? shownRatio : 1.75)
+  const frameRatio = $derived(adapt || shownRatio >= 1 ? shownRatio : Math.max(shownRatio, tall))
 
   // A scan with no back: show its details on a back in the front's main color.
   let tint = $state<CardColor | null>(null)

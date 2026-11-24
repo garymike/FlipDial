@@ -262,7 +262,7 @@
                 style:pointer-events={s.visible ? 'auto' : 'none'}
                 style:filter={s.shade > 0.01 ? `brightness(${(1 - s.shade).toFixed(2)})` : undefined}
               >
-                <FlipCard contact={c} flipped={i === index && flipped} size="large" />
+                <FlipCard contact={c} flipped={i === index && flipped} size="large" tall={1} />
               </div>
             {/each}
           </div>
