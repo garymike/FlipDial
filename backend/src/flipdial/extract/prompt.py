@@ -17,9 +17,12 @@ Steps:
 1. In "text", copy every line printed on the card (front, then back), top to bottom, one
    line per line, exactly as printed.
 2. Then fill in the fields from that text:
-   - full_name, given_name, family_name: a person's name only. Leave empty if the card names
-     only a business.
-   - title, organization.
+   - full_name, given_name, middle_name, family_name: a person's name only. Leave empty if
+     the card names only a business. full_name is the name as printed.
+   - prefix and suffix: printed with the name, such as Dr. or Prof. before it and Jr., PhD,
+     MD or CPA after it.
+   - title, organization, and department: a department, team or division printed apart
+     from the company name.
    - emails, phones, websites: every one printed. A number labeled WhatsApp, Signal, WeChat
      or similar goes in phones and also in socials with that app as the platform.
      Give each a "kind" from the label printed next to it: M, Mobile or Cell is mobile;

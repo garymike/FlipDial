@@ -19,6 +19,55 @@
     return ''
   }
 
+  // Name parts follow the Name field until someone edits them directly.
+  let partsTouched = false
+  let showName = $state(!!(value.prefix || value.middle_name || value.suffix || value.nickname))
+  const touched = () => (partsTouched = true)
+  function nameChanged() {
+    if (partsTouched) return
+    let name = value.full_name.trim()
+    const pre = (value.prefix ?? '').trim()
+    const suf = (value.suffix ?? '').trim()
+    if (pre && name.toLowerCase().startsWith(pre.toLowerCase())) name = name.slice(pre.length)
+    if (suf && name.toLowerCase().endsWith(suf.toLowerCase())) name = name.slice(0, -suf.length)
+    const words = name.replace(/^[\s,]+|[\s,]+$/g, '').split(/\s+/).filter(Boolean)
+    const middle = !!value.middle_name && words.length >= 3
+    value.given_name = words.length < 2 ? words.join(' ') : middle ? words[0] : words.slice(0, -1).join(' ')
+    value.middle_name = middle ? words.slice(1, -1).join(' ') : ''
+    value.family_name = words.length < 2 ? '' : words[words.length - 1]
+  }
+
+  // Birthday as month, day and an optional year; stored as YYYY-MM-DD or --MM-DD.
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  type Parts = { year: string; month: string; day: string }
+  function parseBirthday(v: string): Parts {
+    const m = /^(\d{4}|-)-(\d{2})-(\d{2})$/.exec(v)
+    return m ? { year: m[1] === '-' ? '' : m[1], month: m[2], day: String(Number(m[3])) } : { year: '', month: '', day: '' }
+  }
+  // What's typed so far, which can be incomplete (a month with no day yet).
+  let bday = $state<Parts>({ year: '', month: '', day: '' })
+  let written: string | null = null
+  $effect(() => {
+    const v = value.birthday ?? ''
+    if (v !== written) {
+      bday = parseBirthday(v)
+      written = v
+    }
+  })
+  function setBirthday(part: keyof Parts, v: string) {
+    bday[part] = v.trim()
+    const day = Number(bday.day)
+    let next = value.birthday ?? ''
+    if (bday.month && day >= 1 && day <= 31) {
+      const dd = String(day).padStart(2, '0')
+      next = /^\d{4}$/.test(bday.year) ? `${bday.year}-${bday.month}-${dd}` : `--${bday.month}-${dd}`
+    } else if (!bday.month && !bday.day && !bday.year) {
+      next = ''
+    }
+    written = next
+    value.birthday = next
+  }
+
   const lists = ['emails', 'phones', 'websites'] as const
   const labels: Record<string, string> = {
     full_name: 'Name',
@@ -44,13 +93,39 @@
 </script>
 
 <div class="form">
-  {#each ['full_name', 'title', 'organization'] as const as key (key)}
+  <div class="field">
+    <label for={`${idPrefix}-full_name`}>Name</label>
+    <input id={`${idPrefix}-full_name`} bind:value={value.full_name} oninput={nameChanged} maxlength="200" class:flag={!!flagFor('full_name')} />
+    {#if flagFor('full_name')}<span class="note">{flagFor('full_name')}</span>{/if}
+    {#if showName}
+      <div class="name-parts">
+        <input aria-label="Prefix" placeholder="Prefix" bind:value={value.prefix} oninput={nameChanged} maxlength="80" />
+        <input aria-label="First name" placeholder="First" bind:value={value.given_name} oninput={touched} maxlength="200" />
+        <input aria-label="Middle name" placeholder="Middle" bind:value={value.middle_name} oninput={touched} maxlength="200" />
+        <input aria-label="Last name" placeholder="Last" bind:value={value.family_name} oninput={touched} maxlength="200" />
+        <input aria-label="Suffix" placeholder="Suffix" bind:value={value.suffix} oninput={nameChanged} maxlength="80" />
+      </div>
+      <input aria-label="Nickname" placeholder="Nickname" bind:value={value.nickname} maxlength="200" />
+    {:else}
+      <button type="button" class="add" onclick={() => (showName = true)}>+ Name parts and nickname</button>
+    {/if}
+  </div>
+  <div class="field">
+    <label for={`${idPrefix}-title`}>Title</label>
+    <input id={`${idPrefix}-title`} bind:value={value.title} maxlength="200" class:flag={!!flagFor('title')} />
+    {#if flagFor('title')}<span class="note">{flagFor('title')}</span>{/if}
+  </div>
+  <div class="two">
     <div class="field">
-      <label for={`${idPrefix}-${key}`}>{labels[key]}</label>
-      <input id={`${idPrefix}-${key}`} bind:value={value[key]} maxlength="200" class:flag={!!flagFor(key)} />
-      {#if flagFor(key)}<span class="note">{flagFor(key)}</span>{/if}
+      <label for={`${idPrefix}-organization`}>Company</label>
+      <input id={`${idPrefix}-organization`} bind:value={value.organization} maxlength="200" class:flag={!!flagFor('organization')} />
+      {#if flagFor('organization')}<span class="note">{flagFor('organization')}</span>{/if}
     </div>
-  {/each}
+    <div class="field">
+      <label for={`${idPrefix}-department`}>Department</label>
+      <input id={`${idPrefix}-department`} bind:value={value.department} maxlength="200" class:flag={!!flagFor('department')} />
+    </div>
+  </div>
 
   {#each lists as key (key)}
     <fieldset class="field">
@@ -151,6 +226,20 @@
       <input id={`${idPrefix}-met`} type="date" bind:value={value.met_on} />
     </div>
   </div>
+  <fieldset class="field">
+    <legend>Birthday</legend>
+    <div class="birthday">
+      <select aria-label="Birthday month" value={bday.month} onchange={(e) => setBirthday('month', e.currentTarget.value)}>
+        <option value="">Month</option>
+        {#each MONTHS as m, i (m)}<option value={String(i + 1).padStart(2, '0')}>{m}</option>{/each}
+      </select>
+      <input aria-label="Birthday day" placeholder="Day" inputmode="numeric" maxlength="2" value={bday.day} onchange={(e) => setBirthday('day', e.currentTarget.value)} />
+      <input aria-label="Birthday year (optional)" placeholder="Year" inputmode="numeric" maxlength="4" value={bday.year} onchange={(e) => setBirthday('year', e.currentTarget.value)} />
+      {#if value.birthday}
+        <button type="button" class="remove" aria-label="Clear birthday" onclick={() => (value.birthday = '')}>×</button>
+      {/if}
+    </div>
+  </fieldset>
   <label class="check"><input type="checkbox" bind:checked={value.starred} /> Starred</label>
 </div>
 
@@ -275,6 +364,28 @@
     min-height: 36px;
     font-size: 13px;
     border-style: dashed;
+  }
+  .name-parts {
+    display: grid;
+    grid-template-columns: 0.7fr 1fr 1fr 1fr 0.7fr;
+    gap: 6px;
+  }
+  .name-parts input {
+    min-width: 0;
+  }
+  @media (max-width: 700px) {
+    .name-parts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .birthday {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr auto;
+    gap: 6px;
+  }
+  .birthday input,
+  .birthday select {
+    min-width: 0;
   }
   .two {
     display: grid;

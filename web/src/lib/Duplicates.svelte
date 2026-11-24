@@ -87,6 +87,15 @@
     )
     return {
       full_name: side('full_name').full_name,
+      given_name: side('full_name').given_name ?? '',
+      family_name: side('full_name').family_name ?? '',
+      // Not picked on this screen: whichever contact has one
+      middle_name: side('full_name').middle_name || p.a.middle_name || p.b.middle_name || '',
+      prefix: side('full_name').prefix || p.a.prefix || p.b.prefix || '',
+      suffix: side('full_name').suffix || p.a.suffix || p.b.suffix || '',
+      nickname: p.a.nickname || p.b.nickname || '',
+      department: side('organization').department || p.a.department || p.b.department || '',
+      birthday: p.a.birthday || p.b.birthday || '',
       title: side('title').title,
       organization: side('organization').organization,
       addresses: side('address').addresses,

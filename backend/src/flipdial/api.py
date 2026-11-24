@@ -12,13 +12,13 @@ import re
 import shutil
 import tempfile
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 from starlette.background import BackgroundTask
 
 from flipdial import (
@@ -87,8 +87,31 @@ def _one_address(model: BaseModel) -> None:
     model.address = None
 
 
+Birthday = Annotated[str, StringConstraints(pattern=r"^((\d{4}|-)-\d{2}-\d{2})?$")]
+
+
+def _real_date(value: str | None) -> str | None:
+    """A birthday that is an actual day of the year (Feb 29 allowed without a year)."""
+    if value:
+        year = 2000 if value.startswith("--") else int(value[:4])
+        try:
+            date(year, int(value[-5:-3]), int(value[-2:]))
+        except ValueError as exc:
+            raise ValueError("not a real date") from exc
+    return value
+
+
 class ContactIn(BaseModel):
     full_name: Text = ""  # may be empty for a business card; the company name is used
+    given_name: Text = ""
+    family_name: Text = ""
+    # Empty keeps what the contact already has (when this goes onto an existing contact).
+    middle_name: Text = ""
+    prefix: Short = ""
+    suffix: Short = ""
+    nickname: Text = ""
+    department: Text = ""
+    birthday: Birthday = ""
     title: Text = ""
     organization: Text = ""
     emails: list[TypedIn] = Field(default_factory=list, max_length=10)
@@ -104,6 +127,8 @@ class ContactIn(BaseModel):
     starred: bool = False
     tags: list[Short] = Field(default_factory=list, max_length=20)
 
+    _birthday = field_validator("birthday")(_real_date)
+
     @model_validator(mode="after")
     def _name_or_company(self) -> ContactIn:
         if not self.full_name:
@@ -116,6 +141,14 @@ class ContactIn(BaseModel):
 
 class ContactPatch(BaseModel):
     full_name: Text | None = Field(default=None, min_length=1)
+    given_name: Text | None = None
+    family_name: Text | None = None
+    middle_name: Text | None = None
+    prefix: Short | None = None
+    suffix: Short | None = None
+    nickname: Text | None = None
+    department: Text | None = None
+    birthday: Birthday | None = None
     title: Text | None = None
     organization: Text | None = None
     emails: list[TypedIn] | None = Field(default=None, max_length=10)
@@ -131,6 +164,8 @@ class ContactPatch(BaseModel):
     met_on: Annotated[str, StringConstraints(pattern=r"^(\d{4}-\d{2}-\d{2})?$")] | None = None
     starred: bool | None = None
     tags: list[Short] | None = Field(default=None, max_length=20)
+
+    _birthday = field_validator("birthday")(_real_date)
 
 
 def settings_dep(request: Request) -> Settings:
@@ -191,7 +226,16 @@ def list_contacts(
             needle
             and needle
             not in " ".join(
-                [c.full_name, c.organization, c.title, *values(c.emails), c.event, c.about]
+                [
+                    c.full_name,
+                    c.nickname,
+                    c.organization,
+                    c.department,
+                    c.title,
+                    *values(c.emails),
+                    c.event,
+                    c.about,
+                ]
             ).casefold()
         ):
             continue
@@ -621,6 +665,8 @@ def _reviewed(body: ContactIn, **extra) -> ReviewedContact:
     data = body.model_dump(exclude={"address"})
     data["socials"] = [(x["platform"], x["handle"]) for x in data["socials"]]
     data["note"] = data["note"] or None  # an empty note from review keeps any existing note
+    for key in ("middle_name", "prefix", "suffix", "nickname", "department", "birthday"):
+        data[key] = data[key] or None  # likewise: empty keeps the contact's value
     return ReviewedContact(**data, **extra)
 
 
@@ -732,8 +778,13 @@ FieldName = Literal[
     "",
     "full_name",
     "given_name",
+    "middle_name",
     "family_name",
+    "prefix",
+    "suffix",
+    "nickname",
     "organization",
+    "department",
     "title",
     "email",
     "phone",
@@ -741,6 +792,7 @@ FieldName = Literal[
     "linkedin",
     "address",
     "met_on",
+    "birthday",
     "tags",
     "note",
 ]

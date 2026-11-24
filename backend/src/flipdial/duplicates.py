@@ -175,6 +175,11 @@ def merge(
     keep_scan = keep_card.first("X-FLIPDIAL-CARD-ID")
     drop_scan = drop_card.first("X-FLIPDIAL-CARD-ID")
     result.has_scan = bool(keep_scan or drop_scan)
+    # Details the merge screen doesn't choose come from whichever contact has them.
+    keep_view, drop_view = contacts.view(keep_card), contacts.view(drop_card)
+    for key in ("middle_name", "prefix", "suffix", "nickname", "department", "birthday"):
+        if getattr(result, key) is None:
+            setattr(result, key, getattr(keep_view, key) or getattr(drop_view, key) or None)
     apply(keep_card, result)
     # Both scans stay linked to the kept contact; this picks the one it shows. Unless asked,
     # the newer card wins.
@@ -289,8 +294,17 @@ def attach_scan(
 
     combined = ReviewedContact(
         full_name=reviewed.full_name or existing.full_name,
+        given_name=reviewed.given_name or existing.given_name,
+        family_name=reviewed.family_name or existing.family_name,
         title=reviewed.title or existing.title,
         organization=reviewed.organization or existing.organization,
+        # None keeps the contact's own value
+        middle_name=reviewed.middle_name or None,
+        prefix=reviewed.prefix or None,
+        suffix=reviewed.suffix or None,
+        nickname=reviewed.nickname or None,
+        department=reviewed.department or None,
+        birthday=reviewed.birthday or None,
         emails=union(existing.emails, reviewed.emails),
         phones=union(existing.phones, reviewed.phones),
         websites=union(existing.websites, reviewed.websites),

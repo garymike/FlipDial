@@ -125,9 +125,13 @@ class CardFields(BaseModel):
     )
     full_name: TextField = TextField()
     given_name: TextField = TextField()
+    middle_name: TextField = TextField()
     family_name: TextField = TextField()
+    prefix: TextField = TextField()
+    suffix: TextField = TextField()
     title: TextField = TextField()
     organization: TextField = TextField()
+    department: TextField = TextField()
     emails: list[TypedField] = Field(default_factory=list, max_length=MAX_ITEMS)
     phones: list[TypedField] = Field(default_factory=list, max_length=MAX_ITEMS)
     websites: list[TypedField] = Field(default_factory=list, max_length=MAX_ITEMS)
@@ -177,7 +181,19 @@ def _valid_url(value: str) -> str | None:
     return candidate
 
 
-_SCALARS = ("full_name", "given_name", "family_name", "title", "organization", "address", "about")
+_SCALARS = (
+    "full_name",
+    "given_name",
+    "middle_name",
+    "family_name",
+    "prefix",
+    "suffix",
+    "title",
+    "organization",
+    "department",
+    "address",
+    "about",
+)
 _LISTS = ("emails", "phones", "websites", "socials")
 
 
@@ -291,15 +307,7 @@ def validate(raw: dict[str, Any]) -> Extraction:
 
 def _all_values(fields: CardFields):
     yield "text", fields.text, 1.0
-    for name in (
-        "full_name",
-        "given_name",
-        "family_name",
-        "title",
-        "organization",
-        "address",
-        "about",
-    ):
+    for name in _SCALARS:
         f: TextField = getattr(fields, name)
         yield name, f.value, f.confidence
     for part, value in fields.address_parts.model_dump().items():
