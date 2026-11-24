@@ -2,11 +2,11 @@
   // Dial view: spin through contacts one card at a time.
   // Drag (with momentum), scroll, arrow keys, A to Z letters and the header search all move it.
   import { untrack } from 'svelte'
-  import { api, describe, kindName, type Contact, type ContactList } from './api'
-  import { letterIndex, mod, nearest, offset, seek, settle, slot } from './dial'
+  import { api, describe, type Contact, type ContactList } from './api'
+  import ContactPane from './ContactPane.svelte'
+  import { countMatches, letterIndex, mod, nearest, offset, seek, settle, slot } from './dial'
   import FlipCard from './FlipCard.svelte'
   import { href } from './router.svelte'
-  import Star from './Star.svelte'
 
   let { query = '' }: { query?: string } = $props()
 
@@ -67,6 +67,15 @@
   // The header search dials to the first match instead of filtering.
   // Runs only when the query or the card list changes, not on every move.
   let noMatch = $state(false)
+  const matchCount = $derived(countMatches(query, cards))
+
+  function changed(c: Contact) {
+    const i = cards.findIndex((x) => x.uid === c.uid)
+    if (i >= 0 && data) data.contacts[i] = c
+  }
+  async function forgotten() {
+    await load()
+  }
   $effect(() => {
     const i = seek(query, cards)
     noMatch = !!query.trim() && cards.length > 0 && i < 0
@@ -168,18 +177,7 @@
     }
   }
 
-  async function toggleStar() {
-    if (!current) return
-    const c = current
-    const next = !c.starred
-    c.starred = next
-    try {
-      await api.update(c.uid, { starred: next })
-    } catch (e) {
-      c.starred = !next
-      error = describe(e)
-    }
-  }
+
 
   function pickDeck(name: string, starred = false) {
     deck = name
@@ -288,24 +286,16 @@
           </button>
         </div>
         {#if noMatch}<p class="nomatch" role="status">Nothing matches “{query.trim()}” here. Try part of a name, company, email or event.</p>{/if}
+        {#if matchCount > 1}
+          <a class="towall" href={href({ name: 'wall' })}>Show all {matchCount} matches on the Wall</a>
+        {/if}
         <p class="hint">Drag, scroll or use the arrow keys to dial. Click the front card or press Enter to flip it. Type in search to dial to a name.</p>
       </div>
 
       {#if current}
         <aside aria-label="Current contact">
           <span class="eyebrow">{current.event || 'No event'} · {current.card_id ? 'Scan' : current.source}</span>
-          <div class="who">
-            <div>
-              <div class="name">{current.full_name}</div>
-              <div class="sub">{[current.title, current.organization].filter(Boolean).join(', ')}</div>
-            </div>
-            <Star on={current.starred} label={`${current.starred ? 'Unstar' : 'Star'} ${current.full_name}`} onclick={toggleStar} />
-          </div>
-          <div class="lines">
-            {#each current.emails as e, i (i)}<a href={`mailto:${e.value}`}>{e.value}</a>{/each}
-            {#each current.phones as p, i (i)}<span>{p.value} <small>{kindName('phones', p)}</small></span>{/each}
-          </div>
-          <a class="open" href={href({ name: 'contact', uid: current.uid })}>Open card</a>
+          <ContactPane uid={current.uid} initial={current} showCard={false} onchange={changed} onforget={forgotten} />
           {#if upNext.length}
             <div class="next">
               <span class="eyebrow">Up next</span>
@@ -535,10 +525,17 @@
     color: var(--ash);
     text-align: center;
   }
+  .towall {
+    font-size: 14px;
+  }
   aside {
-    flex: 1 1 280px;
-    max-width: 340px;
-    align-self: center;
+    flex: 1 1 360px;
+    max-width: 440px;
+    align-self: flex-start;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -552,40 +549,6 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--ash);
-    font-weight: 600;
-  }
-  .who {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .name {
-    font-family: var(--font-display);
-    font-size: 26px;
-    font-weight: 600;
-  }
-  .sub {
-    margin-top: 4px;
-    font-size: 14px;
-    color: #d6d1c9;
-  }
-  .lines {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    font-size: 14px;
-    overflow-wrap: anywhere;
-  }
-  .open {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    border-radius: 10px;
-    background: var(--amber);
-    color: var(--ink);
-    text-decoration: none;
-    font-size: 14px;
     font-weight: 600;
   }
   .next {

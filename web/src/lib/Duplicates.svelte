@@ -2,7 +2,7 @@
   // Possible duplicates: review each pair, pick the values to keep, merge, and undo if needed.
   import { api, describe, kindName, REASONS, type Contact, type ContactInput, type DuplicatePair, type MergeRecord } from './api'
   import FlipCard from './FlipCard.svelte'
-  import { href } from './router.svelte'
+  import { contactHref } from './router.svelte'
 
   let pairs = $state<DuplicatePair[]>([])
   let merges = $state<MergeRecord[]>([])
@@ -13,6 +13,7 @@
   // merge editor state
   let open = $state<DuplicatePair | null>(null)
   let keep = $state<'a' | 'b'>('a')
+  let showCard = $state('') // when both have a scan: the card to show (both are kept)
   let pick = $state<Record<string, 'a' | 'b'>>({})
   let listPick = $state<Record<string, Record<string, boolean>>>({})
   let busy = $state(false)
@@ -53,6 +54,8 @@
   function startMerge(p: DuplicatePair) {
     open = p
     keep = p.b.card_id && !p.a.card_id ? 'b' : 'a'
+    // Default to the newer card (card ids start with the scan time).
+    showCard = [p.a.card_id, p.b.card_id].filter((x): x is string => !!x).sort().at(-1) ?? ''
     const choice: Record<string, 'a' | 'b'> = {}
     for (const [key] of scalars) choice[key] = p.a[key] ? 'a' : p.b[key] ? 'b' : 'a'
     pick = choice
@@ -107,7 +110,7 @@
     const p = open
     const [k, d] = keep === 'a' ? [p.a, p.b] : [p.b, p.a]
     try {
-      const r = await api.merge(k.uid, d.uid, result(p))
+      const r = await api.merge(k.uid, d.uid, result(p), p.a.card_id && p.b.card_id ? showCard : '')
       notice = { text: `Merged into ${r.contact.full_name}.`, mergeId: r.merge_id }
       open = null
       await load()
@@ -167,7 +170,7 @@
           {#each [p.a, p.b] as c (c.uid)}
             <div class="side">
               <FlipCard contact={c} />
-              <a href={href({ name: 'contact', uid: c.uid })}>{c.full_name}</a>
+              <a href={contactHref(c.uid)}>{c.full_name}</a>
               <span class="sub">{[c.organization, c.emails[0]?.value].filter(Boolean).join(' · ')}</span>
             </div>
           {/each}
@@ -180,6 +183,19 @@
               <label><input type="radio" bind:group={keep} value="a" /> {p.a.full_name} ({p.a.card_id ? 'has scan' : p.a.source})</label>
               <label><input type="radio" bind:group={keep} value="b" /> {p.b.full_name} ({p.b.card_id ? 'has scan' : p.b.source})</label>
             </fieldset>
+            {#if p.a.card_id && p.b.card_id}
+              <fieldset>
+                <legend>Card to show <span class="hint">both are kept; the other stays in their card history</span></legend>
+                <div class="cardpick">
+                  {#each [p.a, p.b] as c (c.uid)}
+                    <label class:chosen={showCard === c.card_id}>
+                      <input type="radio" bind:group={showCard} value={c.card_id} />
+                      <img src={api.image(c.card_id ?? '', 'thumb')} alt={`Card from ${c.full_name}`} />
+                    </label>
+                  {/each}
+                </div>
+              </fieldset>
+            {/if}
             {#each scalars as [key, label] (key)}
               {#if p.a[key] || p.b[key]}
                 <fieldset>
@@ -234,6 +250,33 @@
 </div>
 
 <style>
+  .cardpick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .cardpick label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .cardpick label.chosen {
+    border-color: var(--amber);
+  }
+  .cardpick img {
+    width: 160px;
+    border-radius: 6px;
+    display: block;
+  }
+  legend .hint {
+    font-weight: 400;
+    color: var(--ash);
+    font-size: 12px;
+  }
   .wrap {
     max-width: 1100px;
     margin: 0 auto;

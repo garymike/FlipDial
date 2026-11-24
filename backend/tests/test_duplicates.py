@@ -155,3 +155,57 @@ def test_attach_scan_to_existing_contact(api, dav_settings, make_card):
     assert got["card_id"] == card_id and got["title"] == "Managing partner"
     assert [e["value"] for e in got["emails"]] == [email]  # combined without duplicates
     assert api.post(f"/api/review/{card_id}/attach/{uid}", json=body, headers=H).status_code == 409
+
+
+def _scan(dav_settings, make_card, seed, fields):
+    ing = Ingestor(dav_settings)  # creates the inbox folder
+    make_card(seed=seed).save(dav_settings.inbox_dir / f"card-{seed}.jpg")
+    card_id = ing.run_once()[0]
+    Extractor(dav_settings, FakeReader(fields)).run_once()
+    return card_id
+
+
+def test_two_scans_merge_choice_and_card_history(api, dav_settings, make_card):
+    tag = uuid.uuid4().hex[:6]
+    first = {"full_name": {"value": f"Hal {tag}", "confidence": 0.9}}
+    old = _scan(dav_settings, make_card, 21, first)
+    r = api.post(f"/api/review/{old}/approve", json=_body(f"Hal {tag}"), headers=H)
+    a = r.json()["uid"]
+    new = _scan(dav_settings, make_card, 22, first)
+    r = api.post(f"/api/review/{new}/approve", json=_body(f"Hal {tag}", title="New job"), headers=H)
+    b = r.json()["uid"]
+
+    # Merging two scanned contacts shows the newer card unless told otherwise.
+    r = api.post(
+        "/api/merge", json={"keep_uid": a, "drop_uid": b, "contact": _body(f"Hal {tag}")}, headers=H
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["contact"]["card_id"] == new
+    merge_id = r.json()["merge_id"]
+
+    # Both cards stay with the contact, newest first.
+    scans = api.get(f"/api/contacts/{a}/scans").json()["scans"]
+    assert [s["card_id"] for s in scans] == [new, old]
+
+    # Show the older card instead; a card that isn't theirs is refused.
+    r = api.patch(f"/api/contacts/{a}", json={"card_id": old}, headers=H)
+    assert r.status_code == 200 and r.json()["card_id"] == old
+    assert api.patch(f"/api/contacts/{a}", json={"card_id": "x"}, headers=H).status_code == 409
+    assert api.get(f"/api/contacts/{a}").json()["card_id"] == old
+
+    # Undo puts each card back with its own contact.
+    assert api.post(f"/api/merge/{merge_id}/undo", headers=H).status_code == 200
+    assert [s["card_id"] for s in api.get(f"/api/contacts/{b}/scans").json()["scans"]] == [new]
+
+
+def test_merge_can_pick_the_older_card(api, dav_settings, make_card):
+    tag = uuid.uuid4().hex[:6]
+    f = {"full_name": {"value": f"Ida {tag}", "confidence": 0.9}}
+    old = _scan(dav_settings, make_card, 23, f)
+    a = api.post(f"/api/review/{old}/approve", json=_body(f"Ida {tag}"), headers=H).json()["uid"]
+    new = _scan(dav_settings, make_card, 24, f)
+    b = api.post(f"/api/review/{new}/approve", json=_body(f"Ida {tag}"), headers=H).json()["uid"]
+    body = {"keep_uid": b, "drop_uid": a, "contact": _body(f"Ida {tag}"), "show_card": old}
+    r = api.post("/api/merge", json=body, headers=H)
+    assert r.status_code == 200, r.text
+    assert r.json()["contact"]["card_id"] == old

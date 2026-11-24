@@ -1,11 +1,28 @@
 <script lang="ts">
-  import { api, cleanInput, describe, kindName, type Contact, type ContactInput } from './api'
+  import { untrack } from 'svelte'
+  import { api, cleanInput, describe, kindName, type Contact, type ContactInput, type Scan } from './api'
   import ContactForm from './ContactForm.svelte'
   import FlipCard from './FlipCard.svelte'
-  import { href } from './router.svelte'
   import Star from './Star.svelte'
 
-  let { uid }: { uid: string } = $props()
+  // The reading pane: one contact's card, details and notes, edited in place.
+  // Used beside the Wall and the Dial. Pass `initial` when the list already has the contact,
+  // so it shows at once; it is fetched otherwise (a link straight to a contact).
+  let {
+    uid,
+    initial = null,
+    showCard = true,
+    onclose,
+    onchange,
+    onforget,
+  }: {
+    uid: string
+    initial?: Contact | null
+    showCard?: boolean
+    onclose?: () => void
+    onchange?: (c: Contact) => void
+    onforget?: (uid: string) => void
+  } = $props()
 
   let contact = $state<Contact | null>(null)
   let flipped = $state(false)
@@ -13,15 +30,74 @@
   let form = $state<ContactInput | null>(null)
   let error = $state('')
   let saving = $state(false)
+  let confirming = $state(false)
 
   $effect(() => {
+    const id = uid
+    const given = untrack(() => initial)
+    flipped = false
+    editing = false
+    confirming = false
+    error = ''
+    if (given && given.uid === id) {
+      contact = given
+      return
+    }
+    contact = null
     api
-      .contact(uid)
+      .contact(id)
       .then((c) => {
-        contact = c
-        error = ''
+        if (id === uid) contact = c
       })
-      .catch((e) => (error = describe(e)))
+      .catch((e) => {
+        if (id === uid) error = describe(e)
+      })
+  })
+
+  // Every card this person has given you. One is shown on the contact; the others can be
+  // looked at here, and any of them made the one shown.
+  let scans = $state<Scan[]>([])
+  let viewing = $state<string | null>(null)
+  $effect(() => {
+    const id = contact?.uid
+    const hasScan = !!contact?.card_id
+    untrack(() => {
+      scans = []
+      viewing = null
+    })
+    if (!id || !hasScan) return
+    api
+      .scans(id)
+      .then((r) => {
+        if (contact?.uid === id) scans = r.scans
+      })
+      .catch(() => (scans = []))
+  })
+  const shown = $derived.by(() => {
+    if (!contact) return null
+    const v = viewing && scans.find((x) => x.card_id === viewing)
+    return v ? { ...contact, card_id: v.card_id, has_back: v.has_back } : contact
+  })
+
+  async function useCard(cardId: string) {
+    if (!contact) return
+    try {
+      contact = await api.update(contact.uid, { card_id: cardId })
+      viewing = null
+      onchange?.(contact)
+    } catch (e) {
+      error = describe(e)
+    }
+  }
+
+  // A star toggled on the Wall shows here too.
+  $effect(() => {
+    const i = initial
+    if (!i) return
+    const starred = i.starred
+    untrack(() => {
+      if (contact && contact.uid === i.uid && contact.starred !== starred) contact = { ...contact, starred }
+    })
   })
 
   function startEdit() {
@@ -43,6 +119,7 @@
     saving = true
     try {
       contact = await api.update(contact.uid, cleanInput(form))
+      onchange?.(contact)
       editing = false
       error = ''
     } catch (e) {
@@ -56,19 +133,21 @@
     if (!contact) return
     try {
       contact = await api.update(contact.uid, { starred: !contact.starred })
+      onchange?.(contact)
     } catch (e) {
       error = describe(e)
     }
   }
 
-  let confirming = $state(false)
   let forgetting = $state(false)
   async function forgetContact() {
     if (!contact) return
     forgetting = true
     try {
       await api.forget(contact.uid)
-      location.hash = '#/wall'
+      forgetting = false
+      confirming = false
+      onforget?.(contact.uid)
     } catch (e) {
       error = describe(e)
       forgetting = false
@@ -83,38 +162,66 @@
   const safeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`)
 </script>
 
-<div class="wrap">
-  <a class="back" href={href({ name: 'wall' })}>← Back to the wall</a>
+<article class="pane" aria-label={contact ? `Contact: ${contact.full_name}` : 'Contact'}>
+  {#if onclose}
+    <button type="button" class="close" aria-label="Close" onclick={onclose}>
+      <span class="phone-only">← Back</span><span class="wide-only" aria-hidden="true">×</span>
+    </button>
+  {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if !contact && !error}<p class="loading">Loading…</p>{/if}
 
   {#if contact}
-    <div class="layout">
+    <div class="head">
+      <div>
+        <h1>{contact.full_name}</h1>
+        <p class="sub">{[contact.title, contact.organization].filter(Boolean).join(', ')}</p>
+      </div>
+      <div class="headbtns">
+        <Star on={contact.starred} label={contact.starred ? 'Unstar' : 'Star'} onclick={toggleStar} />
+        {#if !editing}<button type="button" class="secondary" onclick={startEdit}>Edit</button>{/if}
+      </div>
+    </div>
+
+    {#if showCard && shown}
       <section class="card" aria-label="Card">
-        <button type="button" class="tile" aria-label="Flip card" onclick={() => (flipped = !flipped)}>
-          <FlipCard {contact} {flipped} size="large" />
+        <button type="button" class="tile" aria-label={flipped ? 'Show the front' : 'Show the back'} onclick={() => (flipped = !flipped)}>
+          <FlipCard contact={shown} {flipped} size="large" />
         </button>
-        {#if contact.card_id}
-          <div class="originals">
-            <h2>Original scans, never modified</h2>
-            <a href={api.original(contact.card_id, 'front')} download>Download front</a>
-            {#if contact.has_back}<a href={api.original(contact.card_id, 'back')} download>Download back</a>{/if}
+        {#if shown.card_id}<p class="fliphint">Click the card to flip it.</p>{/if}
+        {#if viewing && viewing !== contact.card_id}
+          <div class="older">
+            <span>You're looking at another of their cards.</span>
+            <button type="button" class="secondary" onclick={() => viewing && useCard(viewing)}>Show this one on the contact</button>
           </div>
-        {:else}
-          <p class="noscan">No card scanned yet. Scan one and it can be attached to this contact.</p>
         {/if}
       </section>
-
-      <section class="info" aria-label="Contact">
-        <div class="head">
-          <div>
-            <h1>{contact.full_name}</h1>
-            <p class="sub">{[contact.title, contact.organization].filter(Boolean).join(', ')}</p>
-          </div>
-          <div class="headbtns">
-            <Star on={contact.starred} label={contact.starred ? 'Unstar' : 'Star'} onclick={toggleStar} />
-            {#if !editing}<button type="button" class="secondary" onclick={startEdit}>Edit</button>{/if}
-          </div>
+    {/if}
+    {#if scans.length > 1}
+      <section class="history" aria-label="Their cards">
+        <h2>Cards they've given you ({scans.length})</h2>
+        <div class="thumbs">
+          {#each scans as sc (sc.card_id)}
+            {@const current = (viewing ?? contact.card_id) === sc.card_id}
+            <button
+              type="button"
+              class="thumb"
+              aria-pressed={current}
+              aria-label={`${sc.card_id === contact.card_id ? 'Card shown on the contact' : 'Another card'}${sc.created_at ? `, scanned ${sc.created_at.slice(0, 10)}` : ''}`}
+              onclick={() => {
+                viewing = sc.card_id === contact?.card_id ? null : sc.card_id
+                flipped = false
+              }}
+            >
+              <img src={api.image(sc.card_id, 'thumb')} alt="" loading="lazy" />
+              {#if sc.card_id === contact.card_id}<span class="tag">Shown</span>{/if}
+            </button>
+          {/each}
         </div>
+      </section>
+    {/if}
+
+      <section class="info" aria-label="Details">
 
         {#if editing && form}
           <ContactForm bind:value={form} idPrefix="edit" />
@@ -157,6 +264,15 @@
             <span class="badge" aria-hidden="true">S</span>
             {storage === 'local' ? 'Saved on this computer (no contacts server set up yet)' : 'Saved to your contacts server'}
           </div>
+          {#if contact.card_id}
+            <div class="originals">
+              <h2>Original scans, never modified</h2>
+              <a href={api.original(shown?.card_id ?? contact.card_id, 'front')} download>Download front</a>
+              {#if shown?.has_back}<a href={api.original(shown?.card_id ?? contact.card_id, 'back')} download>Download back</a>{/if}
+            </div>
+          {:else}
+            <p class="noscan">No card scanned yet. Scan one and it can be attached to this contact.</p>
+          {/if}
           {#if confirming}
             <div class="forget" role="group" aria-label="Forget this contact">
               <p>
@@ -176,38 +292,107 @@
           {/if}
         {/if}
       </section>
-    </div>
   {/if}
-</div>
+</article>
 
 <style>
   .multiline {
     white-space: pre-line;
   }
-  .wrap {
-    max-width: 1360px;
-    margin: 0 auto;
-    padding: 24px 32px 56px;
+  .pane {
+    position: relative;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 20px;
+    min-width: 0;
   }
-  .back {
-    font-size: 14px;
-    text-decoration: none;
+  .close {
+    align-self: flex-end;
+    min-height: 40px;
+    min-width: 40px;
+    margin: -8px -8px -12px 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ash);
+    font: inherit;
+    font-size: 22px;
+    cursor: pointer;
   }
-  .layout {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 40px;
+  .close:hover {
+    color: var(--paper, #f4efe6);
+    background: #23262c;
+  }
+  .close .phone-only {
+    display: none;
+    font-size: 15px;
+  }
+  .loading {
+    color: var(--ash);
   }
   .card {
-    flex: 1 1 480px;
-    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    max-width: 640px;
+    gap: 8px;
+  }
+  .older {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    font-size: 13px;
+    color: var(--amber);
+  }
+  .history h2 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ash);
+  }
+  .thumbs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .thumb {
+    position: relative;
+    flex: 0 0 96px;
+    height: 58px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: #23262c;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .thumb[aria-pressed='true'] {
+    border-color: var(--amber);
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .thumb .tag {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.7);
+    font-size: 10px;
+    color: #fff;
+  }
+  .fliphint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--ash);
+    text-align: center;
   }
   .tile {
     display: block;
@@ -239,7 +424,6 @@
     margin: 0;
   }
   .info {
-    flex: 1 1 400px;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -254,7 +438,7 @@
   h1 {
     margin: 0;
     font-family: var(--font-display);
-    font-size: 36px;
+    font-size: 30px;
     font-weight: 600;
   }
   .sub {
@@ -393,5 +577,18 @@
     border-radius: 10px;
     background: #3a2a1a;
     color: var(--signal);
+  }
+  @media (max-width: 900px) {
+    .close {
+      align-self: flex-start;
+      margin: 0;
+      font-size: 15px;
+    }
+    .close .phone-only {
+      display: inline;
+    }
+    .close .wide-only {
+      display: none;
+    }
   }
 </style>

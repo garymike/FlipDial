@@ -1,10 +1,12 @@
 <script lang="ts">
   import { api, describe, type Contact, type ContactList } from './api'
+  import ContactPane from './ContactPane.svelte'
   import FlipCard from './FlipCard.svelte'
-  import { href } from './router.svelte'
+  import { contactHref, href } from './router.svelte'
   import Star from './Star.svelte'
 
-  let { query = '' }: { query?: string } = $props()
+  // `open` is the contact shown in the reading pane (from the address, #/wall/<uid>).
+  let { query = '', open = '' }: { query?: string; open?: string } = $props()
 
   type Scan = 'all' | 'yes' | 'no'
   let deck = $state('')
@@ -13,7 +15,6 @@
   let data = $state<ContactList | null>(null)
   let error = $state('')
   let syncing = $state(false)
-  let flipped = $state<Record<string, boolean>>({})
   let dupes = $state(0)
 
   $effect(() => {
@@ -69,6 +70,47 @@
     }
   }
 
+  const openIndex = $derived(data?.contacts.findIndex((c) => c.uid === open) ?? -1)
+
+  function show(uid: string) {
+    location.hash = contactHref(uid)
+  }
+  function close() {
+    location.hash = href({ name: 'wall' })
+  }
+
+  // With a contact open: arrow keys move through the wall, Escape closes the pane.
+  function onkey(e: KeyboardEvent) {
+    if (!open || e.altKey || e.ctrlKey || e.metaKey) return
+    const t = e.target as HTMLElement | null
+    if (t?.closest('input, textarea, select, [contenteditable]')) return
+    const list = data?.contacts ?? []
+    if (e.key === 'Escape') close()
+    else if ((e.key === 'ArrowRight' || e.key === 'ArrowDown') && openIndex < list.length - 1) show(list[openIndex + 1].uid)
+    else if ((e.key === 'ArrowLeft' || e.key === 'ArrowUp') && openIndex > 0) show(list[openIndex - 1].uid)
+    else return
+    e.preventDefault()
+  }
+
+  // Keep the open card in view as the arrow keys move through the wall.
+  $effect(() => {
+    if (!open) return
+    const el = document.querySelector(`[data-uid="${CSS.escape(open)}"]`)
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+
+  function changed(c: Contact) {
+    if (!data) return
+    const i = data.contacts.findIndex((x) => x.uid === c.uid)
+    if (i >= 0) data.contacts[i] = c
+  }
+
+  async function forgotten(uid: string) {
+    close()
+    if (data) data.contacts = data.contacts.filter((c) => c.uid !== uid)
+    await load()
+  }
+
   function pickDeck(name: string, starred = false) {
     deck = name
     starredOnly = starred
@@ -82,7 +124,9 @@
   ]
 </script>
 
-<div class="layout">
+<svelte:window onkeydown={onkey} />
+
+<div class="layout" class:with-pane={!!open}>
   <aside>
     <section>
       <h2>Decks</h2>
@@ -135,18 +179,19 @@
 
     <ul class="grid">
       {#each data?.contacts ?? [] as c (c.uid)}
-        <li>
+        <li data-uid={c.uid} class:selected={c.uid === open}>
           <button
             type="button"
             class="tile"
-            aria-label={`Flip card for ${c.full_name}`}
-            onclick={() => (flipped[c.uid] = !flipped[c.uid])}
+            aria-label={`Open ${c.full_name}`}
+            aria-current={c.uid === open ? 'true' : undefined}
+            onclick={() => show(c.uid)}
           >
-            <FlipCard contact={c} flipped={!!flipped[c.uid]} />
+            <FlipCard contact={c} />
           </button>
           <div class="foot">
             <div class="who">
-              <a href={href({ name: 'contact', uid: c.uid })}>{c.full_name}</a>
+              <a href={contactHref(c.uid)}>{c.full_name}</a>
               <span class="sub">{c.event || 'No event'} · {c.card_id ? 'Scan' : c.source}</span>
             </div>
             <div class="actions">
@@ -158,9 +203,70 @@
       {/each}
     </ul>
   </main>
+
+  {#if open}
+    <div class="pane-wrap">
+      {#key open}
+        <ContactPane
+          uid={open}
+          initial={data?.contacts.find((c) => c.uid === open) ?? null}
+          onclose={close}
+          onchange={changed}
+          onforget={forgotten}
+        />
+      {/key}
+    </div>
+  {/if}
 </div>
 
 <style>
+  .pane-wrap {
+    flex: 0 1 460px;
+    min-width: 360px;
+    align-self: flex-start;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    padding: 20px 22px 28px;
+    border-radius: 16px;
+    background: var(--panel);
+    border: 1px solid #2c2f36;
+  }
+  .with-pane {
+    flex-wrap: nowrap;
+  }
+  .with-pane main {
+    flex: 1 1 300px;
+    min-width: 0;
+  }
+  .with-pane .grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  li.selected .tile {
+    outline: 2px solid var(--amber);
+    outline-offset: 3px;
+    border-radius: 12px;
+  }
+  /* Narrow windows: the pane covers the wall, with a back button. */
+  @media (max-width: 900px) {
+    .pane-wrap {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      max-height: none;
+      min-width: 0;
+      border-radius: 0;
+      border: 0;
+      padding: 16px 18px 40px;
+    }
+  }
+  /* Middle widths: make room for the pane by hiding the deck list while it is open. */
+  @media (max-width: 1280px) and (min-width: 901px) {
+    .with-pane aside {
+      display: none;
+    }
+  }
   .layout {
     display: flex;
     flex-wrap: wrap;

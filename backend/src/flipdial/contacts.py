@@ -162,13 +162,22 @@ def list_contacts(settings: Settings) -> list[ContactView]:
             v = view(VCard.parse(r["vcard"]))
         except VCardError:
             continue
-        info = cards.get(v.card_id or "")
-        if info is None:
-            v.card_id = None  # scan not on this FlipDial instance
-        else:
-            v.has_back = bool(info["has_back"]) and not info["back_blank"]
-        out.append(v)
+        out.append(_with_scan(v, cards))
     return out
+
+
+def _with_scan(v: ContactView, cards: dict[str, dict]) -> ContactView:
+    info = cards.get(v.card_id or "")
+    if info is None:
+        v.card_id = None  # scan not on this FlipDial instance
+    else:
+        v.has_back = bool(info["has_back"]) and not info["back_blank"]
+    return v
+
+
+def full_view(settings: Settings, card: VCard) -> ContactView:
+    """A contact as the app shows it, with its scan's details filled in."""
+    return _with_scan(view(card), _cards_by_id(settings))
 
 
 def get_contact(settings: Settings, uid: str) -> tuple[VCard, str, str | None] | None:
@@ -202,6 +211,37 @@ def to_reviewed(v: ContactView) -> ReviewedContact:
     )
 
 
+def scans_for(settings: Settings, uid: str) -> list[dict[str, Any]]:
+    """Every scanned card linked to a contact, newest first."""
+    with db.session(settings.db_path) as conn:
+        rows = conn.execute(
+            "SELECT id, created_at, has_back, back_blank FROM cards "
+            "WHERE vcard_uid = ? AND status = 'approved' ORDER BY rowid DESC",
+            (uid,),
+        ).fetchall()
+    return [
+        {
+            "card_id": r["id"],
+            "created_at": r["created_at"],
+            "has_back": bool(r["has_back"]) and not r["back_blank"],
+        }
+        for r in rows
+    ]
+
+
+def newest_card(settings: Settings, card_ids: list[str]) -> str:
+    """The most recently added of these cards (two scans can share the same second)."""
+    if not card_ids:
+        return ""
+    marks = ",".join("?" * len(card_ids))
+    with db.session(settings.db_path) as conn:
+        row = conn.execute(
+            f"SELECT id FROM cards WHERE id IN ({marks}) ORDER BY rowid DESC LIMIT 1",  # noqa: S608
+            card_ids,
+        ).fetchone()
+    return row["id"] if row else card_ids[-1]
+
+
 def update_contact(
     settings: Settings, client: CardDAVClient, uid: str, changes: dict[str, Any]
 ) -> ContactView:
@@ -210,6 +250,9 @@ def update_contact(
     if found is None:
         raise KeyError(uid)
     card, href, etag = found
+    show = changes.pop("card_id", None)
+    if show is not None and show not in {x["card_id"] for x in scans_for(settings, uid)}:
+        raise ValueError("not_this_contacts_card")
     reviewed = to_reviewed(view(card))
     for key, value in changes.items():
         if key == "socials":
@@ -217,7 +260,9 @@ def update_contact(
         setattr(reviewed, key, value)
     reviewed.__post_init__()  # turn plain values into typed ones
     apply(card, reviewed)
+    if show:
+        card.set("X-FLIPDIAL-CARD-ID", show)  # which of their cards to show
     remote = client.update(href, card, etag)
     store(settings, card, remote.href, remote.etag)
     log.info("contact updated", extra={"vcard_uid": uid, "fields": sorted(changes)})
-    return view(card)
+    return full_view(settings, card)
