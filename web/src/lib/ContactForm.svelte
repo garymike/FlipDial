@@ -11,6 +11,7 @@
   const flagFor = (field: string) => {
     const f = flags.filter((x) => x.endsWith(`:${field}`)).map((x) => x.split(':')[0])
     if (f.includes('suspicious_text')) return 'Looks like instructions or code. Check it.'
+    if (f.includes('found_in_text')) return "Found in the card's text, but not where expected. Check it."
     if (f.includes('low_confidence')) return 'Unsure. Check it against the card.'
     return ''
   }
@@ -68,6 +69,15 @@
     <label for={`${idPrefix}-address`}>Address</label>
     <input id={`${idPrefix}-address`} bind:value={value.address} maxlength="200" class:flag={!!flagFor('address')} />
   </div>
+  <div class="field">
+    <label for={`${idPrefix}-about`}>About <span class="hint">what the card says: tagline, services</span></label>
+    <textarea id={`${idPrefix}-about`} bind:value={value.about} maxlength="2000" rows="2" class:flag={!!flagFor('about')}></textarea>
+    {#if flagFor('about')}<span class="note">{flagFor('about')}</span>{/if}
+  </div>
+  <div class="field">
+    <label for={`${idPrefix}-note`}>Notes <span class="hint">yours: where you met, follow-ups</span></label>
+    <textarea id={`${idPrefix}-note`} bind:value={value.note} maxlength="2000" rows="2"></textarea>
+  </div>
   <div class="two">
     <div class="field">
       <label for={`${idPrefix}-event`}>Event deck</label>
@@ -102,7 +112,8 @@
     color: var(--ash);
     padding: 0;
   }
-  input {
+  input,
+  textarea {
     box-sizing: border-box;
     width: 100%;
     min-height: 44px;
@@ -114,7 +125,20 @@
     font: inherit;
     font-size: 15px;
   }
-  input.flag {
+  textarea {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    resize: vertical;
+    line-height: 1.4;
+    font-family: inherit;
+  }
+  .hint {
+    color: var(--ash);
+    font-weight: 400;
+    margin-left: 6px;
+  }
+  input.flag,
+  textarea.flag {
     border-color: var(--amber);
   }
   input[type='checkbox'] {

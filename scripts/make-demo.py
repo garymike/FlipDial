@@ -176,6 +176,7 @@ def main() -> None:
         contacts.append({
             "uid": f"demo-{uid}", "full_name": name, "title": title, "organization": org,
             "emails": [email], "phones": [phone], "websites": [web], "socials": [], "address": "",
+            "about": tagline or "", "note": "Met at the booth; follow up about a commission." if star else "",
             "categories": [deck], "event": deck, "met_on": met, "starred": star, "source": "scan",
             "card_id": uid, "has_back": bool(tagline),
         })
@@ -184,7 +185,7 @@ def main() -> None:
         contacts.append({
             "uid": f"demo-{uid}", "full_name": name, "title": title, "organization": org,
             "emails": [email] if email else [], "phones": [phone] if phone else [],
-            "websites": [web] if web else [], "socials": socials, "address": "",
+            "websites": [web] if web else [], "socials": socials, "address": "", "about": "", "note": "",
             "categories": [deck] if deck else [], "event": deck, "met_on": met, "starred": star,
             "source": source, "card_id": None, "has_back": False,
         })
@@ -198,7 +199,7 @@ def main() -> None:
             "fields": {
                 "full_name": field(name), "title": field(title), "organization": field(org),
                 "emails": [field(email)], "phones": [field(phone, 0.42 if "phones" in low else 0.95)],
-                "websites": [], "socials": [], "address": field(""),
+                "websites": [], "socials": [], "address": field(""), "about": field(""),
             },
         })
     data = {"contacts": contacts, "review": review}

@@ -15,6 +15,8 @@ export interface Contact {
   websites: string[]
   socials: Social[]
   address: string
+  about: string
+  note: string
   categories: string[]
   event: string
   met_on: string
@@ -46,6 +48,8 @@ export interface ReviewFields {
   websites: Field[]
   socials: (Social & { confidence: number })[]
   address: Field
+  about?: Field
+  text?: string
 }
 
 export interface ReviewItem {
@@ -57,6 +61,14 @@ export interface ReviewItem {
   flags: string[]
   error: string | null
   error_detail?: string
+  progress?: ReadProgress | null
+}
+
+export interface ReadProgress {
+  stage: 'waiting' | 'reading' | 'checking'
+  seconds: number
+  fields: Partial<Record<'full_name' | 'title' | 'organization' | 'address' | 'about', string>> &
+    Partial<Record<'emails' | 'phones' | 'websites' | 'text', string[]>>
 }
 
 export type ContactInput = Omit<Contact, 'uid' | 'categories' | 'source' | 'card_id' | 'has_back'> & {

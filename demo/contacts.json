@@ -16,6 +16,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "Hand-blown glass since 2011",
+      "note": "Met at the booth; follow up about a commission.",
       "categories": [
         "Art Fair 2026"
       ],
@@ -42,6 +44,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [
         "Art Fair 2026"
       ],
@@ -68,6 +72,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "Wheel-thrown stoneware \u00b7 Commissions open",
+      "note": "Met at the booth; follow up about a commission.",
       "categories": [
         "Art Fair 2026"
       ],
@@ -94,6 +100,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [
         "Art Fair 2026"
       ],
@@ -120,6 +128,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "Contemporary craft \u00b7 Thursdays until 9",
+      "note": "",
       "categories": [
         "Art Fair 2026"
       ],
@@ -146,6 +156,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "Met at the booth; follow up about a commission.",
       "categories": [
         "Design Week 2026"
       ],
@@ -172,6 +184,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [
         "Design Week 2026"
       ],
@@ -198,6 +212,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "Fonts for print and screen",
+      "note": "",
       "categories": [
         "Design Week 2026"
       ],
@@ -224,6 +240,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [
         "Design Week 2026"
       ],
@@ -250,6 +268,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "Zero trust, done calmly",
+      "note": "Met at the booth; follow up about a commission.",
       "categories": [
         "SecCon 2026"
       ],
@@ -276,6 +296,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [
         "SecCon 2026"
       ],
@@ -302,6 +324,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [
         "SecCon 2026"
       ],
@@ -328,6 +352,8 @@
       ],
       "socials": [],
       "address": "",
+      "about": "Learn to row \u00b7 Saturday mornings",
+      "note": "Met at the booth; follow up about a commission.",
       "categories": [
         "SecCon 2026"
       ],
@@ -352,6 +378,8 @@
       "websites": [],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [],
       "event": "",
       "met_on": "",
@@ -377,6 +405,8 @@
         }
       ],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [],
       "event": "",
       "met_on": "2025-03-11",
@@ -397,6 +427,8 @@
       "websites": [],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [],
       "event": "",
       "met_on": "",
@@ -419,6 +451,8 @@
       "websites": [],
       "socials": [],
       "address": "",
+      "about": "",
+      "note": "",
       "categories": [],
       "event": "",
       "met_on": "",
@@ -468,6 +502,10 @@
         "address": {
           "value": "",
           "confidence": 0.97
+        },
+        "about": {
+          "value": "",
+          "confidence": 0.97
         }
       }
     },
@@ -506,6 +544,10 @@
         "websites": [],
         "socials": [],
         "address": {
+          "value": "",
+          "confidence": 0.97
+        },
+        "about": {
           "value": "",
           "confidence": 0.97
         }

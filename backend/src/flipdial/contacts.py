@@ -31,6 +31,8 @@ class ContactView:
     websites: list[str] = field(default_factory=list)
     socials: list[dict[str, str]] = field(default_factory=list)
     address: str = ""
+    about: str = ""
+    note: str = ""
     categories: list[str] = field(default_factory=list)
     event: str = ""
     met_on: str = ""
@@ -73,6 +75,8 @@ def view(card: VCard) -> ContactView:
         websites=[p.text() for p in card.get("URL")],
         socials=socials,
         address=address,
+        about=card.first("X-FLIPDIAL-ABOUT"),
+        note=card.first("NOTE"),
         categories=[c for c in cats if c != "Starred"],
         event=card.first("X-FLIPDIAL-EVENT"),
         met_on=card.first("X-FLIPDIAL-MET-ON"),
@@ -183,6 +187,8 @@ def to_reviewed(v: ContactView) -> ReviewedContact:
         websites=list(v.websites),
         socials=[(s["platform"], s["handle"]) for s in v.socials],
         address=v.address,
+        about=v.about,
+        note=v.note,
         event=v.event,
         met_on=v.met_on,
         starred=v.starred,

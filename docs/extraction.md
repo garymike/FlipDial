@@ -35,7 +35,15 @@ FlipDial refuses to start if the URL points outside your local network, because 
 
 ## Fields read from a card
 
-Full name, given and family name, title, company, email addresses, phone numbers, websites, social handles and address. Each value comes with a confidence score.
+Full name, given and family name, title, company, email addresses, phone numbers, websites, social handles (including messaging apps like WhatsApp), address, and **About**: any other printed description, such as a tagline or a list of services. Each value comes with a confidence score.
+
+**Notes** are yours (where you met, follow-ups) and are never filled in by the model. They're saved as the contact's standard note, which phones and Synology show. About is saved in a FlipDial field that other apps keep but don't display.
+
+## How a card is read
+
+1. The model first copies every printed line of the card, top to bottom, then fills in the fields from that copy. Copying first makes it much less likely to skip a value.
+2. **Safety net:** any email address, phone number or website in the copied text that isn't in a field is added by FlipDial and highlighted ("Found in the card's text") for you to check.
+3. While a card is read, Review shows live progress: the stage, a timer, the lines being copied, then each field as it's found. This is a preview only; the final answer is checked in full before anything is shown for review.
 
 ## How the output is checked
 

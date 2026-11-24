@@ -14,6 +14,7 @@ from pathlib import Path
 from flipdial import db
 from flipdial.config import Settings
 from flipdial.extract.client import ModelError, Reader, make_reader
+from flipdial.extract.progress import Progress
 from flipdial.extract.schema import Extraction, validate
 
 log = logging.getLogger("flipdial.extract")
@@ -49,9 +50,17 @@ class Extractor:
     def _extract(self, card_id: str, back_blank: bool, attempts: int) -> bool:
         images = card_images(self.s.archive_dir, card_id, back_blank)
         started = time.monotonic()
+        progress = Progress(self.s, card_id)
         try:
-            result: Extraction = validate(self.reader.read(images))
+            if getattr(self.reader, "streams", False):
+                raw = self.reader.read(images, on_progress=progress.text)  # type: ignore[call-arg]
+            else:
+                progress.set_stage("reading")
+                raw = self.reader.read(images)
+            progress.set_stage("checking")
+            result: Extraction = validate(raw)
         except (ModelError, OSError) as exc:
+            progress.clear()
             code = exc.args[0] if isinstance(exc, ModelError) else "image_missing"
             detail = getattr(exc, "detail", "")
             failed = attempts + 1 >= self.s.extract_max_attempts
@@ -72,6 +81,7 @@ class Extractor:
             )
             return False
 
+        progress.clear()
         seconds = round(time.monotonic() - started, 2)
         with db.session(self.s.db_path) as conn:
             conn.execute(
@@ -106,10 +116,10 @@ class Extractor:
 
     def run_forever(self) -> None:
         log.info("extraction watching queue", extra={"reader": self.reader.name})
-        from flipdial.status import beat
+        from flipdial.status import keep_beating
 
+        keep_beating(self.s, "extract")
         while True:
-            beat(self.s, "extract")
             try:
                 self.run_once()
             except Exception:

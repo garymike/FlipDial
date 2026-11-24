@@ -25,6 +25,22 @@ def beat(settings: Settings, role: str) -> None:
     (run / f"{role}.heartbeat").write_text(str(time.time()))
 
 
+def keep_beating(settings: Settings, role: str, every: float = 5.0) -> None:
+    """Beat from a background thread for as long as the process runs, so a long read (which
+    can take minutes while a model loads) doesn't look like a stopped worker."""
+    import threading
+
+    def loop() -> None:
+        while True:
+            try:
+                beat(settings, role)
+            except OSError:
+                pass
+            time.sleep(every)
+
+    threading.Thread(target=loop, name=f"{role}-heartbeat", daemon=True).start()
+
+
 def _age(settings: Settings, role: str) -> float | None:
     try:
         return time.time() - float((settings.data_dir / "run" / f"{role}.heartbeat").read_text())

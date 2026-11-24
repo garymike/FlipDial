@@ -185,3 +185,26 @@ def test_read_failed_cards_again(api, dav_settings, make_card):
         conn.execute("UPDATE cards SET status = 'extract_failed' WHERE id = ?", (card_id,))
     assert api.post("/api/review/retry", headers=H).json()["retrying"] >= 1
     assert api.get("/api/audit").json()["entries"][0]["action"] == "card.retry"
+
+
+def test_notes_saved_and_not_wiped_by_an_empty_review_note(api, dav_settings, make_card):
+    card_id = _scan_and_read(dav_settings, make_card, seed=11)
+    r = api.post(
+        f"/api/review/{card_id}/approve",
+        json=_body(
+            full_name="Nia Notes", about="Precious stones and silver", note="Met at booth 12"
+        ),
+        headers=H,
+    )
+    uid = r.json()["uid"]
+    got = api.get(f"/api/contacts/{uid}").json()
+    assert got["about"] == "Precious stones and silver" and got["note"] == "Met at booth 12"
+
+    card2 = _scan_and_read(dav_settings, make_card, seed=12)
+    api.post(
+        f"/api/review/{card2}/attach/{uid}", json=_body(full_name="Nia Notes", note=""), headers=H
+    )
+    assert api.get(f"/api/contacts/{uid}").json()["note"] == "Met at booth 12"
+
+    api.patch(f"/api/contacts/{uid}", json={"note": ""}, headers=H)  # cleared on purpose
+    assert api.get(f"/api/contacts/{uid}").json()["note"] == ""

@@ -63,11 +63,31 @@ class Social(BaseModel):
         return clean_text(v, 80)
 
 
+MAX_TRANSCRIPT = 2000
+
+
+def clean_transcript(value: Any) -> str:
+    """Like clean_text, but keeps line breaks (one printed line per line)."""
+    if not isinstance(value, str):
+        return ""
+    lines = [clean_text(line, 300) for line in value.splitlines()]
+    return "\n".join(line for line in lines if line)[:MAX_TRANSCRIPT]
+
+
 class CardFields(BaseModel):
-    """What the model must return. Also used as the JSON schema sent to the model."""
+    """What the model must return. Also used as the JSON schema sent to the model.
+
+    `text` comes first on purpose: the model copies every printed line before filling in the
+    fields, which makes it much less likely to skip a value, and gives FlipDial something to
+    check the fields against.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
+    text: str = Field(
+        default="",
+        description="Every line of text printed on the card, top to bottom, one per line.",
+    )
     full_name: TextField = TextField()
     given_name: TextField = TextField()
     family_name: TextField = TextField()
@@ -78,6 +98,12 @@ class CardFields(BaseModel):
     websites: list[TextField] = Field(default_factory=list, max_length=MAX_ITEMS)
     socials: list[Social] = Field(default_factory=list, max_length=MAX_ITEMS)
     address: TextField = TextField()
+    about: TextField = TextField()  # printed description: tagline, services
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _clean_text(cls, v: Any) -> str:
+        return clean_transcript(v)
 
     @field_validator("emails", "phones", "websites", "socials", mode="before")
     @classmethod
@@ -103,7 +129,7 @@ def _valid_url(value: str) -> str | None:
     return candidate
 
 
-_SCALARS = ("full_name", "given_name", "family_name", "title", "organization", "address")
+_SCALARS = ("full_name", "given_name", "family_name", "title", "organization", "address", "about")
 _LISTS = ("emails", "phones", "websites", "socials")
 
 
@@ -112,6 +138,8 @@ def _coerce(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return {}
     out: dict[str, Any] = {}
+    if isinstance(raw.get("text"), str):
+        out["text"] = raw["text"]
     for name in _SCALARS:
         v = raw.get(name)
         if isinstance(v, dict):
@@ -173,6 +201,7 @@ def validate(raw: dict[str, Any]) -> Extraction:
     fields = fields.model_copy(
         update={"emails": emails, "phones": phones, "websites": sites, "socials": socials}
     )
+    fields = _fill_from_transcript(fields, flags)
 
     for name, value, conf in _all_values(fields):
         if value and _STEERING.search(value):
@@ -187,7 +216,16 @@ def validate(raw: dict[str, Any]) -> Extraction:
 
 
 def _all_values(fields: CardFields):
-    for name in ("full_name", "given_name", "family_name", "title", "organization", "address"):
+    yield "text", fields.text, 1.0
+    for name in (
+        "full_name",
+        "given_name",
+        "family_name",
+        "title",
+        "organization",
+        "address",
+        "about",
+    ):
         f: TextField = getattr(fields, name)
         yield name, f.value, f.confidence
     for name in ("emails", "phones", "websites"):
@@ -195,6 +233,73 @@ def _all_values(fields: CardFields):
             yield name, f.value, f.confidence
     for s in fields.socials:
         yield "socials", s.handle, s.confidence
+
+
+# Finding contact details in the model's own copy of the card text, as a safety net.
+_FIND_EMAIL = re.compile(
+    r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}"
+)
+_FIND_PHONE = re.compile(r"(?<![\w@.])\+?\(?\d[\d\s().-]{5,}\d(?![\w@])")
+_DATE = re.compile(r"^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$|^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$")
+_FIND_SITE = re.compile(
+    r"(?<![@\w.])(?:https?://)?(?:www\.)?[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*"
+    r"\.(?:com|net|org|io|co|art|studio|design|gallery|shop|store|me|us|uk|ca|au|de|fr|es|it|nl|"
+    r"info|biz|xyz|app|dev|ai|tv|photo|photography|works|ink|online|site|website|page)"
+    r"(?:/[^\s]*)?(?![\w@])",
+    re.IGNORECASE,
+)
+FOUND_CONFIDENCE = 0.5
+
+
+def _digits(v: str) -> str:
+    return re.sub(r"\D", "", v)[-10:]
+
+
+def _site_key(v: str) -> str:
+    return re.sub(r"^https?://(www\.)?", "", v.lower()).rstrip("/")
+
+
+def _fill_from_transcript(fields: CardFields, flags: set[str]) -> CardFields:
+    """Add emails, phones and websites that appear in the card's text but not in a field.
+
+    They are added with middling confidence and flagged, so the person checks them."""
+    text = fields.text
+    if not text:
+        return fields
+    update: dict[str, list] = {}
+    emails = list(fields.emails)
+    have = {e.value.lower() for e in emails}
+    for m in _FIND_EMAIL.findall(text):
+        v = m.lower()
+        if v not in have and _EMAIL.match(v) and len(emails) < MAX_ITEMS:
+            emails.append(TextField(value=v, confidence=FOUND_CONFIDENCE))
+            have.add(v)
+            flags.add("found_in_text:emails")
+    update["emails"] = emails
+
+    rest = _FIND_EMAIL.sub(" ", text)
+    phones = list(fields.phones)
+    have = {_digits(p.value) for p in phones} | {_digits(s.handle) for s in fields.socials}
+    for m in _FIND_PHONE.findall(rest):
+        v = " ".join(m.split()).strip(" .-")
+        digits = sum(ch.isdigit() for ch in v)
+        if 7 <= digits <= 15 and not _DATE.match(v) and _digits(v) not in have:
+            if _PHONE_CHARS.match(v) and len(phones) < MAX_ITEMS:
+                phones.append(TextField(value=v, confidence=FOUND_CONFIDENCE))
+                have.add(_digits(v))
+                flags.add("found_in_text:phones")
+    update["phones"] = phones
+
+    sites = list(fields.websites)
+    have = {_site_key(s.value) for s in sites}
+    for m in _FIND_SITE.findall(rest):
+        url = _valid_url(m.rstrip(".,;"))
+        if url and _site_key(url) not in have and len(sites) < MAX_ITEMS:
+            sites.append(TextField(value=url, confidence=FOUND_CONFIDENCE))
+            have.add(_site_key(url))
+            flags.add("found_in_text:websites")
+    update["websites"] = sites
+    return fields.model_copy(update=update)
 
 
 def json_schema() -> dict[str, Any]:

@@ -26,10 +26,10 @@
 
   function startEdit() {
     if (!contact) return
-    const { full_name, title, organization, emails, phones, websites, socials, address, event, met_on, starred } =
+    const { full_name, title, organization, emails, phones, websites, socials, address, about, note, event, met_on, starred } =
       contact
     form = {
-      full_name, title, organization, address, event, met_on, starred,
+      full_name, title, organization, address, about, note, event, met_on, starred,
       emails: [...emails], phones: [...phones], websites: [...websites],
       socials: socials.map((s) => ({ ...s })),
       tags: contact.categories.filter((c) => c !== contact?.event),
@@ -132,6 +132,8 @@
             {/each}
             {#each contact.socials as s (s.handle)}<dt>{s.platform || 'Social'}</dt><dd>{s.handle}</dd>{/each}
             {#if contact.address}<dt>Address</dt><dd>{contact.address}</dd>{/if}
+            {#if contact.about}<dt>About</dt><dd class="multiline">{contact.about}</dd>{/if}
+            {#if contact.note}<dt>Notes</dt><dd class="multiline">{contact.note}</dd>{/if}
             <dt>Met at</dt><dd>{contact.event || 'Not set'}</dd>
             <dt>Met on</dt><dd>{contact.met_on || 'Not set'}</dd>
           </dl>
@@ -165,6 +167,9 @@
 </div>
 
 <style>
+  .multiline {
+    white-space: pre-line;
+  }
   .wrap {
     max-width: 1360px;
     margin: 0 auto;

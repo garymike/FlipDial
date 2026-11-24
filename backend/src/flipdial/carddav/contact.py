@@ -45,6 +45,8 @@ class ReviewedContact:
     websites: list[str] = field(default_factory=list)
     socials: list[tuple[str, str]] = field(default_factory=list)  # (platform, handle)
     address: str = ""
+    about: str = ""  # what the card says about them (tagline, services)
+    note: str | None = None  # your own notes; None leaves any existing note alone
     event: str = ""
     met_on: str = ""  # ISO date
     starred: bool = False
@@ -68,6 +70,7 @@ class ReviewedContact:
             websites=[w.value for w in f.websites],
             socials=[(s.platform, s.handle) for s in f.socials],
             address=f.address.value,
+            about=f.about.value,
             **extra,
         )
 
@@ -123,6 +126,11 @@ def apply(card: VCard, c: ReviewedContact) -> VCard:
             raw=True,
         )
 
+    if c.note is not None:
+        card.remove("NOTE")
+        if c.note.strip():
+            card.add("NOTE", c.note.strip()[:2000])
+
     cats = [x for x in _categories(card) if x != "Starred"]
     for extra in ([c.event] if c.event else []) + c.tags + (["Starred"] if c.starred else []):
         if extra and extra not in cats:
@@ -137,6 +145,7 @@ def apply(card: VCard, c: ReviewedContact) -> VCard:
         "SOURCE": c.source,
         "EVENT": c.event,
         "MET-ON": c.met_on,
+        "ABOUT": c.about.strip()[:2000],
         "STARRED": "yes" if c.starred else "",
     }.items():
         card.set(X + key, value)
