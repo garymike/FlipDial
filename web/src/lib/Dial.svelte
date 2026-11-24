@@ -291,7 +291,6 @@
 
       {#if current}
         <aside aria-label="Current contact">
-          <span class="eyebrow">{current.event || 'No event'} · {current.card_id ? 'Scan' : current.source}</span>
           <ContactPane uid={current.uid} initial={current} showCard={false} onchange={changed} onforget={forgotten} />
         </aside>
       {/if}
@@ -528,13 +527,6 @@
     border-radius: 14px;
     background: var(--panel);
     border: 1px solid #2c2f36;
-  }
-  .eyebrow {
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ash);
-    font-weight: 600;
   }
   .error {
     margin: 0;
