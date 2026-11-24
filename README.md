@@ -79,6 +79,7 @@ The Docker image serves the built web app and the API together.
 | [Reading cards](docs/extraction.md) | Fields, checks, flags, accuracy testing |
 | [Contacts server](docs/carddav.md) | CardDAV setup, Synology, what is written and kept |
 | [Duplicates](docs/duplicates.md) | How pairs are found, merging and undo |
+| [Windows](docs/windows.md) | One-time setup and the start, stop and update scripts |
 | [Sign-in and activity log](docs/sign-in.md) | OpenID Connect or reverse-proxy sign-in, sessions, audit log |
 | [Import and export](docs/import-export.md) | vCard, CSV and LinkedIn import, exports, backup and restore |
 | [Data model](docs/data-model.md) | vCard fields and FlipDial extensions |
