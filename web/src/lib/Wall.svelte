@@ -1,6 +1,8 @@
 <script lang="ts">
   import { api, describe, type Contact, type ContactList } from './api'
   import ContactPane from './ContactPane.svelte'
+  import { layout } from './layout.svelte'
+  import Sheet from './Sheet.svelte'
   import FlipCard from './FlipCard.svelte'
   import { contactHref, href } from './router.svelte'
   import Star from './Star.svelte'
@@ -126,7 +128,22 @@
 
 <svelte:window onkeydown={onkey} />
 
-<div class="layout" class:with-pane={!!open}>
+<!-- Phone and tablet: the pane opens over the wall instead of beside it. -->
+{#if open && layout.mode !== 'desktop'}
+  <Sheet onclose={close}>
+    {#key open}
+      <ContactPane
+        uid={open}
+        initial={data?.contacts.find((c) => c.uid === open) ?? null}
+        onclose={close}
+        onchange={changed}
+        onforget={forgotten}
+      />
+    {/key}
+  </Sheet>
+{/if}
+
+<div class="layout" class:with-pane={!!open && layout.mode === 'desktop'}>
   <aside>
     <section>
       <h2>Decks</h2>
@@ -207,7 +224,7 @@
     </ul>
   </main>
 
-  {#if open}
+  {#if open && layout.mode === 'desktop'}
     <div class="pane-wrap">
       {#key open}
         <ContactPane
@@ -264,18 +281,6 @@
     border-radius: 12px;
   }
   /* Narrow windows: the pane covers the wall, with a back button. */
-  @media (max-width: 900px) {
-    .pane-wrap {
-      position: fixed;
-      inset: 0;
-      z-index: 50;
-      max-height: none;
-      min-width: 0;
-      border-radius: 0;
-      border: 0;
-      padding: 16px 18px 40px;
-    }
-  }
   /* Middle widths: make room for the pane by hiding the deck list while it is open. */
   @media (max-width: 1280px) and (min-width: 901px) {
     .with-pane aside {
@@ -501,9 +506,15 @@
     aside {
       max-width: none;
       flex-basis: 100%;
+      min-width: 0; /* the deck row scrolls inside the screen instead of widening the page */
       gap: 0;
     }
+    main {
+      min-width: 0;
+    }
     aside section:first-child {
+      min-width: 0;
+      max-width: 100%;
       flex-direction: row;
       gap: 6px;
       overflow-x: auto;
@@ -523,6 +534,26 @@
     .deck[aria-pressed='true'] {
       box-shadow: none;
       border-color: var(--amber);
+    }
+    /* Two cards per row, so more fit on screen when scanning. */
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px 12px;
+    }
+    .foot {
+      gap: 4px;
+    }
+    .foot .who a {
+      font-size: 14px;
+    }
+    .foot .sub {
+      font-size: 11px;
+    }
+    .foot .badge {
+      display: none;
+    }
+    .toolbar h1 {
+      font-size: 22px;
     }
   }
 </style>

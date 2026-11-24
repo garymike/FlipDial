@@ -7,10 +7,12 @@
   import Activity from './lib/Activity.svelte'
   import Setup from './lib/Setup.svelte'
   import Trash from './lib/Trash.svelte'
+  import { layout } from './lib/layout.svelte'
   import { href, router } from './lib/router.svelte'
   import Wall from './lib/Wall.svelte'
 
   let query = $state('')
+  let more = $state(false) // phone: the More menu above the tab bar
   let reviewCount = $state(0)
 
   async function refreshCount() {
@@ -219,6 +221,42 @@
   </main>
 {/if}
 
+{#if layout.mode === 'phone'}
+  <!-- Phone: the views and Review at the bottom, where a thumb reaches them. -->
+  <nav class="tabbar" aria-label="Views">
+    <a href={href({ name: 'dial' })} aria-current={router.route.name === 'dial' ? 'page' : undefined}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="7" width="14" height="10" rx="2" /><path d="M7 4h10M7 20h10" /></svg>
+      Dial
+    </a>
+    <a href={href({ name: 'wall' })} aria-current={router.route.name === 'wall' ? 'page' : undefined}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1.5" /><rect x="13" y="4" width="8" height="7" rx="1.5" /><rect x="3" y="13" width="8" height="7" rx="1.5" /><rect x="13" y="13" width="8" height="7" rx="1.5" /></svg>
+      Wall
+    </a>
+    <a href={href({ name: 'review' })} aria-current={router.route.name === 'review' ? 'page' : undefined}>
+      <span class="tabicon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v12H4zM8 4h8M9 13l2 2 4-4" /></svg>
+        {#if reviewCount}<span class="dot">{reviewCount}</span>{/if}
+      </span>
+      Review
+    </a>
+    <button type="button" aria-expanded={more} onclick={() => (more = !more)}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" /></svg>
+      More
+    </button>
+  </nav>
+  {#if more}
+    <button type="button" class="more-backdrop" aria-label="Close menu" onclick={() => (more = false)}></button>
+    <div class="more" role="menu">
+      <a role="menuitem" href={href({ name: 'transfer' })} onclick={() => (more = false)}>Import, export and backup</a>
+      <a role="menuitem" href={href({ name: 'duplicates' })} onclick={() => (more = false)}>Possible duplicates</a>
+      <a role="menuitem" href={href({ name: 'trash' })} onclick={() => (more = false)}>Trash</a>
+      <a role="menuitem" href={href({ name: 'activity' })} onclick={() => (more = false)}>Activity log</a>
+      <a role="menuitem" href={href({ name: 'setup' })} onclick={() => (more = false)}>Setup check and updates</a>
+      {#if me && me.mode === 'oidc'}<button type="button" role="menuitem" onclick={signOut}>Sign out</button>{/if}
+    </div>
+  {/if}
+{/if}
+
 <style>
   .update-bar {
     display: flex;
@@ -417,5 +455,127 @@
     margin: 0 0 8px;
     color: var(--bone);
     font-family: var(--font-display);
+  }
+  /* -- phone ------------------------------------------------------------------------- */
+  .tabbar,
+  .more,
+  .more-backdrop {
+    display: none;
+  }
+  @media (max-width: 700px) {
+    :global(body) {
+      padding-bottom: calc(64px + env(safe-area-inset-bottom));
+    }
+    .demo-banner {
+      font-size: 12px;
+      padding: 6px 12px;
+    }
+    header {
+      flex-wrap: nowrap;
+      gap: 10px;
+      padding: 10px 12px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--ink, #16171a);
+    }
+    .brand span,
+    header nav,
+    header .review {
+      display: none;
+    }
+    .search {
+      flex: 1 1 auto;
+    }
+    .tabbar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding: 6px 4px env(safe-area-inset-bottom);
+      background: #16171a;
+      border-top: 1px solid #2c2f36;
+    }
+    .tabbar a,
+    .tabbar button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-height: 52px;
+      justify-content: center;
+      border: 0;
+      background: transparent;
+      color: var(--ash);
+      font: inherit;
+      font-size: 11px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .tabbar [aria-current='page'],
+    .tabbar [aria-expanded='true'] {
+      color: var(--amber);
+    }
+    .tabicon {
+      position: relative;
+      display: inline-flex;
+    }
+    .dot {
+      position: absolute;
+      top: -4px;
+      right: -10px;
+      min-width: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: var(--amber);
+      color: var(--ink);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 16px;
+      text-align: center;
+    }
+    .more-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 29;
+      border: 0;
+      background: rgba(0, 0, 0, 0.4);
+    }
+    .more {
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      right: 8px;
+      bottom: calc(70px + env(safe-area-inset-bottom));
+      z-index: 31;
+      min-width: 240px;
+      padding: 6px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid #3a3d44;
+    }
+    .more a,
+    .more button {
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--bone);
+      font: inherit;
+      font-size: 15px;
+      text-decoration: none;
+      text-align: left;
+    }
+    .more a:active,
+    .more button:active {
+      background: #2a2d33;
+    }
   }
 </style>
