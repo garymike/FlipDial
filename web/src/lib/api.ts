@@ -145,6 +145,15 @@ export interface SetupStatus {
   items: SetupItem[]
 }
 
+export interface UpdateInfo {
+  current: string
+  enabled: boolean
+  available: boolean
+  release: { tag: string; name: string; url: string; published_at: string } | null
+  install: string
+  can_update: boolean
+}
+
 export interface AuditEntry {
   id: number
   ts: string
@@ -250,6 +259,8 @@ export const api = {
   exportUrl: (kind: 'vcf' | 'csv' | 'backup') => urls.exportUrl(kind),
   forget: (uid: string) =>
     call<{ forgotten: string; scans: number }>('DELETE', `/api/contacts/${encodeURIComponent(uid)}`),
+  updateInfo: () => call<UpdateInfo>('GET', '/api/update'),
+  startUpdate: () => call<{ updating_to: string }>('POST', '/api/update/start'),
   status: () => call<SetupStatus>('GET', '/api/status'),
   retry: (cardId: string) => call<{ retrying: number }>('POST', `/api/review/${cardId}/retry`),
   retryAll: () => call<{ retrying: number }>('POST', '/api/review/retry'),
@@ -305,6 +316,10 @@ export function describe(err: unknown): string {
     no_contacts_found: 'No contacts were found in that file.',
     empty_file: 'That file is empty.',
     demo_readonly: 'That is turned off in the demo. Install FlipDial to use it with your own contacts.',
+    not_supported: 'This install updates differently. See the release notes.',
+    no_update: 'You already have the newest version.',
+    launch_failed: "The update couldn't be started. Run update.cmd instead.",
+    updater_missing: "FlipDial's update script couldn't be found. Run update.cmd instead.",
     not_failed: 'That card is already being read.',
     bad_mapping: 'The column choices do not match the file. Pick the file again.',
   }

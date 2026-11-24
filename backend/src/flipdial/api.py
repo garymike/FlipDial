@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints
 from starlette.background import BackgroundTask
 
-from flipdial import audit, contacts, db, duplicates, forget, status
+from flipdial import audit, contacts, db, duplicates, forget, status, updates
 from flipdial.carddav.client import CardDAVClient, CardDAVError, ConflictError
 from flipdial.carddav.contact import ReviewedContact
 from flipdial.carddav.sync import ApproveError, approve_card
@@ -237,6 +237,26 @@ def approve(
         raise _dav_errors(exc) from exc
     audit.record(s, actor, "card.approve", card_id, vcard_uid=uid)
     return contacts.view(card).as_dict() | {"uid": uid}
+
+
+@router.get("/update")
+def update_info(s: SettingsDep) -> dict:
+    return updates.summary(s)
+
+
+@router.post("/update/check")
+def update_check(s: SettingsDep) -> dict:
+    return updates.summary(s, force=True)
+
+
+@router.post("/update/start")
+def update_start(s: SettingsDep, actor: ActorDep) -> dict:
+    try:
+        tag = updates.start(s)
+    except updates.UpdateError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    audit.record(s, actor, "update.start", tag, from_version=updates.__version__)
+    return {"updating_to": tag}
 
 
 @router.get("/status")

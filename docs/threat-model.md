@@ -56,6 +56,8 @@ Reviewed for v1 (milestones 0 to 8, November 2026). Review again whenever a mile
 | Changes nobody can account for | Audit log of every change, import, export, backup and sign-in (including refused ones); append-only in the database; hash-chained so edits made with other tools are detected (`flipdial audit verify`) |
 | Tampered audit log by someone with file access | Detected, not prevented: the chain breaks at the edited entry; removal from the end is caught by comparing the noted `head` fingerprint. Keep the data folder on a volume only FlipDial's account can write |
 | Supply chain | Locked dependencies installed with hash checks in the image; GitHub Actions pinned to commit SHAs; Dependabot; weekly advisory scan of Python and npm packages; container image and release files signed with Sigstore (keyless), with SBOMs and build provenance attached |
+| Malicious or tampered update installed through Update now | Only published releases are offered; the updater checks the release's Sigstore signature against this repository, the Release workflow and the exact commit before changing anything, and installs that commit; the button needs a signed-in user and the cross-site request checks; it runs only the install's own update script with a validated version; a failed start rolls back |
+| Update check leaking information | One request a day to GitHub's public API for the latest version, carrying no user or contact data; `FLIPDIAL_UPDATE_CHECK=false` turns it off |
 | Private data committed to this repo | `.gitignore` for data paths, secret scanning in pre-commit and CI, CI check that blocks images and vCards outside `demo/` |
 
 ## Out of scope for v1

@@ -1,5 +1,7 @@
 # Shared helpers for the FlipDial Windows scripts. Works in Windows PowerShell 5.1 and PowerShell 7.
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 may default to old TLS versions that GitHub refuses.
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Backend = Join-Path $Root 'backend'
