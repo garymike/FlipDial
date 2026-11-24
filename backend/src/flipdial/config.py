@@ -88,6 +88,12 @@ class Settings(BaseSettings):
     # Only contacts switched on for the phone are copied there. Empty: phone sync is off.
     phone_addressbook: str | None = None  # display name or path
     phone_check_hour: int = Field(default=3, ge=0, le=23)  # daily check, server local time
+    # The address phones use for the contacts server, when it differs from the one FlipDial
+    # uses (FlipDial may reach it by a name that only works inside Docker, say).
+    phone_server_url: str | None = None
+    # The bundled contacts server's folder (docs/contacts-server.md). When set, the phone
+    # setup wizard can create the phone's account itself.
+    radicale_dir: Path | None = None
 
     # Extraction model
     model_backend: Literal["ollama", "openai_compatible"] = "ollama"

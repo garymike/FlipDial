@@ -287,6 +287,7 @@ export async function handle(method: string, path: string, body?: unknown): Prom
           books: ['Contacts', 'Phone'],
           phone_username: 'phone',
           flipdial_username: 'flipdial',
+          bundled: false,
           error: '',
         }
       return seg[1] === 'inbox' ? { items: [] } : phoneStatus()

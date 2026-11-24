@@ -61,7 +61,7 @@ function Get-FlipDialProcesses {
     if (-not (Test-Path $PidFile)) { return @() }
     $ids = Get-Content $PidFile -Raw | ConvertFrom-Json
     $found = @()
-    foreach ($name in 'server', 'worker') {
+    foreach ($name in 'server', 'worker', 'contacts') {
         $id = $ids.$name
         if (-not $id) { continue }
         $p = Get-Process -Id $id -ErrorAction SilentlyContinue

@@ -21,3 +21,24 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+  # Optional: a contacts server for people who don't have one (docs/contacts-server.md).
+  # Set it up once:  docker compose run --rm flipdial flipdial contacts-server init --host <this computer's name or address>
+  # Then start it:   docker compose --profile contacts-server up -d
+  contacts:
+    profiles: ["contacts-server"]
+    build:
+      context: ..
+      dockerfile: docker/contacts-server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5232:5232"   # for phones on your home network. Never forward this port on your router.
+    volumes:
+      - ./data/contacts-server:/data/contacts-server
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

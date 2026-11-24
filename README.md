@@ -14,7 +14,8 @@ Scan, review, dial through, and sync to any CardDAV server.
 - **Keeps the card.** The original front and back scans are stored untouched, so the art on a card is never lost.
 - **Reads it on your own hardware.** Name, title, company, email, phone and links are read from the card on a machine you control. Nothing leaves your network unless you turn that on.
 - **You review before anything is saved.** Fields that may be wrong are flagged, and nothing is saved without your OK.
-- **Syncs with standards.** Contacts are written as vCards to any CardDAV server (Synology Contacts, Nextcloud, Radicale, Baïkal and others).
+- **Syncs with standards.** Contacts are written as vCards to any CardDAV server (Synology Contacts, Nextcloud, Radicale, Baïkal and others). No server? FlipDial can [run one for you](docs/contacts-server.md).
+- **Only the contacts you choose on your phone.** [Phone sync](docs/sync.md) keeps a separate phone address book with just the contacts you switch on, both ways, on your home network. Nothing is connected to your Google or Apple account.
 - **Three ways to browse:**
   - **Wall:** every contact as a grid of cards
   - **Dial:** spin through your deck one card at a time. Drag, scroll, use the arrow keys, jump by letter, or type a name to dial straight to it

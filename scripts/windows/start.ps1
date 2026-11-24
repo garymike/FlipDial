@@ -32,11 +32,11 @@ try {
 New-Item -ItemType Directory -Force -Path $LogDir, $RunDir | Out-Null
 $uv = (Get-Command uv).Source
 
-function Start-Part([string]$Command, [string]$Name) {
+function Start-Part([string[]]$Arguments, [string]$Name) {
     $out = Join-Path $LogDir "$Name.log"
     $err = Join-Path $LogDir "$Name.errors.log"
     foreach ($f in $out, $err) { if (Test-Path $f) { Move-Item $f "$f.previous" -Force } }
-    Start-Process -FilePath $uv -ArgumentList @('run', 'flipdial', $Command) -WorkingDirectory $Backend `
+    Start-Process -FilePath $uv -ArgumentList $Arguments -WorkingDirectory $Backend `
         -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
 }
 
@@ -44,9 +44,21 @@ Write-Step 'Starting FlipDial'
 # Lets the app offer one-click updates through this install's own update script.
 $env:FLIPDIAL_INSTALL = 'windows-scripts'
 $env:FLIPDIAL_UPDATER = Join-Path $PSScriptRoot 'update.ps1'
-$server = Start-Part 'serve' 'server'
-$worker = Start-Part 'worker' 'worker'
-@{ server = $server.Id; worker = $worker.Id } | ConvertTo-Json | Set-Content $PidFile
+$parts = @{}
+# Every part runs with the same extra (what update installs), so uv never removes a package
+# another part is using.
+$run = @('run', '--extra', 'contacts-server', 'flipdial')
+# The optional bundled contacts server (docs/contacts-server.md), when it has been set up.
+$contactsDir = Get-FlipDialSetting 'FLIPDIAL_RADICALE_DIR' ''
+if ($contactsDir -and (Test-Path (Join-Path (Resolve-FromBackend $contactsDir) 'config'))) {
+    $contacts = Start-Part ($run + @('contacts-server', 'run')) 'contacts'
+    $parts.contacts = $contacts.Id
+}
+$server = Start-Part ($run + @('serve')) 'server'
+$worker = Start-Part ($run + @('worker')) 'worker'
+$parts.server = $server.Id
+$parts.worker = $worker.Id
+$parts | ConvertTo-Json | Set-Content $PidFile
 
 $deadline = (Get-Date).AddSeconds(90)  # the first start can take a while
 while (-not (Test-FlipDialUp)) {

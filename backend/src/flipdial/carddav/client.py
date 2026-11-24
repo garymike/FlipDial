@@ -81,6 +81,8 @@ class CardDAVClient:
             verify = ssl.create_default_context(cafile=str(settings.carddav_ca_bundle))
         self.start = settings.carddav_url
         self.wanted = book or settings.carddav_addressbook
+        # On FlipDial's own contacts server, its address book is made on first use.
+        self.make_missing = not book and bool(settings.radicale_dir)
         # The phone book is never picked as the main address book by default.
         from flipdial.phone_rules import book_name
 
@@ -143,7 +145,19 @@ class CardDAVClient:
     def address_book(self) -> AddressBook:
         if self._book:
             return self._book
+        if self.wanted and (self.wanted.startswith("/") or "://" in self.wanted):
+            # An address given by its path: open it directly (another account's book).
+            url = urljoin(self.start, self.wanted)
+            if urlparse(url).netloc != urlparse(self.start).netloc:
+                raise CardDAVError("address_book_not_found")
+            found = self._books_at(url if url.endswith("/") else url + "/", "0")
+            if not found:
+                raise CardDAVError("address_book_not_found")
+            self._book = found[0]
+            return self._book
         books = self._find_books()
+        if not books and self.make_missing and not self.wanted:
+            books = [self.create_book("Contacts")]
         if not books:
             raise CardDAVError("no_address_book")
 
@@ -169,10 +183,13 @@ class CardDAVClient:
             return self._find_books()
         return self._books_at(home, "1")
 
-    def create_book(self, name: str) -> AddressBook:
-        """Make a new address book next to the others (RFC 5689 extended MKCOL)."""
+    def create_book(self, name: str, url: str | None = None) -> AddressBook:
+        """Make a new address book next to the others, or at `url` (RFC 5689 extended
+        MKCOL)."""
         slug = "".join(ch for ch in name.lower() if ch.isalnum()) or "phone"
-        url = urljoin(self._home(), slug + "/")
+        url = urljoin(self.start, url) if url else urljoin(self._home(), slug + "/")
+        if urlparse(url).netloc != urlparse(self.start).netloc:
+            raise CardDAVError("cannot_create_book")
         body = (
             '<?xml version="1.0" encoding="utf-8"?>'
             '<d:mkcol xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav"><d:set><d:prop>'

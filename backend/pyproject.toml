@@ -17,15 +17,18 @@ dependencies = [
     "pyjwt[crypto]>=2.15",
     "packaging>=26",
     "segno>=1.6",
+    "bcrypt>=4.2",
 ]
 
 [project.optional-dependencies]
 heif = ["pillow-heif>=0.20"]
+# The optional bundled contacts server (docs/contacts-server.md)
+contacts-server = ["radicale[bcrypt]>=3.5"]
 dev = [
     "pytest>=8.3",
     "httpx>=0.28",
     "ruff>=0.8",
-    "radicale>=3.5",
+    "radicale[bcrypt]>=3.5",
 ]
 
 [project.scripts]

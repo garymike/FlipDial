@@ -64,6 +64,16 @@ def main(argv: list[str] | None = None) -> None:
     )
     ts_check = ts_sub.add_parser("check", help="show which cards still need answers")
     ts_check.add_argument("out", type=Path)
+    srv = sub.add_parser("contacts-server", help="the optional bundled contacts server")
+    srv.add_argument("action", choices=["init", "add-user", "run"])
+    srv.add_argument("name", nargs="?", default="", help="add-user: the new account's name")
+    srv.add_argument("--dir", type=Path, help="its folder (default: FLIPDIAL_RADICALE_DIR)")
+    srv.add_argument(
+        "--host",
+        action="append",
+        default=[],
+        help="init: a name or address phones use to reach this computer (repeat for more)",
+    )
     aud = sub.add_parser("audit", help="audit log tools")
     aud.add_argument("action", choices=["verify"])
     for p in (ev, ts_make, ts_check):
@@ -110,6 +120,43 @@ def main(argv: list[str] | None = None) -> None:
             worker.run_once()
         else:
             worker.run_forever()
+        return
+
+    if args.command == "contacts-server":
+        from flipdial import contacts_server as cs
+
+        folder = args.dir or settings.radicale_dir or settings.data_dir / "contacts-server"
+        try:
+            if args.action == "init":
+                out = cs.init(folder, args.host)
+                host = args.host[0]
+                print(f"Contacts server set up in {folder}. Add these to your settings file:\n")
+                print(f"FLIPDIAL_RADICALE_DIR={folder}")
+                # In Docker, FlipDial reaches the server by its service name.
+                inside = (
+                    "contacts" if os.environ.get("FLIPDIAL_INSTALL") == "docker" else "localhost"
+                )
+                print(f"FLIPDIAL_CARDDAV_URL=https://{inside}:{cs.PORT}/")
+                print(f"FLIPDIAL_CARDDAV_USERNAME={out['username']}")
+                print(f"FLIPDIAL_CARDDAV_PASSWORD={out['password']}")
+                print(f"FLIPDIAL_CARDDAV_CA_BUNDLE={folder / 'ca.pem'}")
+                print(f"FLIPDIAL_PHONE_SERVER_URL=https://{host}:{cs.PORT}/")
+                print("\nThe password is shown only this once.")
+            elif args.action == "add-user":
+                pw = cs.add_user(folder, args.name)
+                print(f"Account {args.name} added. Its password (shown only once): {pw}")
+            else:
+                import subprocess
+
+                if not (folder / "config").is_file():
+                    sys.exit(f"No contacts server in {folder}. Run: flipdial contacts-server init")
+                sys.exit(
+                    subprocess.call(  # noqa: S603  (fixed arguments)
+                        [sys.executable, "-m", "radicale", "--config", str(folder / "config")]
+                    )
+                )
+        except cs.ServerSetupError as exc:
+            sys.exit(f"Contacts server: {exc}")
         return
 
     if args.command == "carddav":

@@ -1,6 +1,6 @@
 # Phone sync
 
-Status: steps 1 to 4 of the build order are in (the phone book and its rules, two-way sync with it, the setup wizard, import updates and Export changes). Bundled Radicale is planned. This page is the spec the code and tests are written against.
+Status: built (all five steps of the build order). The open checks at the end still need a real iPhone, Android phone and Synology. This page is the spec the code and tests are written against.
 
 To turn it on, use **Setup > Phone > Set up phone sync** (below), or make a second address book on your contacts server (for example "Phone") and set:
 
@@ -101,13 +101,7 @@ Syncing away from home (for example through Tailscale) may come in a later relea
 
 ## Bundled Radicale
 
-An optional service in `docker/compose.yml`, for people with no contacts server.
-
-- Built from the Radicale package on PyPI at a pinned version, with hashes checked. No third-party image.
-- Runs as a non-root user with a read-only filesystem and no added privileges.
-- Passwords stored as bcrypt hashes. Access rules limit each account to its own address books.
-- Reachable only by FlipDial unless you publish its port on your home network for the phone, with a certificate the wizard creates.
-- Data is plain `.vcf` files in the data folder, included in FlipDial's backups.
+For people with no contacts server: see [Bundled contacts server](contacts-server.md). In short, `flipdial contacts-server init` sets up Radicale with HTTPS (a certificate made for this server only), bcrypt passwords, and access rules where each phone account opens only its own phone book. The wizard then makes the phone's account and its book in one step. With Docker it is an optional service built from PyPI at pinned, hash-checked versions; with the Windows scripts it starts and stops with FlipDial. Set FLIPDIAL_PHONE_SERVER_URL to the address phones use when FlipDial reaches the server by another name.
 
 ## Google
 
