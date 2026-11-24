@@ -1,6 +1,6 @@
 # Phone sync
 
-Status: steps 1 to 3 of the build order are in (the phone book and its rules, two-way sync with it, and the setup wizard). Import updates, export of changes and bundled Radicale are planned. This page is the spec the code and tests are written against.
+Status: steps 1 to 4 of the build order are in (the phone book and its rules, two-way sync with it, the setup wizard, import updates and Export changes). Bundled Radicale is planned. This page is the spec the code and tests are written against.
 
 To turn it on, use **Setup > Phone > Set up phone sync** (below), or make a second address book on your contacts server (for example "Phone") and set:
 
@@ -113,8 +113,8 @@ An optional service in `docker/compose.yml`, for people with no contacts server.
 
 No sign-in to Google, by design.
 
-- **Into FlipDial:** export from contacts.google.com as vCard, then Import. Contacts that match are updated, new ones are added, and nothing is deleted.
-- **Out to Google:** **Export changes** makes a vCard of contacts changed since the last export, to import at contacts.google.com. Google may add copies instead of updating; its **Merge & fix** tool combines them.
+- **Into FlipDial:** export from contacts.google.com as vCard, then Import. A contact already in FlipDial (same UID, email or phone) is updated: new phones, emails, websites, addresses and socials are added, and empty fields are filled in. Nothing is removed. When both have a different value, FlipDial's is kept unless you tick "use the file's". The preview shows what each update adds, and the import can be undone (updated contacts go back to how they were, unless edited since). New contacts are added; a contact that matches only by name is skipped unless you ask for a copy.
+- **Out to Google:** **Import / export > Changes for Google Contacts** downloads a vCard of contacts changed since the last download, with standard fields only (optionally only the contacts on your phone). Import it at contacts.google.com. Google may add copies instead of updating; its **Merge & fix** tool combines them.
 
 ## Build order
 

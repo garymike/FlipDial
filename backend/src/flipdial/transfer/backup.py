@@ -72,6 +72,54 @@ def export_vcf(settings: Settings, deck: str = "", starred: bool = False) -> tup
     return vcf.join([text for text, _ in rows]), len(rows)
 
 
+CHANGES_KEY = "changes_export_at"
+
+
+def _changed_cards(settings: Settings, only_phone: bool) -> tuple[list[VCard], str]:
+    """Contacts changed since the last "Export changes", and when that was ("" if never)."""
+    from flipdial import phone, phone_rules
+
+    since = phone_rules.get_setting(settings, CHANGES_KEY)
+    with db.session(settings.db_path) as conn:
+        rows = conn.execute(
+            "SELECT uid, vcard FROM contacts WHERE updated_at > ? ORDER BY sort_name", (since,)
+        ).fetchall()
+    keep = None
+    if only_phone and phone_rules.enabled(settings):
+        keep = set(phone.wanted(settings, phone._masters(settings)))
+    out = []
+    for r in rows:
+        if keep is not None and r["uid"] not in keep:
+            continue
+        try:
+            out.append(VCard.parse(r["vcard"]))
+        except VCardError:
+            continue
+    return out, since
+
+
+def changes_info(settings: Settings) -> dict:
+    from flipdial import phone_rules
+
+    cards, since = _changed_cards(settings, False)
+    info = {"since": since, "count": len(cards), "phone_sync": phone_rules.enabled(settings)}
+    if info["phone_sync"]:
+        info["count_phone"] = len(_changed_cards(settings, True)[0])
+    return info
+
+
+def export_changes(settings: Settings, only_phone: bool = False) -> tuple[str, int]:
+    """A vCard of contacts changed since the last time, with standard fields only (for
+    importing into Google Contacts, say). Marks now as the new starting point."""
+    from flipdial import phone, phone_rules
+
+    started = datetime.now(UTC).isoformat(timespec="microseconds")
+    cards, _ = _changed_cards(settings, only_phone)
+    text = "".join(phone.phone_card(c).render() for c in cards)
+    phone_rules.put_setting(settings, CHANGES_KEY, started)
+    return text, len(cards)
+
+
 def export_csv(settings: Settings, deck: str = "", starred: bool = False) -> tuple[str, int]:
     rows = _selected(settings, deck, starred)
     return csvfile.write_csv([d for _, d in rows]), len(rows)

@@ -129,7 +129,7 @@ def store(settings: Settings, card: VCard, href: str, etag: str | None) -> None:
                 etag,
                 card.render(),
                 _sort_name(card),
-                datetime.now(UTC).isoformat(timespec="seconds"),
+                datetime.now(UTC).isoformat(timespec="microseconds"),
             ),
         )
 

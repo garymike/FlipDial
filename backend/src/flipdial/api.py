@@ -1031,6 +1031,8 @@ class ImportIn(BaseModel):
     mapping: list[FieldName] | None = Field(default=None, max_length=200)
     deck: Short = ""
     include_duplicates: bool = False
+    update: bool = True  # update contacts already there (adds values, never removes)
+    prefer_file: bool = False  # when both have a different value, use the file's
 
 
 def _transfer_error(exc: importer.TransferError) -> HTTPException:
@@ -1050,7 +1052,15 @@ def import_preview(body: ImportIn, s: SettingsDep) -> dict:
 def import_contacts(body: ImportIn, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
     try:
         result = importer.run_import(
-            s, client, body.text, body.kind, body.mapping, body.deck, body.include_duplicates
+            s,
+            client,
+            body.text,
+            body.kind,
+            body.mapping,
+            body.deck,
+            body.include_duplicates,
+            body.update,
+            body.prefer_file,
         )
         audit.record(
             s,
@@ -1111,6 +1121,20 @@ def export_vcf(
     text, n = backup.export_vcf(s, deck, starred)
     audit.record(s, actor, "export.vcard", contacts=n, filtered=bool(deck or starred))
     return _download(text, "text/vcard; charset=utf-8", f"flipdial-contacts-{_stamp()}.vcf", n)
+
+
+@router.get("/export/changes")
+def export_changes_info(s: SettingsDep) -> dict:
+    """How many contacts changed since the last "Export changes"."""
+    return backup.changes_info(s)
+
+
+@router.get("/export/changes.vcf")
+def export_changes(s: SettingsDep, actor: ActorDep, only_phone: bool = False) -> Response:
+    """Contacts changed since last time, standard fields only (for Google Contacts)."""
+    text, n = backup.export_changes(s, only_phone)
+    audit.record(s, actor, "export.changes", contacts=n, only_phone=only_phone)
+    return _download(text, "text/vcard; charset=utf-8", f"flipdial-changes-{_stamp()}.vcf", n)
 
 
 @router.get("/export/contacts.csv")

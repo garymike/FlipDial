@@ -17,8 +17,9 @@ How it works:
 1. **Preview.** Choosing a file shows what was recognized, how many contacts are new, and which ones look like contacts you already have (same email, same phone, or same name). Nothing is saved yet.
 2. **Columns.** For CSV files, each column has a menu. Pick "Ignore" to leave a column out. Several columns can feed the same field (for example, three email columns).
 3. **Deck.** Optionally put every imported contact in a deck. LinkedIn imports suggest a "LinkedIn" deck.
-4. **Duplicates.** Likely duplicates are skipped unless you tick the box. To combine them with existing contacts instead, import them and then use **Possible duplicates**.
-5. **Undo.** Every import is listed under **Recent imports** and can be undone. Undo removes the contacts that import created, except any you have edited since.
+4. **Contacts you already have.** A contact that matches one in FlipDial by UID, email or phone is updated: new phones, emails, websites, addresses and socials are added, and empty fields filled in. Nothing is removed. When both have a different value, FlipDial's is kept unless you tick "use the file's". The preview says what each update adds, or "Up to date" when there's nothing new. Untick the box to leave them alone.
+5. **Other likely duplicates** (same name only, or twice in the file) are skipped unless you tick the box to add them as separate contacts; then use **Possible duplicates** to combine them.
+6. **Undo.** Every import is listed under **Recent imports** and can be undone. Undo removes the contacts that import created and puts updated contacts back as they were, except any you have edited since.
 
 Limits: 10 MB and 10,000 contacts per file. Imported files are treated as untrusted: values are length-limited and never run or rendered as HTML.
 
@@ -27,6 +28,7 @@ FlipDial reads LinkedIn's official data export only. It never signs in to Linked
 ## Export
 
 - **vCard (.vcf):** every contact exactly as stored on your contacts server, ready for any contacts app.
+- **Changes for Google Contacts:** a vCard of the contacts changed since you last downloaded it, standard fields only (optionally only the contacts on your phone). Import it at contacts.google.com; Google's **Merge & fix** combines any copies it makes.
 - **Spreadsheet (.csv):** one row per contact. Several emails or phones are joined with ` ; `. Cells that a spreadsheet could treat as a formula are prefixed with `'`. FlipDial can import this file again.
 
 ## Full backup
