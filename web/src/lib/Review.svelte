@@ -17,6 +17,7 @@
   } from './api'
   import { href } from './router.svelte'
   import ContactForm from './ContactForm.svelte'
+  import ScanImage from './ScanImage.svelte'
 
   let { onchange }: { onchange?: () => void } = $props()
 
@@ -283,7 +284,7 @@
       <ul>
         {#each waiting as w (w.card_id)}
           <li>
-            <img src={api.image(w.card_id, 'thumb')} alt="Scanned card" loading="lazy" />
+            <span class="thumbimg"><ScanImage src={api.image(w.card_id, 'thumb')} alt="Scanned card" /></span>
             {#if w.status === 'extract_failed'}
               <span class="why">{READ_ERRORS[w.error ?? ''] ?? "Couldn't be read."}</span>
               {#if w.error_detail}<span class="said">Ollama said: {w.error_detail}</span>{/if}
@@ -327,10 +328,14 @@
   {:else if form}
     <div class="layout">
       <section class="images" aria-label="Card images">
-        <img
-          src={api.image(current.card_id, showBack ? 'back' : 'front')}
-          alt={showBack ? 'Back of the card' : 'Front of the card'}
-        />
+        <span class="bigimg">
+          <ScanImage
+            src={api.image(current.card_id, showBack ? 'back' : 'front')}
+            alt={showBack ? 'Back of the card' : 'Front of the card'}
+            fit="natural"
+            lazy={false}
+          />
+        </span>
         {#if current.has_back}
           <div class="segmented" role="group" aria-label="Side">
             <button type="button" aria-pressed={!showBack} onclick={() => (showBack = false)}>Front</button>
@@ -388,7 +393,7 @@
         <ul>
           {#each dismissedList as d (d.card_id)}
             <li>
-              <img src={api.image(d.card_id, 'thumb')} alt="Dismissed card" loading="lazy" />
+              <span class="thumbimg"><ScanImage src={api.image(d.card_id, 'thumb')} alt="Dismissed card" /></span>
               <span class="label">{d.label || 'Not read'}</span>
               {#if confirmDelete === d.card_id}
                 <span class="why">Delete this scan for good? This can't be undone.</span>
@@ -443,11 +448,11 @@
     flex-direction: column;
     gap: 14px;
   }
-  .images img {
-    width: 100%;
+  .bigimg {
+    display: block;
     max-height: 60vh;
-    object-fit: contain;
     border-radius: 10px;
+    overflow: hidden;
     background: #111214;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
   }
@@ -612,11 +617,10 @@
     background: var(--panel);
     border: 1px solid #2c2f36;
   }
-  .waiting img {
-    width: 100%;
-    aspect-ratio: 1.75;
-    object-fit: contain;
+  .waiting .thumbimg {
+    display: block;
     border-radius: 6px;
+    overflow: hidden;
     background: #111;
   }
   .reading,
@@ -751,11 +755,10 @@
     background: var(--panel);
     border: 1px solid #2c2f36;
   }
-  .dismissed img {
-    width: 100%;
-    aspect-ratio: 1.75;
-    object-fit: contain;
+  .dismissed .thumbimg {
+    display: block;
     border-radius: 6px;
+    overflow: hidden;
     background: #111;
   }
   .dismissed .label {

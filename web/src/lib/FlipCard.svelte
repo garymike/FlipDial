@@ -3,6 +3,7 @@
   // without a scan show the generated house card.
   import { api, type Contact } from './api'
   import HouseCard from './HouseCard.svelte'
+  import ScanImage from './ScanImage.svelte'
 
   let {
     contact,
@@ -20,14 +21,14 @@
   <div class="inner" class:flipped>
     <div class="face">
       {#if front}
-        <img src={front} alt={`Front of ${contact.full_name}'s card`} loading="lazy" draggable="false" />
+        <ScanImage src={front} alt={`Front of ${contact.full_name}'s card`} fit="fill" />
       {:else}
         <HouseCard {contact} />
       {/if}
     </div>
     <div class="face backface">
       {#if back}
-        <img src={back} alt={`Back of ${contact.full_name}'s card`} loading="lazy" draggable="false" />
+        <ScanImage src={back} alt={`Back of ${contact.full_name}'s card`} fit="fill" />
       {:else}
         <HouseCard {contact} side="back" />
       {/if}
@@ -63,13 +64,5 @@
   }
   .backface {
     transform: rotateY(180deg);
-  }
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-    -webkit-user-drag: none;
-    user-select: none;
   }
 </style>

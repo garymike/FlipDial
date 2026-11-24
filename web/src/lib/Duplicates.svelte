@@ -2,6 +2,7 @@
   // Possible duplicates: review each pair, pick the values to keep, merge, and undo if needed.
   import { api, describe, kindName, REASONS, type Contact, type ContactInput, type DuplicatePair, type MergeRecord } from './api'
   import FlipCard from './FlipCard.svelte'
+  import ScanImage from './ScanImage.svelte'
   import { contactHref } from './router.svelte'
 
   let pairs = $state<DuplicatePair[]>([])
@@ -190,7 +191,7 @@
                   {#each [p.a, p.b] as c (c.uid)}
                     <label class:chosen={showCard === c.card_id}>
                       <input type="radio" bind:group={showCard} value={c.card_id} />
-                      <img src={api.image(c.card_id ?? '', 'thumb')} alt={`Card from ${c.full_name}`} />
+                      <span class="pickimg"><ScanImage src={api.image(c.card_id ?? '', 'thumb')} alt={`Card from ${c.full_name}`} /></span>
                     </label>
                   {/each}
                 </div>
@@ -267,10 +268,12 @@
   .cardpick label.chosen {
     border-color: var(--amber);
   }
-  .cardpick img {
+  .pickimg {
+    display: block;
     width: 160px;
     border-radius: 6px;
-    display: block;
+    overflow: hidden;
+    background: #111214;
   }
   legend .hint {
     font-weight: 400;
