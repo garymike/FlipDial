@@ -1,7 +1,9 @@
 <script lang="ts">
   // Phone sync settings (docs/sync.md): which contacts go to the phone book, and syncing.
   import { api, describe, type PhonePending, type PhoneStatus } from './api'
+  import PhoneWizard from './PhoneWizard.svelte'
 
+  let wizard = $state<'' | 'book' | 'phone'>('')
   let st = $state<PhoneStatus | null>(null)
   let counts = $state<[string, number][]>([])
   let busy = $state(false)
@@ -27,6 +29,15 @@
   $effect(() => {
     load()
   })
+
+  async function turnOff() {
+    try {
+      await api.phoneSetupOff()
+      await load()
+    } catch (e) {
+      error = describe(e)
+    }
+  }
 
   async function rule(name: string, state: 'on' | 'off' | 'follow') {
     try {
@@ -81,14 +92,25 @@
 <section class="phone" aria-label="Phone">
   <h2>Phone</h2>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if wizard}
+    {#key wizard}<PhoneWizard start={wizard} ondone={load} />{/key}
+    <button type="button" class="secondary" onclick={() => { wizard = ''; load() }}>Close setup</button>
+  {/if}
   {#if st && !st.enabled}
     <p class="detail">
-      Send only the contacts you choose to your phone, so its address book stays short. Make a second
-      address book on your contacts server (for example "Phone"), then set
-      <code>FLIPDIAL_PHONE_ADDRESSBOOK=Phone</code> and restart FlipDial.
+      Send only the contacts you choose to your phone, so its address book stays short. Nothing is connected to your
+      Google or Apple account, and the phone syncs on your home network.
       <a href="https://github.com/garymike/FlipDial/blob/main/docs/sync.md" target="_blank" rel="noreferrer">How phone sync works</a>
     </p>
+    {#if !wizard}<button type="button" class="primary" onclick={() => (wizard = 'book')}>Set up phone sync</button>{/if}
   {:else if st}
+    {#if !wizard}
+      <div class="row">
+        <button type="button" class="secondary" onclick={() => (wizard = 'phone')}>Add a phone</button>
+        <button type="button" class="secondary" onclick={() => (wizard = 'book')}>Change the phone book</button>
+        <button type="button" class="secondary" onclick={turnOff}>Turn off phone sync</button>
+      </div>
+    {/if}
     <p class="detail">
       {st.on_phone} on your phone now, {st.wanted} after the next sync. Last synced {when(st.last_success)}.
       FlipDial sends changes within a minute and checks the phone book every day after {st.check_hour}:00.
@@ -258,8 +280,5 @@
   .error {
     color: var(--amber);
     margin: 0;
-  }
-  code {
-    font-size: 13px;
   }
 </style>

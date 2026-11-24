@@ -1,8 +1,8 @@
 # Phone sync
 
-Status: steps 1 and 2 of the build order are in (the phone book, its rules, sync to it, and edits and additions from the phone). The setup wizard, import updates, export of changes and bundled Radicale are planned. This page is the spec the code and tests are written against.
+Status: steps 1 to 3 of the build order are in (the phone book and its rules, two-way sync with it, and the setup wizard). Import updates, export of changes and bundled Radicale are planned. This page is the spec the code and tests are written against.
 
-To turn it on, make a second address book on your contacts server (for example "Phone") and set:
+To turn it on, use **Setup > Phone > Set up phone sync** (below), or make a second address book on your contacts server (for example "Phone") and set:
 
 ```sh
 FLIPDIAL_PHONE_ADDRESSBOOK=Phone
@@ -77,22 +77,17 @@ Each rule has a test.
 
 ## Setup wizard
 
-**Setup > Phone sync** does as much as possible itself. The steps:
+**Setup > Phone > Set up phone sync** walks through three steps:
 
-1. **Check the server.** FlipDial confirms it can reach the contacts server and shows which kind it is.
-2. **Create the phone book.**
-   - Radicale and servers that allow it: FlipDial creates it.
-   - Synology Contacts: if FlipDial can't create it, the wizard shows the three clicks in Synology Contacts and checks again when you're done.
-3. **Create the phone account.**
-   - Bundled Radicale: FlipDial creates the account, limited to the phone book, with a generated password.
-   - Synology: the wizard shows how to add a DSM user and share only the phone book with it, then tests the account.
-4. **Choose what goes to the phone.** Pick tags or decks, see the count, confirm. The first sync runs.
-5. **Add the account to the phone.**
-   - iPhone: open the link the wizard shows (or scan the QR code) and install the profile. It adds the CardDAV account in one step and asks for the password on the phone, so the password is never stored in the file.
-   - Android: install DAVx5, choose "Login with URL and user name", and paste the address and user name the wizard shows.
-6. **Confirm.** The wizard waits until the phone has connected once, then shows it as working.
+1. **Phone address book.** Pick an address book on the contacts server, or let FlipDial make one (named "Phone" unless you choose another name). The main address book can't be picked. If the server doesn't let FlipDial make one (Synology may not), the wizard says how to make it there.
+2. **The phone's account.** The wizard explains how to give the phone its own account that can open only the phone book (on Synology: a DSM user, and the phone book shared with it). **Check the account** signs in as the phone would and shows whether it can open the phone book and whether it can also see the main address book, which it shouldn't. The password is used for that check only and never kept. The wizard warns if the phone would use FlipDial's own account.
+3. **Add it to the phone.**
+   - iPhone: **Make the iPhone link** shows a QR code. Scanning it downloads a profile that adds the CardDAV account in one step; the iPhone asks for the password, so the password is never in the file. If the contacts server has its own certificate (FLIPDIAL_CARDDAV_CA_BUNDLE), the profile carries it too. The link works once, expires after 15 minutes, and only a hash of it is stored.
+   - Android: install DAVx5, choose "Login with URL and user name", and copy the address and user name the wizard shows.
 
-The profile link works once, only for the signed-in user, and expires after 15 minutes.
+The wizard warns when the phone couldn't reach the address: FlipDial opened as localhost, or the contacts server set as localhost. It also warns when the server uses http, since the phone would send its password unencrypted.
+
+Choices made in the wizard are kept in FlipDial's database. FLIPDIAL_PHONE_ADDRESSBOOK in the settings file, if set, wins over them.
 
 ### Home network only
 
@@ -133,5 +128,6 @@ No sign-in to Google, by design.
 
 - Whether Synology Contacts lets FlipDial create an address book over CardDAV, and whether it can share one address book with another DSM user while keeping the master private.
 - How quickly Radicale picks up a new account from its users file.
-- The exact DAVx5 login steps and whether it accepts a link or QR code.
+- The exact DAVx5 login steps on a current version, and whether it accepts a link or QR code.
+- That an iPhone installs the profile and finds the phone book from its address (tested so far only by reading the profile back, not on an iPhone).
 - How the iPhone handles a home server's own certificate: whether the profile alone is enough, or the user also has to turn on full trust in Settings (General > About > Certificate Trust Settings). The wizard's iPhone steps depend on this.

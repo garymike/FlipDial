@@ -229,6 +229,28 @@ def create_app(
 
     app.include_router(router)
 
+    @app.get("/phone-profile/{token}")
+    async def phone_profile(token: str) -> Response:
+        """The iPhone profile, through a one-time link from the phone setup wizard. The link
+        itself is the permission: it works once, for 15 minutes, and holds no password."""
+        from flipdial import phone_setup
+
+        if not phone_setup.use_link(settings, token):
+            return Response(
+                "This link has expired or was already used. Make a new one in FlipDial.",
+                404,
+                media_type="text/plain; charset=utf-8",
+            )
+        audit.record(settings, "phone", "phone.profile_download")
+        return Response(
+            phone_setup.profile(settings),
+            media_type="application/x-apple-aspen-config",
+            headers={
+                "Content-Disposition": 'attachment; filename="FlipDial.mobileconfig"',
+                "Cache-Control": "no-store",
+            },
+        )
+
     if settings.web_dir and settings.web_dir.is_dir():
         app.mount("/", StaticFiles(directory=settings.web_dir, html=True), name="web")
 

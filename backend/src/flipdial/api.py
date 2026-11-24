@@ -18,7 +18,14 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    SecretStr,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from starlette.background import BackgroundTask
 
 from flipdial import (
@@ -30,6 +37,7 @@ from flipdial import (
     forget,
     phone,
     phone_rules,
+    phone_setup,
     reread,
     status,
     trash,
@@ -359,6 +367,94 @@ def phone_sync(body: PhoneSyncIn, s: SettingsDep, client: ClientDep, actor: Acto
     if body.confirm or body.accept_drop:
         audit.record(s, actor, "phone.confirm", "", accepted_drop=body.accept_drop)
     return {**out, "state": phone.status(s)}
+
+
+# -- phone setup wizard ----------------------------------------------------------------
+
+
+class PhoneBookIn(BaseModel):
+    name: Short = Field(min_length=1)
+    create: bool = False
+
+
+class PhoneUserIn(BaseModel):
+    username: Text = ""
+
+
+class PhoneTestIn(BaseModel):
+    username: Text = Field(min_length=1)
+    password: SecretStr
+
+
+class ProfileLinkIn(BaseModel):
+    base: Annotated[str, StringConstraints(max_length=300, pattern=r"^https?://[^/\s]+$")]
+
+
+def _setup_errors(exc: Exception) -> HTTPException:
+    if isinstance(exc, CardDAVError):
+        return _dav_errors(exc)
+    return HTTPException(409, str(exc))
+
+
+@router.get("/phone/setup")
+def phone_setup_info(s: SettingsDep, request: Request) -> dict:
+    client = request.app.state.carddav_factory() if s.carddav_url else None
+    return phone_setup.info(s, client)
+
+
+@router.post("/phone/setup/book")
+def phone_setup_book(body: PhoneBookIn, s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
+    """Use this address book (making it first, if asked) as the phone book."""
+    if not s.carddav_url:
+        raise HTTPException(409, "carddav_not_configured")
+    try:
+        name = phone_setup.choose_book(s, client, body.name, body.create)
+    except (phone_setup.SetupError, CardDAVError) as exc:
+        raise _setup_errors(exc) from exc
+    audit.record(s, actor, "phone.setup_book", name, created=body.create)
+    return phone_setup.info(s, client)
+
+
+@router.delete("/phone/setup/book")
+def phone_setup_off(s: SettingsDep, actor: ActorDep) -> dict:
+    """Turn phone sync off. The phone book stays on the server as it is."""
+    try:
+        phone_setup.forget_book(s)
+    except phone_setup.SetupError as exc:
+        raise _setup_errors(exc) from exc
+    audit.record(s, actor, "phone.setup_off")
+    return {"enabled": False}
+
+
+@router.put("/phone/setup/username")
+def phone_setup_username(body: PhoneUserIn, s: SettingsDep, actor: ActorDep) -> dict:
+    phone_setup.set_username(s, body.username)
+    audit.record(s, actor, "phone.setup_username")
+    return {"username": body.username}
+
+
+@router.post("/phone/setup/test")
+def phone_setup_test(body: PhoneTestIn, s: SettingsDep) -> dict:
+    """Sign in as the phone would, to see which address books it can see. The password is
+    used once and not kept or logged."""
+    if not phone_rules.enabled(s):
+        raise HTTPException(409, "phone_sync_off")
+    try:
+        return phone_setup.test_account(s, body.username, body.password.get_secret_value())
+    except CardDAVError as exc:
+        raise _dav_errors(exc) from exc
+
+
+@router.post("/phone/profile-link")
+def phone_profile_link(body: ProfileLinkIn, s: SettingsDep, actor: ActorDep) -> dict:
+    """A one-time link (and QR code) for an iPhone to install the contacts account."""
+    try:
+        token, expires = phone_setup.new_link(s)
+    except phone_setup.SetupError as exc:
+        raise _setup_errors(exc) from exc
+    url = f"{body.base}/phone-profile/{token}"
+    audit.record(s, actor, "phone.profile_link")
+    return {"url": url, "expires_at": expires.isoformat(), "qr_svg": phone_setup.qr_svg(url)}
 
 
 @router.get("/phone/inbox")

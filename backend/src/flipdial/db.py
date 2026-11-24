@@ -226,6 +226,19 @@ MIGRATIONS: list[str] = [
         undone_at   TEXT
     );
     """,
+    # 16: settings made in the app (the phone setup wizard), and one-time links for the
+    # iPhone profile (only a hash of each link is stored).
+    """
+    CREATE TABLE app_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    CREATE TABLE phone_profile_links (
+        hash        TEXT PRIMARY KEY,
+        expires_at  TEXT NOT NULL,
+        used_at     TEXT
+    );
+    """,
 ]
 
 STATUSES = ("extract_pending", "extract_failed", "review", "approved", "dismissed")
