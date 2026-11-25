@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.15.1
+
+### Fixes
+
+- **Wall rows line up again:** a name on two lines pushed its card up. Cards now line up
+  along the bottom of each row and names along the top.
+
 ## 0.15.0
 
 ### New
