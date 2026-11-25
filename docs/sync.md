@@ -98,7 +98,7 @@ By design, the contacts server is reachable only on your home network. Nothing i
 - DAVx5 can be limited to your home Wi-Fi, so it doesn't try to sync elsewhere.
 - Away from home, contacts already on the phone keep working. Changes wait until you are back.
 
-Syncing away from home (for example through Tailscale) may come in a later release as an option you turn on.
+Syncing away from home isn't planned: opening the contacts server beyond your home network is a risk FlipDial won't take on.
 
 ## Bundled Radicale
 

@@ -150,3 +150,16 @@ def test_password_not_in_errors(settings):
 def test_settings_password_is_secret():
     s = Settings(_env_file=None, carddav_password="s3cret-example")
     assert "s3cret" not in repr(s)
+
+
+def test_never_requests_another_host(dav_settings):
+    """Addresses from the server's answers or typed names can't send FlipDial elsewhere."""
+    import pytest
+
+    from flipdial.carddav.client import CardDAVClient, CardDAVError
+
+    c = CardDAVClient(dav_settings)
+    for url in ("http://169.254.169.254/latest/", "https://evil.example/", "file:///etc/passwd"):
+        with pytest.raises(CardDAVError) as err:
+            c._request("GET", url)
+        assert err.value.code == "outside_server"
