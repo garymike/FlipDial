@@ -439,8 +439,9 @@ export function setUrls(next: typeof urls): void {
   Object.assign(urls, next)
 }
 
-// Saves still on their way. A read waits for them first, so switching views right after a
-// change (star in Dial, then open Wall) never shows the state from before it.
+// Contact edits still on their way. A read waits for them first, so switching views right
+// after a change (star in Dial, then open Wall) never shows the state from before it.
+// Only contact edits, which are quick: a sync or an update check never holds up a view.
 const writing = new Set<Promise<unknown>>()
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -448,6 +449,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     if (writing.size) await Promise.allSettled([...writing])
     return send<T>(method, path, body)
   }
+  if (!path.startsWith('/api/contacts/')) return send<T>(method, path, body)
   const p = send<T>(method, path, body)
   writing.add(p)
   try {
