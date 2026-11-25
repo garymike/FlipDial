@@ -45,7 +45,7 @@
 
   // New release banner, and the one-click update.
   let update = $state<UpdateInfo | null>(null)
-  let updating = $state<'off' | 'running' | 'slow' | 'rolledback' | 'error'>('off')
+  let updating = $state<'off' | 'running' | 'slow' | 'rolledback' | 'error' | 'notstarted'>('off')
   let updateError = $state('')
   const dismissKey = (tag: string) => `flipdial.update.later.${tag}`
   function showUpdate(u: UpdateInfo, asked = false) {
@@ -106,6 +106,16 @@
         }
       } catch {
         sawDown = true // restarting
+      }
+      // FlipDial never stopped and the updater isn't at work: it didn't get going (its log
+      // says why). It can take a while before stopping FlipDial (checking the signature).
+      if (!sawDown && Date.now() - started > 60 * 1000) {
+        const r = await api.updateRunning().catch(() => ({ running: true }))
+        if (!r.running && !sawDown) {
+          clearInterval(timer)
+          updating = 'notstarted'
+          return
+        }
       }
       if (Date.now() - started > 10 * 60 * 1000 && updating === 'running') updating = 'slow'
     }, 3000)
@@ -196,6 +206,10 @@
         <h2 id="updating-title">Updating FlipDial…</h2>
         <p>Checking the release signature, installing, and restarting. This takes a minute or two, and this page reloads by itself.</p>
         {#if updating === 'slow'}<p>This is taking longer than expected. Details are in <code>logs\update.log</code> in your data folder.</p>{/if}
+      {:else if updating === 'notstarted'}
+        <h2 id="updating-title">The update didn't start</h2>
+        <p>FlipDial is still on the version you had, and nothing was changed. Details are in <code>logs\update.log</code> in your data folder. You can also run <code>update.cmd</code>.</p>
+        <button type="button" class="update-btn" onclick={() => (updating = 'off')}>OK</button>
       {:else if updating === 'rolledback'}
         <h2 id="updating-title">The update didn't finish</h2>
         <p>FlipDial is back on the version you had. Details are in <code>logs\update.log</code> in your data folder.</p>

@@ -147,6 +147,19 @@ jobs:
           uv run pytest -q tests/test_builtin_server.py
           if ($LASTEXITCODE) { exit 1 }
           Pop-Location
+      - name: Update now can start the updater
+        # The app starts update.ps1 in the background (updates.launch). Windows PowerShell
+        # started the wrong way exits without running anything, so check it really runs.
+        shell: powershell
+        run: |
+          $t = $env:RUNNER_TEMP
+          Set-Content "$t\probe.ps1" 'param([string]$Out) "ran" | Set-Content $Out'
+          Push-Location backend; uv sync
+          uv run python -c "import sys; from flipdial.updates import launch; launch(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',sys.argv[1],'-Out',sys.argv[2]])" "$t\probe.ps1" "$t\probe.txt"
+          Pop-Location
+          Start-Sleep 15
+          if (-not (Test-Path "$t\probe.txt")) { 'the updater did not run'; exit 1 }
+          'the updater ran'
       - name: Start, check, stop
         shell: powershell
         run: |

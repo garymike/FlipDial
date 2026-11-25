@@ -585,6 +585,7 @@ export const api = {
   updateInfo: () => call<UpdateInfo>('GET', '/api/update'),
   checkUpdate: () => call<UpdateInfo>('POST', '/api/update/check'),
   startUpdate: () => call<{ updating_to: string }>('POST', '/api/update/start'),
+  updateRunning: () => call<{ running: boolean }>('GET', '/api/update/running'),
   status: () => call<SetupStatus>('GET', '/api/status'),
   retry: (cardId: string) => call<{ retrying: number }>('POST', `/api/review/${cardId}/retry`),
   dismissedCards: () =>

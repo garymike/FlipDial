@@ -149,18 +149,36 @@ def start(s: Settings) -> str:
         tag,
         "-FromApp",
     ]
-    flags = 0
-    if sys.platform == "win32":
-        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
     try:
-        subprocess.Popen(  # noqa: S603  (fixed program and script; tag validated above)
-            args,
-            creationflags=flags,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-        )
+        launch(args)
     except OSError as exc:
         raise UpdateError("launch_failed") from exc
     return tag
+
+
+def running(s: Settings) -> bool:
+    """The updater is at work (it holds run/update.lock while it runs)."""
+    lock = s.data_dir / "run" / "update.lock"
+    try:
+        return time.time() - lock.stat().st_mtime < 15 * 60
+    except OSError:
+        return False
+
+
+def launch(args: list[str]) -> None:
+    """Start the updater in the background, with no window.
+
+    Not DETACHED_PROCESS: Windows PowerShell started that way (no console at all) exits
+    before running anything, which made Update now do nothing. CREATE_NO_WINDOW gives it a
+    hidden console instead. The updater then moves itself out of FlipDial's process tree."""
+    flags = 0
+    if sys.platform == "win32":
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+    subprocess.Popen(  # noqa: S603  (fixed program and script; the tag is checked by start)
+        args,
+        creationflags=flags,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        close_fds=True,
+    )
