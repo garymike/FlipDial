@@ -56,6 +56,11 @@ type = htpasswd
 htpasswd_filename = {dir}/users
 htpasswd_encryption = bcrypt
 delay = 1
+# Checking a bcrypt password takes a noticeable moment, and every request signs in.
+# Remember a correct sign-in for a minute (a changed password takes up to that long to
+# stop working).
+cache_logins = True
+cache_successful_logins_expiry = 60
 
 [rights]
 type = from_file

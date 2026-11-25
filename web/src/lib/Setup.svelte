@@ -51,6 +51,26 @@
     }
   }
 
+  // Removing contacts the server no longer has: asks once more before doing it.
+  let dropAsk = $state(false)
+  async function allowDrop() {
+    if (!dropAsk) {
+      dropAsk = true
+      return
+    }
+    pushing = true
+    try {
+      const r = await api.syncAllowDrop()
+      pushed = `Removed ${r.removed} from FlipDial.`
+      dropAsk = false
+      await run()
+    } catch (e) {
+      error = describe(e)
+    } finally {
+      pushing = false
+    }
+  }
+
   let pushing = $state(false)
   let pushed = $state('')
   async function pushLocal() {
@@ -95,16 +115,22 @@
       {#each status.items as item (item.id)}
         <li class={item.state}>
           <span class="icon" aria-hidden="true">{ICON[item.state]}</span>
-          <div>
-            <strong>{item.label}</strong>
-            <span class="detail">{item.detail}</span>
-            {#if item.fix}<span class="fix">{item.fix}</span>{/if}
-            {#if item.action === 'push_local'}
-              <button type="button" class="secondary act" onclick={pushLocal} disabled={pushing}>
-                {pushing ? 'Copying…' : item.action_label}
-              </button>
-            {/if}
-          </div>
+          <strong>{item.label}</strong>
+          <span class="detail">{item.detail}</span>
+          {#if item.fix || item.action}
+            <div class="more">
+              {#if item.fix}<span class="fix">{item.fix}</span>{/if}
+              {#if item.action === 'push_local'}
+                <button type="button" class="secondary act" onclick={pushLocal} disabled={pushing}>
+                  {pushing ? 'Copying…' : item.action_label}
+                </button>
+              {:else if item.action === 'allow_drop'}
+                <button type="button" class="secondary act" onclick={allowDrop} disabled={pushing}>
+                  {dropAsk ? `Yes, ${item.action_label?.toLowerCase()}` : item.action_label}
+                </button>
+              {/if}
+            </div>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -112,17 +138,14 @@
 
   <section class="updates" aria-label="Updates">
     <h2>Updates</h2>
-    <p class="detail">
-      You have FlipDial {upd?.current ?? '…'}.
-      {#if upd && !upd.enabled}Checking for new versions is turned off (FLIPDIAL_UPDATE_CHECK=false).{/if}
-    </p>
+    <span class="detail">
+      {#if updNote}<span role="status">{updNote}</span>{:else}FlipDial {upd?.current ?? '…'}{#if upd && !upd.enabled}. Checking
+          for new versions is turned off (FLIPDIAL_UPDATE_CHECK=false).{/if}{/if}
+    </span>
     {#if !upd || upd.enabled}
-      <div class="row">
-        <button type="button" class="secondary" onclick={checkNow} disabled={updChecking}>
-          {updChecking ? 'Checking…' : 'Check now'}
-        </button>
-        {#if updNote}<span role="status">{updNote}</span>{/if}
-      </div>
+      <button type="button" class="secondary small" onclick={checkNow} disabled={updChecking}>
+        {updChecking ? 'Checking…' : 'Check now'}
+      </button>
     {/if}
   </section>
 
@@ -133,37 +156,36 @@
 <style>
   .updates {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 12px;
-    padding: 18px 20px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+    padding: 8px 8px 8px 16px;
     border-radius: 12px;
     border: 1px solid #2c2f36;
     background: var(--panel);
   }
   .updates h2 {
     margin: 0;
-    font-size: 16px;
+    font-size: 14px;
   }
   .updates .detail {
-    margin: 0;
+    flex: 1 1 auto;
+    text-align: right;
     color: var(--ash);
-    font-size: 14px;
+    font-size: 13px;
   }
-  .updates .row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 12px;
-    font-size: 14px;
+  .updates button.small {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
   }
   .wrap {
     max-width: 820px;
     margin: 0 auto;
-    padding: 28px 32px 56px;
+    padding: 20px 32px 48px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
   }
   .head {
     display: flex;
@@ -174,7 +196,7 @@
   h1 {
     margin: 0;
     font-family: var(--font-display);
-    font-size: 30px;
+    font-size: 24px;
     font-weight: 600;
   }
   .lead {
@@ -185,7 +207,7 @@
   .summary,
   .error {
     margin: 0;
-    padding: 12px 16px;
+    padding: 8px 14px;
     border-radius: 10px;
     font-size: 14px;
   }
@@ -211,27 +233,42 @@
     background: var(--panel);
   }
   .items li {
-    display: flex;
-    gap: 14px;
-    padding: 14px 18px;
+    /* One line per item: icon, name, and the details to the right in grey. */
+    display: grid;
+    grid-template-columns: 20px auto 1fr;
+    align-items: center;
+    column-gap: 12px;
+    padding: 9px 16px;
     border-bottom: 1px solid #2a2d33;
   }
   .items li:last-child {
     border-bottom: 0;
   }
-  .items li div {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+  .items li strong {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .items li .detail {
+    justify-self: end;
+    text-align: right;
+    color: var(--ash);
+    font-size: 13px;
     min-width: 0;
   }
+  .more {
+    grid-column: 2 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+  }
   .icon {
-    flex: 0 0 26px;
-    height: 26px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: grid;
     place-items: center;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--ink);
   }
@@ -273,6 +310,14 @@
   @media (max-width: 640px) {
     .wrap {
       padding: 20px 16px 40px;
+    }
+    .items li {
+      grid-template-columns: 20px 1fr;
+    }
+    .items li .detail {
+      grid-column: 2;
+      justify-self: start;
+      text-align: left;
     }
   }
 </style>

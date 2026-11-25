@@ -265,3 +265,30 @@ def test_business_card_without_a_person_saves_as_a_company(api, dav_settings, ma
         f"/api/review/{card2}/approve", json=_body(full_name="", organization=""), headers=H
     )
     assert r.status_code == 422
+
+
+def test_sync_holds_back_when_most_contacts_vanish(api, dav_settings, monkeypatch):
+    """A different or emptied address book doesn't empty FlipDial; it asks first."""
+    from flipdial import contacts
+
+    # The test server is shared with other tests, so "most" is measured against them all.
+    monkeypatch.setattr(contacts, "DROP_HOLD_SHARE", 0.0)
+
+    client = CardDAVClient(dav_settings)
+    made = [
+        client.create(new_card(ReviewedContact(full_name=f"Hold Example {i}", has_scan=False)))
+        for i in range(6)
+    ]
+    api.post("/api/sync", headers=H)
+    before = len(api.get("/api/contacts").json()["contacts"])
+    for r in made:
+        client.delete(r.href, None)
+    out = api.post("/api/sync", headers=H).json()
+    assert out["held"] == 6 and out["removed"] == 0
+    assert len(api.get("/api/contacts").json()["contacts"]) == before
+    assert contacts.held_drop(dav_settings) == 6
+    assert any(i["id"] == "sync_held" for i in api.get("/api/status").json()["items"])
+    # Saying yes removes them.
+    out = api.post("/api/sync?allow_drop=true", headers=H).json()
+    assert out["removed"] == 6 and contacts.held_drop(dav_settings) == 0
+    assert len(api.get("/api/contacts").json()["contacts"]) == before - 6

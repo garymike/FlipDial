@@ -147,6 +147,7 @@ def create_phone_account(
     phone_rules.put_setting(settings, NAME_KEY, name)
     if old and old != user and old in contacts_server.users(folder):
         contacts_server.remove_user(folder, old)
+        _forget_sign_ins(folder)
     return {"username": user, "password": password, "book": path, "name": name}
 
 
@@ -157,7 +158,18 @@ def new_password(settings: Settings) -> dict[str, str]:
     user = phone_rules.get_setting(settings, USERNAME_KEY)
     if not user:
         raise SetupError("no_phone_account")
-    return {"username": user, "password": contacts_server.set_password(folder, user)}
+    password = contacts_server.set_password(folder, user)
+    _forget_sign_ins(folder)
+    return {"username": user, "password": password}
+
+
+def _forget_sign_ins(folder: Path) -> None:
+    """The server remembers a correct sign-in for a minute. After a password change or a
+    removed account, restart it so the old password stops working right away."""
+    from flipdial import builtin_server
+
+    if builtin_server.supervisor.folder == folder:
+        builtin_server.supervisor.restart()
 
 
 def forget_book(settings: Settings) -> None:

@@ -349,6 +349,14 @@ class Supervisor:
                 self.proc.stdin.close()
             self.proc = None
 
+    def restart(self) -> None:
+        """Start the server again if it's running (it forgets remembered sign-ins)."""
+        if not self.running() or self.folder is None:
+            return
+        folder, settings = self.folder, self.settings
+        self.stop()
+        self.start(folder, settings)
+
     def _launch(self) -> None:
         assert self.folder is not None  # noqa: S101  (set before the thread starts)
         path = self.folder / "server.log"
@@ -365,6 +373,8 @@ class Supervisor:
         ]
         if self.listening:
             args += ["--server-hosts", self.listening]
+        # Also for servers set up before the settings file had it (see contacts_server).
+        args += ["--auth-cache-logins", "True", "--auth-cache-successful-logins-expiry", "60"]
         self.proc = subprocess.Popen(  # noqa: S603  (fixed arguments)
             args,
             stdin=subprocess.PIPE,  # the server exits when this closes (contacts_child)

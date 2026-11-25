@@ -37,7 +37,10 @@ def server(tmp_path, settings):
     cfg = folder / "config"
     cfg.write_text(cfg.read_text().replace(f"0.0.0.0:{cs.PORT}", f"127.0.0.1:{port}"))
     proc = subprocess.Popen(  # noqa: S603
-        [sys.executable, "-m", "radicale", "--config", str(cfg)], stderr=subprocess.DEVNULL
+        # Without the sign-in cache, so a changed password is refused at once here; the
+        # built-in server is restarted for that instead (test_builtin_server).
+        [sys.executable, "-m", "radicale", "--config", str(cfg), "--no-auth-cache-logins"],
+        stderr=subprocess.DEVNULL,
     )
     ctx = ssl.create_default_context(cafile=str(folder / "ca.pem"))
     base = f"https://localhost:{port}/"

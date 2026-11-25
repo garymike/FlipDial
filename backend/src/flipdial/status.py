@@ -235,6 +235,22 @@ def check(
                     f"Connected to {book.name or 'your address book'}.",
                 )
             )
+            from flipdial.contacts import held_drop
+
+            if held := held_drop(s):
+                items.append(
+                    _item(
+                        "sync_held",
+                        "Contacts missing from the server",
+                        "warn",
+                        f"{held} contacts FlipDial has aren't in {book.name or 'the address book'}"
+                        " any more, so FlipDial kept them instead of removing them.",
+                        "This happens if the address book was emptied or replaced, or FlipDial "
+                        "was pointed at a different one. If you removed them on purpose, remove "
+                        "them here too.",
+                    )
+                    | {"action": "allow_drop", "action_label": f"Remove {held} from FlipDial"}
+                )
             if on_computer:
                 items.append(
                     _item(

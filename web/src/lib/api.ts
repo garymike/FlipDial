@@ -387,7 +387,7 @@ export interface SetupItem {
   state: 'ok' | 'warn' | 'fail'
   detail: string
   fix: string
-  action?: 'push_local'
+  action?: 'push_local' | 'allow_drop'
   action_label?: string
 }
 
@@ -532,6 +532,7 @@ export const api = {
   deleteForever: (uid: string) => call('DELETE', `/api/trash/${encodeURIComponent(uid)}`),
   scans: (uid: string) => call<{ scans: Scan[] }>('GET', `/api/contacts/${encodeURIComponent(uid)}/scans`),
   sync: () => call<Record<string, number>>('POST', '/api/sync'),
+  syncAllowDrop: () => call<Record<string, number>>('POST', '/api/sync?allow_drop=true'),
   review: () => call<{ items: ReviewItem[]; ready: number; from_phone?: number }>('GET', '/api/review'),
   approve: (cardId: string, input: ContactInput) =>
     call<Contact & { uid: string }>('POST', `/api/review/${cardId}/approve`, input),
