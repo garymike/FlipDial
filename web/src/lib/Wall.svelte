@@ -448,10 +448,19 @@
     gap: 28px 24px;
   }
   li {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end; /* cards of other shapes line up at the bottom, names in a row */
-    gap: 10px;
+    /* Each tile takes two rows of the grid: the cards in a row line up at the bottom
+       whatever their shape, and the names below them line up at the top, even when a name
+       takes two lines. */
+    display: grid;
+    grid-row: span 2;
+    grid-template-rows: subgrid;
+    row-gap: 10px;
+  }
+  li > .tile {
+    align-self: end;
+  }
+  li > .foot {
+    align-self: start;
   }
   .tile {
     display: block;
