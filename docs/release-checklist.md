@@ -64,6 +64,26 @@ Run `flipdial eval` against the private test set (kept outside the repository) w
 - [ ] Full export and restore tested on a copy of real data
 - [ ] Fresh install from the docs works on a clean machine, start to first card
 
+## Updating FlipDial
+
+Run on Windows for every release, from the previous release. Make a backup first (Import / export > Full backup).
+
+**From the app**
+- [ ] Install the previous release, then publish the new one. Within a day (or Setup > Updates > Check now) the bar offers it.
+- [ ] Update now: the page says it's updating, FlipDial restarts on its own, and the page reloads on the new version (Setup shows it).
+- [ ] `logs\update.log` shows the signature check passing and the update finishing.
+- [ ] Contacts, scans, stars, phone sync settings and the built-in contacts server are as before. Phones keep syncing without being set up again.
+
+**From the command line**
+- [ ] `update.cmd` from the previous release: same result as above.
+- [ ] `update.cmd` again: "Already up to date".
+- [ ] With a file in the FlipDial folder changed by hand, `update.cmd` refuses and says how to undo it.
+
+**When it goes wrong**
+- [ ] Without internet: Check now says GitHub couldn't be reached; Update now changes nothing.
+- [ ] A release whose signature doesn't match (for example, update to a tag on a fork): refused, nothing changed, FlipDial still running.
+- [ ] Rollback: if the new version doesn't start, the previous one is put back and the page says so.
+
 ## Phone sync on real devices
 
 Run once per release that changes phone sync, and whenever iOS, Android, DAVx5 or Synology has a major update. Use invented test contacts where you can.
@@ -75,7 +95,11 @@ Run once per release that changes phone sync, and whenever iOS, Android, DAVx5 o
 - [ ] Make a FlipDial backup (Import / export > Full backup).
 
 **Setup**
-- [ ] Setup > Phone > Set up phone sync: phone book made (or chosen), phone account made.
+- [ ] Setup > Phone > Set up phone sync. Step 1 explains how it works and asks Android or iPhone/iPad and a name.
+- [ ] Step 2 (own server): the sign-in is named after the phone (`mikes-pixel`), and the page says what the password is for and where to enter it.
+- [ ] The address book shows on the device under the name you gave.
+- [ ] "Make a new password": the device asks for the new one; the old one is refused right away.
+- [ ] Rename (Name, sign-in or address book > new name > Make the sign-in): the old sign-in stops working, the chosen contacts appear in the new address book, and nothing is lost in FlipDial.
 - [ ] Check the account (own server): it opens the phone book and **can't** see the main address book.
 - [ ] Switch on one test deck with 3 to 5 contacts. Sync now: the first sync lists them and waits for confirmation.
 
