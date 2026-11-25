@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **Update now shows its progress:** checking the release signature, installing and
+  restarting, then opening the new version, each ticked off as it finishes, with the time
+  so far.
+
 ## 0.15.1
 
 ### Fixes
