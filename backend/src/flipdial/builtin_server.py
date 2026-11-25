@@ -160,18 +160,21 @@ def _address_of(host: str) -> str:
 
 def _have_address(ip: str) -> bool:
     """This computer has this address on one of its network connections right now (Wi-Fi,
-    Ethernet, a VPN...). Checked by asking to use it, which sends nothing."""
+    Ethernet, a VPN...). Asks the system which of its own addresses it would send from to
+    reach `ip`: for an address of its own, that is the address itself. Nothing is sent."""
     try:
         addr = ipaddress.ip_address(ip)
     except ValueError:
+        return False
+    if addr.is_unspecified or addr.is_multicast:
         return False
     if addr.is_loopback:
         return True
     family = socket.AF_INET6 if addr.version == 6 else socket.AF_INET
     with socket.socket(family, socket.SOCK_DGRAM) as s:
         try:
-            s.bind((ip, 0))
-            return True
+            s.connect((str(addr), 9))  # UDP: connect() only picks a route
+            return ipaddress.ip_address(s.getsockname()[0]) == addr
         except OSError:
             return False
 
