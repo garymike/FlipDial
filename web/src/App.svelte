@@ -80,6 +80,19 @@
     update = null
   }
 
+  // Where the update is, as far as the page can tell: FlipDial answers while the release is
+  // checked, is stopped while it installs and restarts, and answers on the new version after.
+  let stage = $state<'check' | 'install' | 'done'>('check')
+  let updateTo = $state('')
+  let elapsed = $state(0)
+  const STAGES = [
+    { id: 'check', label: 'Checking the release signature' },
+    { id: 'install', label: 'Installing and restarting', note: 'FlipDial is stopped for this part' },
+    { id: 'done', label: 'Opening the new version' },
+  ] as const
+  const stageIndex = $derived(STAGES.findIndex((x) => x.id === stage))
+  const clock = (sec: number) => (sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${sec % 60} s`)
+
   async function updateNow() {
     if (!update) return
     const from = update.current
@@ -91,7 +104,14 @@
       return
     }
     updating = 'running'
+    updateTo = update.release?.tag ?? ''
+    stage = 'check'
     const started = Date.now()
+    elapsed = 0
+    const tick = setInterval(() => {
+      elapsed = Math.round((Date.now() - started) / 1000)
+      if (updating !== 'running' && updating !== 'slow') clearInterval(tick)
+    }, 1000)
     let sawDown = false
     const timer = setInterval(async () => {
       try {
@@ -99,13 +119,15 @@
         const v = (await r.json()).version as string
         if (v !== from) {
           clearInterval(timer)
-          location.reload()
+          stage = 'done'
+          setTimeout(() => location.reload(), 800)
         } else if (sawDown) {
           clearInterval(timer)
           updating = 'rolledback'
         }
       } catch {
-        sawDown = true // restarting
+        sawDown = true // FlipDial is stopped: installing, then starting again
+        stage = 'install'
       }
       // FlipDial never stopped and the updater isn't at work: it didn't get going (its log
       // says why). It can take a while before stopping FlipDial (checking the signature).
@@ -203,8 +225,16 @@
   <div class="updating" role="alertdialog" aria-modal="true" aria-labelledby="updating-title">
     <div class="updating-box">
       {#if updating === 'running' || updating === 'slow'}
-        <h2 id="updating-title">Updating FlipDial…</h2>
-        <p>Checking the release signature, installing, and restarting. This takes a minute or two, and this page reloads by itself.</p>
+        <h2 id="updating-title">Updating FlipDial{updateTo ? ` to ${updateTo.replace(/^v/, '')}` : '…'}</h2>
+        <ol class="stages">
+          {#each STAGES as st, i (st.id)}
+            <li class:done={i < stageIndex || stage === 'done'} class:now={i === stageIndex && stage !== 'done'}>
+              <span class="mark" aria-hidden="true">{i < stageIndex || stage === 'done' ? '✓' : i === stageIndex ? '●' : '○'}</span>
+              {st.label}{#if 'note' in st && i === stageIndex && stage !== 'done'}<small> ({st.note})</small>{/if}
+            </li>
+          {/each}
+        </ol>
+        <p class="elapsed">{clock(elapsed)}. This usually takes a minute or two, and the page reloads by itself.</p>
         {#if updating === 'slow'}<p>This is taking longer than expected. Details are in <code>logs\update.log</code> in your data folder.</p>{/if}
       {:else if updating === 'notstarted'}
         <h2 id="updating-title">The update didn't start</h2>
@@ -362,6 +392,45 @@
   }
   .updating-box p {
     color: #d6d1c9;
+  }
+  .stages {
+    list-style: none;
+    margin: 12px 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--ash);
+  }
+  .stages li.now {
+    color: var(--bone);
+  }
+  .stages li.done {
+    color: #d6d1c9;
+  }
+  .stages .mark {
+    display: inline-block;
+    width: 20px;
+    color: var(--amber);
+  }
+  .stages li.now .mark {
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .stages small {
+    color: var(--ash);
+  }
+  .elapsed {
+    font-size: 13px;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stages li.now .mark {
+      animation: none;
+    }
   }
   .attention {
     margin: 0;
