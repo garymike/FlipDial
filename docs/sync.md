@@ -84,7 +84,7 @@ Each rule has a test.
 3. **Add it to the phone.**
    - iPhone or iPad, by hand (most contained): add a CardDAV account in Settings with the address and user name the wizard shows. If the device can't verify the server's certificate, it asks once; check the name and accept it for that account only. No profile and no certificate authority on the device.
    - iPhone or iPad, quick: **Make the iPhone link** shows a QR code. Scanning it downloads a profile that adds the CardDAV account in one step; the iPhone asks for the password, so the password is never in the file. If the contacts server has its own certificate (FLIPDIAL_CARDDAV_CA_BUNDLE), the profile carries it too. The link works once, expires after 15 minutes, and only a hash of it is stored. The wizard shows when it was opened, so you can tell if anything other than your device opened it. When FlipDial is opened as localhost, the link is served on the home network over plain HTTP (port 5233) for those minutes; the profile holds no password, but on a network you don't fully trust, use the by-hand way instead.
-   - Android: install DAVx5, choose "Login with URL and user name", and copy the address and user name the wizard shows.
+   - Android: install DAVx5 (free from F-Droid, or a small one-time price on Google Play; same open-source app), choose "Login with URL and user name", and copy the address and user name the wizard shows.
 
 The wizard warns when the phone couldn't reach the address: FlipDial opened as localhost, or the contacts server set as localhost. It also warns when the server uses http, since the phone would send its password unencrypted.
 

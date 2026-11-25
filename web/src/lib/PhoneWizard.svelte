@@ -361,7 +361,11 @@
       {/if}
     {:else}
       <ol class="how">
-        <li>Install DAVx5 from Google Play or F-Droid. It's a free, open-source app that adds address books like this one to Android's Contacts.</li>
+        <li>
+          Install <strong>DAVx⁵</strong> (search "DAVx5"). It's an open-source app that adds address books like this one to
+          Android's Contacts. It's free from <a href="https://f-droid.org/packages/at.bitfire.davdroid/" target="_blank" rel="noreferrer">F-Droid</a>,
+          or a small one-time price on Google Play, which supports its developers. Both are the same app.
+        </li>
         <li>Tap +, choose <em>Login with URL and user name</em>, and enter:
           <div class="grid copy">
             <span>Address</span><code>{info.book_url}</code>
