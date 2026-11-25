@@ -67,6 +67,8 @@
     <small aria-live="polite">
       {#if note}<a href={href({ name: 'setup' })}>{note}</a>
       {:else if st.problem || st.pending}<a href={href({ name: 'setup' })}>Needs a look</a>
+      {:else if st.mode === 'manual' && ((st.drift_result?.to_phone ?? 0) + (st.drift_result?.from_phone ?? 0)) > 0}<a
+          href={href({ name: 'setup' })}>Phone is behind</a>
       {:else if st.last_success}Phone synced {ago(st.last_success)}
       {:else}Phone not synced yet{/if}
     </small>

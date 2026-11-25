@@ -42,6 +42,27 @@
     }
   }
 
+  async function setSchedule(mode: 'auto' | 'manual', drift: 'off' | 'daily' | 'weekly') {
+    try {
+      st = await api.phoneSchedule(mode, drift)
+      window.dispatchEvent(new CustomEvent('flipdial:server-changed'))
+    } catch (e) {
+      error = describe(e)
+    }
+  }
+  let checking = $state(false)
+  async function checkDrift() {
+    checking = true
+    try {
+      st = await api.phoneDriftCheck()
+    } catch (e) {
+      error = describe(e)
+    } finally {
+      checking = false
+    }
+  }
+  const behind = $derived((st?.drift_result?.to_phone ?? 0) + (st?.drift_result?.from_phone ?? 0))
+
   async function rule(name: string, state: 'on' | 'off' | 'follow') {
     try {
       st = await api.phoneRule(name, state)
@@ -114,11 +135,46 @@
         <button type="button" class="secondary" onclick={turnOff}>Turn off phone sync</button>
       </div>
     {/if}
+    <div class="when">
+      <span class="label">When to sync</span>
+      <div class="segmented" role="group" aria-label="When to sync">
+        <button type="button" aria-pressed={st.mode !== 'manual'} onclick={() => setSchedule('auto', st?.drift ?? 'weekly')}>On its own</button>
+        <button type="button" aria-pressed={st.mode === 'manual'} onclick={() => setSchedule('manual', st?.drift ?? 'weekly')}>Only when I press Sync now</button>
+      </div>
+      {#if st.mode === 'manual'}
+        <label class="drift">
+          Check whether the phone is behind
+          <select value={st.drift ?? 'weekly'} onchange={(e) => setSchedule('manual', (e.currentTarget as HTMLSelectElement).value as 'off' | 'daily' | 'weekly')}>
+            <option value="weekly">every week</option>
+            <option value="daily">every day</option>
+            <option value="off">never</option>
+          </select>
+        </label>
+      {/if}
+    </div>
     <p class="detail">
       {st.on_phone} on your phone now, {st.wanted} after the next sync. Last synced {when(st.last_success)}.
-      FlipDial looks for changes every {st.check_minutes ?? 5} minutes and does a full check every day after
-      {st.check_hour}:00. Use Sync now (here, or next to Review) when you don't want to wait.
+      {#if st.mode === 'manual'}
+        Nothing is sent until you press Sync now (here, or next to Review).
+      {:else}
+        FlipDial looks for changes every {st.check_minutes ?? 5} minutes and does a full check every day after
+        {st.check_hour}:00. Use Sync now (here, or next to Review) when you don't want to wait.
+      {/if}
     </p>
+    {#if st.mode === 'manual' && st.drift_result}
+      <p class="detail" class:behind={behind > 0}>
+        {#if st.drift_result.problem}
+          Couldn't check the phone ({st.drift_result.problem}).
+        {:else if behind > 0}
+          Your phone is behind: {st.drift_result.to_phone} {st.drift_result.to_phone === 1 ? 'change' : 'changes'} to send{#if st.drift_result.from_phone},
+            {st.drift_result.from_phone} from the phone{/if}. Press Sync now when you're ready.
+        {:else}
+          Your phone is up to date.
+        {/if}
+        <span class="muted">Checked {when(st.drift_result.checked_at)}.</span>
+        <button type="button" class="link" disabled={checking} onclick={checkDrift}>{checking ? 'Checking…' : 'Check now'}</button>
+      </p>
+    {/if}
 
     {#if st.problem}
       <div class="box warn" role="alert">
@@ -284,5 +340,60 @@
   .error {
     color: var(--amber);
     margin: 0;
+  }
+  .when {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    font-size: 14px;
+  }
+  .when .label {
+    color: var(--ash);
+  }
+  .drift select {
+    margin-left: 6px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--graphite);
+    color: var(--bone);
+    font: inherit;
+  }
+  .segmented {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .segmented button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 0;
+    background: transparent;
+    color: var(--ash);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .segmented button[aria-pressed='true'] {
+    background: var(--graphite);
+    color: var(--bone);
+  }
+  .behind {
+    color: var(--amber);
+  }
+  .muted {
+    color: var(--ash);
+  }
+  .link {
+    margin-left: 6px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--amber);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
 </style>
