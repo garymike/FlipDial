@@ -15,11 +15,13 @@ from __future__ import annotations
 import ipaddress
 import logging
 import os
+import re
 import socket
 import subprocess
 import sys
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from pydantic import SecretStr
@@ -237,8 +239,51 @@ def status(settings: Settings) -> dict:
         "port": cs.PORT,
         "suggestions": suggestions(),
         "unused_accounts": unused_accounts(settings),
+        "failed_sign_ins": failed_sign_ins(settings) if is_on(settings) else None,
         "windows": sys.platform == "win32",
         "docker": os.environ.get("FLIPDIAL_INSTALL") == "docker",
+    }
+
+
+_FAILED = re.compile(
+    r"^\[(?P<at>[^\]]+)\].*Failed login attempt from "
+    r"(?P<host>[^:\s]+(?::[^:\s]+)*): '(?P<user>[^']*)'"
+)
+
+
+def failed_sign_ins(settings: Settings, days: int = 7) -> dict:
+    """Failed sign-ins to the built-in server in the last `days` days, from its log: how
+    many, when the last one was, and who tried from where (most first). A device with an
+    old password shows up here too, which is usually the explanation."""
+    d = folder(settings)
+    since = datetime.now(UTC) - timedelta(days=days)
+    seen: dict[tuple[str, str], int] = {}
+    count, last = 0, None
+    for name in ("server.log.1", "server.log"):
+        path = d / name
+        if not path.is_file():
+            continue
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                m = _FAILED.match(line)
+                if not m:
+                    continue
+                try:
+                    at = datetime.strptime(m["at"], "%Y-%m-%d %H:%M:%S %z")
+                except ValueError:
+                    continue
+                if at < since:
+                    continue
+                count += 1
+                last = at if last is None or at > last else last
+                key = (m["host"], m["user"][:64])
+                seen[key] = seen.get(key, 0) + 1
+    tried = sorted(seen.items(), key=lambda kv: -kv[1])[:5]
+    return {
+        "days": days,
+        "count": count,
+        "last_at": last.isoformat() if last else None,
+        "from": [{"host": h, "user": u, "count": n} for (h, u), n in tried],
     }
 
 

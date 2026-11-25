@@ -4,6 +4,11 @@
 
 ### Security
 
+- **Failed sign-ins to the built-in contacts server show in Setup**, with how many in the
+  last 7 days and who tried from where. Usually it's a device with an old password.
+- The README now says plainly that the data folder isn't encrypted by FlipDial, and
+  recommends full-disk encryption.
+
 - The contacts server client only ever talks to the configured server. Addresses come
   from the server's own answers and from names typed in the phone wizard, so this keeps a
   misbehaving server or input from sending FlipDial to another host (code scanning: server-side
