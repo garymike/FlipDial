@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- The contacts server client only ever talks to the configured server. Addresses come
+  from the server's own answers and from names typed in the phone wizard, so this keeps a
+  misbehaving server or input from sending FlipDial to another host (code scanning: server-side
+  request forgery).
+- Phone sync's status updates use fixed SQL statements instead of building one from column
+  names (code scanning: raw query).
+
 ## 0.16.0
 
 ### New

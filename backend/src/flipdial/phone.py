@@ -310,11 +310,24 @@ def _lease(settings: Settings) -> bool:
     return n == 1
 
 
+# One fixed statement per column: no SQL is ever built from names.
+_SET_STATE = {
+    "last_run": "UPDATE phone_state SET last_run = ? WHERE id = 1",
+    "last_success": "UPDATE phone_state SET last_success = ? WHERE id = 1",
+    "master_count": "UPDATE phone_state SET master_count = ? WHERE id = 1",
+    "phone_count": "UPDATE phone_state SET phone_count = ? WHERE id = 1",
+    "problem": "UPDATE phone_state SET problem = ? WHERE id = 1",
+    "pending_json": "UPDATE phone_state SET pending_json = ? WHERE id = 1",
+    "running_until": "UPDATE phone_state SET running_until = ? WHERE id = 1",
+    "last_daily": "UPDATE phone_state SET last_daily = ? WHERE id = 1",
+}
+
+
 def _finish(settings: Settings, **values: Any) -> None:
     values = {"running_until": None, "last_run": _now().isoformat(timespec="seconds"), **values}
-    cols = ", ".join(f"{k} = ?" for k in values)
     with db.session(settings.db_path) as conn:
-        conn.execute(f"UPDATE phone_state SET {cols} WHERE id = 1", tuple(values.values()))  # noqa: S608
+        for column, value in values.items():
+            conn.execute(_SET_STATE[column], (value,))
 
 
 def _backup(settings: Settings, masters: dict[str, VCard]) -> None:

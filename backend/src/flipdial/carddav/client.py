@@ -110,7 +110,13 @@ class CardDAVClient:
     # -- HTTP plumbing --------------------------------------------------------------
 
     def _request(self, method: str, url: str, **kw) -> httpx.Response:
-        origin = urlparse(url)
+        # Only ever the configured contacts server. Addresses also come from the server's
+        # answers (hrefs, principals) and from names typed in the phone wizard, so a
+        # misbehaving server or input can't send FlipDial to another host on the network.
+        origin, home = urlparse(url), urlparse(self.start)
+        if (origin.scheme, origin.netloc) != (home.scheme, home.netloc):
+            raise CardDAVError("outside_server")
+        url = origin._replace(scheme=home.scheme, netloc=home.netloc).geturl()
         for _ in range(MAX_REDIRECTS + 1):
             try:
                 r = self.http.request(method, url, **kw)
