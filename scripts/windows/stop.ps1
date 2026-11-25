@@ -13,7 +13,9 @@ foreach ($r in $running) {
     # /T also stops the Python process that uv started for it.
     # A child can exit on its own while the tree is being stopped; taskkill then reports
     # an error for it even though everything stopped. Check what's left instead.
-    & taskkill.exe /PID $r.Process.Id /T /F 2>$null | Out-Null
+    # Through cmd, so its error text never reaches PowerShell: Windows PowerShell treats a
+    # native program's error output as a failure when errors are set to stop.
+    & cmd.exe /c "taskkill /PID $($r.Process.Id) /T /F >nul 2>&1"
 }
 Remove-Item $PidFile -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
