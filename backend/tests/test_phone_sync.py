@@ -235,3 +235,33 @@ def test_check_pace_follows_book_size(ps):
             [(f"pace-{i}", f"/pace-{i}.vcf") for i in range(6000)],
         )
     assert phone.check_minutes(ps) == 10
+
+
+def test_manual_mode_only_checks_how_far_behind(ps):
+    """Manual: the worker never sends anything; a daily or weekly check says how far the
+    phone is behind, and Sync now still works."""
+    deck = _deck()
+    [uid] = _people(ps, deck, 1)
+    ps.phone_check_hour = 0
+    phone.set_schedule(ps, "manual", "daily")
+    phone_rules.set_choice(ps, uid, "on")
+    assert phone.tick(ps, lambda: None) is None
+    assert _phone_uids(ps) == set()  # nothing sent
+    st = phone.status(ps)
+    assert st["mode"] == "manual" and st["drift_result"]["to_phone"] == 1
+    # Checked today already: not again until tomorrow.
+    first = st["drift_result"]["checked_at"]
+    phone.tick(ps, lambda: None)
+    assert phone.status(ps)["drift_result"]["checked_at"] == first
+    # Sync now: in step, nothing behind.
+    token = _run(ps)["token"]
+    assert _run(ps, confirm=token)["status"] == "done"
+    assert phone.status(ps)["drift_result"]["to_phone"] == 0
+    # Off: no checks at all.
+    phone.set_schedule(ps, "manual", "off")
+    phone_rules.put_setting(ps, phone.DRIFT_RESULT_KEY, "")
+    phone.tick(ps, lambda: None)
+    assert phone.status(ps)["drift_result"] is None
+    # Back to automatic.
+    phone.set_schedule(ps, "auto", "weekly")
+    assert phone.status(ps)["mode"] == "auto"

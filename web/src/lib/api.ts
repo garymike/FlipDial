@@ -141,6 +141,9 @@ export interface PhoneStatus {
   check_hour?: number
   check_minutes?: number // how often changes are looked for
   waiting?: number // in Review: added on the phone, or changed in both places
+  mode?: 'auto' | 'manual' // manual: only when Sync now is pressed
+  drift?: 'off' | 'daily' | 'weekly' // manual mode: how often to check how far behind
+  drift_result?: { checked_at: string; to_phone?: number; from_phone?: number; problem?: string } | null
 }
 
 /** FlipDial's built-in contacts server. */
@@ -508,6 +511,9 @@ export const api = {
   },
   contact: (uid: string) => call<Contact>('GET', `/api/contacts/${encodeURIComponent(uid)}`),
   phone: () => call<PhoneStatus>('GET', '/api/phone'),
+  phoneSchedule: (mode: 'auto' | 'manual', drift: 'off' | 'daily' | 'weekly') =>
+    call<PhoneStatus>('PUT', '/api/phone/schedule', { mode, drift }),
+  phoneDriftCheck: () => call<PhoneStatus>('POST', '/api/phone/drift'),
   phoneRule: (name: string, state: 'on' | 'off' | 'follow') =>
     call<PhoneStatus>('PUT', '/api/phone/rules', { name, state }),
   phoneSync: (body: { confirm?: string; accept_drop?: boolean } = {}) =>

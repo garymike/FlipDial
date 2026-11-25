@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### New
+
+- **Choose when your phone syncs:** on its own (as before), or only when you press Sync
+  now. In manual mode FlipDial can still check every week or every day (or never) whether
+  the phone is behind, and says so in Setup and next to Review ("Phone is behind"), with a
+  Check now button.
+
 ### Fixes
 
 - **FlipDial remembers which address book it keeps your contacts in.** If that address
@@ -10,6 +17,8 @@
 - **Old phone sign-ins can be removed.** Setting a phone up again could leave earlier
   sign-ins on the built-in contacts server. Setup lists them under Contacts server, each
   with a Remove button.
+- Stopping FlipDial on Windows could report a failure when one of its processes had
+  already exited, which could also interrupt an update.
 
 ## 0.14.1
 

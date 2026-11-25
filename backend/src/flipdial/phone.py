@@ -386,6 +386,9 @@ def run(
             problem=None,
             pending_json=None,
         )
+        # Just synced: nothing is behind until something changes again.
+        after = {"checked_at": _now().isoformat(timespec="seconds"), "to_phone": 0, "from_phone": 0}
+        phone_rules.put_setting(settings, DRIFT_RESULT_KEY, json.dumps(after))
         if any(done.values()):
             audit.record(settings, ACTOR, "phone.sync", "", **{k: len(v) for k, v in done.items()})
         log.info("phone sync done", extra={k: len(v) for k, v in done.items()})
@@ -760,6 +763,8 @@ def status(settings: Settings) -> dict[str, Any]:
         "check_hour": settings.phone_check_hour,
         "check_minutes": check_minutes(settings),
         "waiting": waiting_count(settings),
+        **schedule(settings),
+        "drift_result": drift_result(settings),
     }
     return out
 
@@ -790,11 +795,73 @@ def dirty(settings: Settings) -> bool:
     return any(content_hash(phone_card(masters[u])) != copies[u]["hash"] for u in want)
 
 
+MODE_KEY = "phone_mode"  # "auto" (default) or "manual": only when Sync now is pressed
+DRIFT_KEY = "phone_drift"  # manual mode: "weekly" (default), "daily" or "off"
+DRIFT_RESULT_KEY = "phone_drift_result"  # the last check, as JSON
+
+
+def schedule(settings: Settings) -> dict[str, str]:
+    mode = phone_rules.get_setting(settings, MODE_KEY)
+    drift = phone_rules.get_setting(settings, DRIFT_KEY)
+    return {
+        "mode": mode if mode in ("auto", "manual") else "auto",
+        "drift": drift if drift in ("off", "daily", "weekly") else "weekly",
+    }
+
+
+def set_schedule(settings: Settings, mode: str, drift: str) -> None:
+    phone_rules.put_setting(settings, MODE_KEY, mode)
+    phone_rules.put_setting(settings, DRIFT_KEY, drift)
+    if mode == "auto":
+        phone_rules.put_setting(settings, DRIFT_RESULT_KEY, "")
+
+
+def drift_result(settings: Settings) -> dict[str, Any] | None:
+    raw = phone_rules.get_setting(settings, DRIFT_RESULT_KEY)
+    return json.loads(raw) if raw else None
+
+
+def check_drift(settings: Settings) -> dict[str, Any]:
+    """Look at what a sync would do, without doing it: how far the phone is behind."""
+    out: dict[str, Any] = {"checked_at": _now().isoformat(timespec="seconds")}
+    try:
+        p = plan(settings, phone_client(settings))
+        out |= {
+            "to_phone": len(p.add) + len(p.update) + len(p.remove),
+            "from_phone": len(p.pull) + len(p.found) + len(p.gone),
+        }
+    except SyncStopped as stop:
+        out["problem"] = stop.code
+    except CardDAVError as exc:
+        out["problem"] = exc.code
+    phone_rules.put_setting(settings, DRIFT_RESULT_KEY, json.dumps(out))
+    return out
+
+
+def _drift_due(settings: Settings, how: str) -> bool:
+    if how == "off":
+        return False
+    last = drift_result(settings)
+    if not last:
+        return True
+    since = _now() - datetime.fromisoformat(last["checked_at"])
+    return since.days >= (7 if how == "weekly" else 1)
+
+
 def tick(settings: Settings, refresh) -> dict[str, Any] | None:
     """Called by the worker every few minutes (check_minutes). Pushes local changes, and
     once a day (after the check hour) refreshes from the server and checks the phone book.
-    Waiting confirmations and stopped syncs are retried only on the daily check."""
+    Waiting confirmations and stopped syncs are retried only on the daily check.
+
+    In manual mode nothing is sent until Sync now; FlipDial only checks, daily or weekly
+    (or never), how far the phone is behind, and says so."""
     if not phone_rules.enabled(settings):
+        return None
+    when = schedule(settings)
+    if when["mode"] == "manual":
+        if datetime.now().hour >= settings.phone_check_hour and _drift_due(settings, when["drift"]):
+            refresh()
+            check_drift(settings)
         return None
     state = _state(settings)
     now = datetime.now()  # server local time, for the daily hour

@@ -346,6 +346,32 @@ def phone_status(s: SettingsDep) -> dict:
     return phone.status(s)
 
 
+class PhoneScheduleIn(BaseModel):
+    mode: Literal["auto", "manual"]
+    drift: Literal["off", "daily", "weekly"] = "weekly"
+
+
+@router.put("/phone/schedule")
+def phone_schedule(body: PhoneScheduleIn, s: SettingsDep, actor: ActorDep) -> dict:
+    """Sync on its own, or only when Sync now is pressed (with an optional check, daily or
+    weekly, that says when the phone is behind)."""
+    if not phone_rules.enabled(s):
+        raise HTTPException(409, "phone_sync_off")
+    phone.set_schedule(s, body.mode, body.drift)
+    audit.record(s, actor, "phone.schedule", body.mode, drift=body.drift)
+    return phone.status(s)
+
+
+@router.post("/phone/drift")
+def phone_drift(s: SettingsDep, client: ClientDep) -> dict:
+    """Check now how far the phone is behind, without syncing."""
+    if not phone_rules.enabled(s):
+        raise HTTPException(409, "phone_sync_off")
+    contacts.sync(s, client)
+    phone.check_drift(s)
+    return phone.status(s)
+
+
 @router.put("/phone/rules")
 def phone_rule(body: PhoneRuleIn, s: SettingsDep, actor: ActorDep) -> dict:
     """Change a tag's or deck's rule, or the Everything switch. Nothing is sent to the phone
