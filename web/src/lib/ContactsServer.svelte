@@ -120,12 +120,22 @@
         {busy ? 'Setting it up…' : 'Turn on the built-in contacts server'}
       </button>
     {:else}
-      <p class="detail">
-        {#if st.running}✓ Running. Phones reach it at <strong>https://{st.host}:{st.port}</strong>.
-        {:else}Starting…{/if}
-        {#if st.problem}<span class="warn">{PROBLEMS[st.problem] ?? st.problem}</span>{/if}
-      </p>
-      <p class="hint">Next: set up your phone under Phone below.</p>
+      <div class="split">
+        <div class="text">
+          <p class="detail">
+            {#if st.running}✓ Running. Phones reach it at <strong>https://{st.host}:{st.port}</strong>.
+            {:else}Starting…{/if}
+            {#if st.problem}<span class="warn">{PROBLEMS[st.problem] ?? st.problem}</span>{/if}
+          </p>
+          <p class="hint">Next: set up your phone under Phone below.</p>
+        </div>
+        {#if !changing && !confirmOff}
+          <div class="stack">
+            <button type="button" class="secondary" onclick={() => (changing = true)}>Change the address</button>
+            <button type="button" class="secondary" onclick={() => (confirmOff = true)}>Turn off</button>
+          </div>
+        {/if}
+      </div>
 
       {#if changing}
         <fieldset>
@@ -151,11 +161,6 @@
         <div class="row">
           <button type="button" class="secondary" disabled={busy} onclick={() => run(() => api.builtinServerOff())}>Turn it off</button>
           <button type="button" class="secondary" onclick={() => (confirmOff = false)}>Keep it on</button>
-        </div>
-      {:else}
-        <div class="row">
-          <button type="button" class="secondary" onclick={() => (changing = true)}>Change the address</button>
-          <button type="button" class="secondary" onclick={() => (confirmOff = true)}>Turn off</button>
         </div>
       {/if}
     {/if}
@@ -249,6 +254,33 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+  }
+  .split {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .split .text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 300px;
+  }
+  .split .text p {
+    margin: 0;
+  }
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .stack button {
+    min-height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
   }
   .primary,
   .secondary {

@@ -439,7 +439,25 @@ export function setUrls(next: typeof urls): void {
   Object.assign(urls, next)
 }
 
+// Saves still on their way. A read waits for them first, so switching views right after a
+// change (star in Dial, then open Wall) never shows the state from before it.
+const writing = new Set<Promise<unknown>>()
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (method === 'GET') {
+    if (writing.size) await Promise.allSettled([...writing])
+    return send<T>(method, path, body)
+  }
+  const p = send<T>(method, path, body)
+  writing.add(p)
+  try {
+    return await p
+  } finally {
+    writing.delete(p)
+  }
+}
+
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
   if (DEMO) return (await (await import('./demo')).handle(method, path, body)) as T
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (method !== 'GET') headers['X-FlipDial-Request'] = '1'
