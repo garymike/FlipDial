@@ -236,9 +236,29 @@ def status(settings: Settings) -> dict:
         "host": phone_rules.get_setting(settings, HOST_KEY),
         "port": cs.PORT,
         "suggestions": suggestions(),
+        "unused_accounts": unused_accounts(settings),
         "windows": sys.platform == "win32",
         "docker": os.environ.get("FLIPDIAL_INSTALL") == "docker",
     }
+
+
+def unused_accounts(settings: Settings) -> list[str]:
+    """Sign-ins on the built-in server that no phone setup uses now (left over from setting
+    up a phone again, or made by hand). FlipDial's own and the current phone's are kept."""
+    from flipdial.phone_setup import USERNAME_KEY
+
+    d = folder(settings)
+    current = phone_rules.get_setting(settings, USERNAME_KEY)
+    return [u for u in cs.users(d) if u not in (cs.FLIPDIAL_USER, current)]
+
+
+def remove_account(settings: Settings, username: str) -> None:
+    """Remove an unused sign-in and the copies in its address books."""
+    if username not in unused_accounts(settings):
+        raise cs.ServerSetupError("not_an_unused_account")
+    cs.remove_user(folder(settings), username)
+    if supervisor.folder == folder(settings):
+        supervisor.restart()  # it remembers sign-ins for a minute
 
 
 # -- the server process ----------------------------------------------------------------

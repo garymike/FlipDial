@@ -153,6 +153,7 @@ export interface BuiltinServer {
   host: string
   port: number
   suggestions: { host: string; note: string }[]
+  unused_accounts?: string[]
   windows: boolean
   docker: boolean
 }
@@ -387,7 +388,7 @@ export interface SetupItem {
   state: 'ok' | 'warn' | 'fail'
   detail: string
   fix: string
-  action?: 'push_local' | 'allow_drop'
+  action?: 'push_local' | 'allow_drop' | 'repick_book'
   action_label?: string
 }
 
@@ -514,6 +515,8 @@ export const api = {
   builtinServer: () => call<BuiltinServer>('GET', '/api/contacts-server'),
   builtinServerOn: (host: string) => call<BuiltinServer>('POST', '/api/contacts-server/on', { host }),
   builtinServerOff: () => call<BuiltinServer>('POST', '/api/contacts-server/off'),
+  removeServerAccount: (name: string) =>
+    call<BuiltinServer>('DELETE', `/api/contacts-server/accounts/${encodeURIComponent(name)}`),
   phoneSetup: () => call<PhoneSetupInfo>('GET', '/api/phone/setup'),
   phoneSetupBook: (name: string, create: boolean) =>
     call<PhoneSetupInfo>('POST', '/api/phone/setup/book', { name, create }),
@@ -552,6 +555,7 @@ export const api = {
   deleteForever: (uid: string) => call('DELETE', `/api/trash/${encodeURIComponent(uid)}`),
   scans: (uid: string) => call<{ scans: Scan[] }>('GET', `/api/contacts/${encodeURIComponent(uid)}/scans`),
   sync: () => call<Record<string, number>>('POST', '/api/sync'),
+  repickMainBook: () => call<{ ok: boolean }>('POST', '/api/contacts/main-book/repick'),
   syncAllowDrop: () => call<Record<string, number>>('POST', '/api/sync?allow_drop=true'),
   review: () => call<{ items: ReviewItem[]; ready: number; from_phone?: number }>('GET', '/api/review'),
   approve: (cardId: string, input: ContactInput) =>
@@ -690,6 +694,7 @@ export function describe(err: unknown): string {
     address_book_not_found: "The address book in your settings wasn't found on the contacts server.",
     phone_book_is_main_book: "That's your main address book. The phone needs a separate one.",
     no_address_book: 'No address book was found on the contacts server.',
+    main_book_missing: "The address book FlipDial keeps your contacts in isn't on the contacts server any more. See Setup.",
     put_failed: "The contacts server didn't accept the change. Try again in a moment.",
     get_failed: "The contacts server didn't return the contact. Try again in a moment.",
     delete_failed: "The contacts server didn't delete the contact. Try again in a moment.",

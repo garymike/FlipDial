@@ -80,6 +80,8 @@ class CardDAVClient:
         if settings.carddav_ca_bundle:
             verify = ssl.create_default_context(cafile=str(settings.carddav_ca_bundle))
         self.start = settings.carddav_url
+        self.settings: Settings | None = settings
+        self.book_given = bool(book)
         self.wanted = book or settings.carddav_addressbook
         # On FlipDial's own contacts server, its address book is made on first use.
         self.make_missing = not book and bool(settings.radicale_dir)
@@ -161,6 +163,15 @@ class CardDAVClient:
             self._book = found[0]
             return self._book
         books = self._find_books()
+        pinned = "" if self.wanted else self._pinned()
+        if pinned:
+            # FlipDial's main book was chosen before: use that one or none, never quietly
+            # another (an empty or different book would look like every contact was gone).
+            same = [b for b in books if urlparse(b.url).path == urlparse(pinned).path]
+            if not same:
+                raise CardDAVError("main_book_missing")
+            self._book = same[0]
+            return self._book
         if not books and self.make_missing and not self.wanted:
             books = [self.create_book("Contacts")]
         if not books:
@@ -178,7 +189,33 @@ class CardDAVClient:
             if not books:
                 raise CardDAVError("no_address_book")
         self._book = books[0]
+        if not self.wanted:
+            self._pin(self._book.url)
         return self._book
+
+    # Which address book is FlipDial's main one, per server, once it has been chosen.
+    def _pin_key(self) -> str:
+        return "main_book:" + urlparse(self.start).netloc
+
+    def _pinned(self) -> str:
+        if self.settings is None or self.book_given:
+            return ""
+        from flipdial.phone_rules import get_setting
+
+        try:
+            return get_setting(self.settings, self._pin_key())
+        except Exception:  # noqa: BLE001  (no database yet: nothing pinned)
+            return ""
+
+    def _pin(self, url: str) -> None:
+        if self.settings is None or self.book_given:
+            return
+        from flipdial.phone_rules import put_setting
+
+        try:
+            put_setting(self.settings, self._pin_key(), url)
+        except Exception:  # noqa: BLE001,S110  (no database yet: chosen again next time)
+            pass
 
     def books(self) -> list[AddressBook]:
         """Every address book this account can see."""

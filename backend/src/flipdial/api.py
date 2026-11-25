@@ -414,6 +414,17 @@ def builtin_on(body: BuiltinOnIn, s: SettingsDep, actor: ActorDep) -> dict:
     return out
 
 
+@router.delete("/contacts-server/accounts/{username}")
+def builtin_remove_account(username: str, s: SettingsDep, actor: ActorDep) -> dict:
+    """Remove a sign-in no phone setup uses any more."""
+    try:
+        builtin_server.remove_account(s, username)
+    except contacts_server.ServerSetupError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    audit.record(s, actor, "contacts_server.remove_account", username)
+    return builtin_server.status(s)
+
+
 @router.post("/contacts-server/off")
 def builtin_off(s: SettingsDep, actor: ActorDep) -> dict:
     builtin_server.turn_off(s)
@@ -705,6 +716,18 @@ def push_local(s: SettingsDep, actor: ActorDep) -> dict:
         raise _dav_errors(exc) from exc
     audit.record(s, actor, "contacts.copy_to_server", **counts)
     return counts
+
+
+@router.post("/contacts/main-book/repick")
+def repick_main_book(s: SettingsDep, actor: ActorDep) -> dict:
+    """Forget which address book is FlipDial's main one, so it's chosen again."""
+    from urllib.parse import urlparse
+
+    if not s.carddav_url:
+        raise HTTPException(409, "carddav_not_configured")
+    phone_rules.put_setting(s, "main_book:" + urlparse(s.carddav_url).netloc, "")
+    audit.record(s, actor, "contacts.repick_main_book")
+    return {"ok": True}
 
 
 @router.post("/sync")
