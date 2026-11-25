@@ -90,6 +90,11 @@ class CardDAVClient:
         if not book and self.avoid and self.wanted == self.avoid:
             raise CardDAVError("phone_book_is_main_book")
         self.version = settings.vcard_version
+        if transport is None and urlparse(self.start).hostname == "localhost":
+            # FlipDial's own server listens on 127.0.0.1. "localhost" also means ::1, and
+            # Windows waits about two seconds on a refused ::1 before trying 127.0.0.1, on
+            # every new connection. Connecting over IPv4 only skips that wait.
+            transport = httpx.HTTPTransport(verify=verify, local_address="0.0.0.0")  # noqa: S104
         self.http = httpx.Client(
             auth=auth,
             verify=verify,

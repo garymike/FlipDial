@@ -222,3 +222,15 @@ def test_turning_on_moves_contacts_saved_on_this_computer(builtin):
     names = {c["full_name"] for c in api.get("/api/contacts").json()["contacts"]}
     assert {"Lou Example", "Mo Example"} <= names
     assert local_count(s) == 0  # the folder is kept, renamed, as a backup
+
+
+def test_own_server_is_reached_over_ipv4(builtin):
+    """Windows waits ~2 s on a refused ::1 before trying 127.0.0.1, per connection."""
+    s = builtin
+    builtin_server.turn_on(s, HOME)
+    c = CardDAVClient(s)
+    assert c.http._transport._pool._local_address == "0.0.0.0"  # noqa: S104
+    _wait_up(s)
+    t = time.monotonic()
+    CardDAVClient(s).address_book()
+    assert time.monotonic() - t < 1.5

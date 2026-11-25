@@ -20,6 +20,10 @@
   copy them), so FlipDial looked empty. Now they're copied as the server starts.
 - **FlipDial no longer empties itself** if the contacts server suddenly lacks most of its
   contacts (an emptied or different address book). It keeps them and asks in Setup.
+- **Faster on Windows with the built-in contacts server:** FlipDial reached it as
+  "localhost", and Windows tries the IPv6 address first and waits about two seconds before
+  falling back, on every connection. It now connects over IPv4 directly. This was most of
+  the delay after an edit.
 - **Stars are instant** and quick clicks end on what you chose. Saving to the built-in
   contacts server took over a second, because every request checked the password from
   scratch; it now remembers a correct sign-in for a minute. A new phone password still
