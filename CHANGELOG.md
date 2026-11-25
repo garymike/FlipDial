@@ -10,8 +10,20 @@
   `phone2`). It says what the password is for and where you'll enter it, and you can make
   a new password any time. Renaming replaces the old sign-in and its address book.
 
+- **Setup is compact:** each check is one line, with its details to the right in grey.
+  Updates is one line too.
+
 ### Fixes
 
+- **Turning on the built-in contacts server moves your contacts onto it.** Contacts saved
+  on this computer before there was a server used to stay behind (with a button in Setup to
+  copy them), so FlipDial looked empty. Now they're copied as the server starts.
+- **FlipDial no longer empties itself** if the contacts server suddenly lacks most of its
+  contacts (an emptied or different address book). It keeps them and asks in Setup.
+- **Stars are instant** and quick clicks end on what you chose. Saving to the built-in
+  contacts server took over a second, because every request checked the password from
+  scratch; it now remembers a correct sign-in for a minute. A new phone password still
+  works only from the moment it's made. The Starred count updates right away.
 - The built-in contacts server keeps working for FlipDial when this computer isn't on the
   home network, or its address changed. Before, it stopped completely, so edits like
   starring a contact failed. Now it answers on this computer only until the home address

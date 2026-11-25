@@ -70,8 +70,12 @@
   const matchCount = $derived(countMatches(query, cards))
 
   function changed(c: Contact) {
-    const i = cards.findIndex((x) => x.uid === c.uid)
-    if (i >= 0 && data) data.contacts[i] = c
+    if (!data) return
+    // By uid in the full list: `cards` can be in a different order or filtered.
+    const i = data.contacts.findIndex((x) => x.uid === c.uid)
+    if (i < 0) return
+    if (data.contacts[i].starred !== c.starred) data.starred += c.starred ? 1 : -1
+    data.contacts[i] = c
   }
   async function forgotten() {
     await load()

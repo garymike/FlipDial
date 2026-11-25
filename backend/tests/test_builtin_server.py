@@ -58,6 +58,26 @@ def test_one_button_turns_it_on(builtin):
     # The phone wizard can make the phone's account straight away.
     out = phone_setup.create_phone_account(s, CardDAVClient(s))
     assert out["username"] == "my-phone"
+    # A new password works, and the old one stops working at once even though the server
+    # remembers sign-ins for a minute.
+    import httpx
+
+    url = f"https://127.0.0.1:{cs.PORT}/my-phone/contacts/"
+    ca = str(folder / "ca.pem")
+    assert (
+        httpx.request("PROPFIND", url, auth=("my-phone", out["password"]), verify=ca).status_code
+        == 207
+    )
+    again = phone_setup.new_password(s)
+    _wait_up(s)
+    assert (
+        httpx.request("PROPFIND", url, auth=("my-phone", out["password"]), verify=ca).status_code
+        == 401
+    )
+    assert (
+        httpx.request("PROPFIND", url, auth=("my-phone", again["password"]), verify=ca).status_code
+        == 207
+    )
 
     # The certificate authority can only vouch for this server's names.
     ca = x509.load_pem_x509_certificate((folder / "ca.pem").read_bytes())
@@ -183,3 +203,22 @@ def test_server_stops_when_flipdial_is_killed(builtin, tmp_path):
     else:
         os.kill(child, signal.SIGTERM)
         pytest.fail("the contacts server kept running after FlipDial was killed")
+
+
+def test_turning_on_moves_contacts_saved_on_this_computer(builtin):
+    """Contacts kept on this computer before there was a server go onto it, so FlipDial
+    doesn't look empty after switching the server on."""
+    from flipdial.carddav.contact import ReviewedContact, new_card
+    from flipdial.carddav.local import LocalAddressBook, local_count
+
+    s = builtin
+    book = LocalAddressBook(s)
+    for n in ("Lou Example", "Mo Example"):
+        book.create(new_card(ReviewedContact(full_name=n, has_scan=False)))
+    assert local_count(s) == 2
+    api = TestClient(create_app(s, lambda: CardDAVClient(s)))
+    out = api.post("/api/contacts-server/on", json={"host": HOME}, headers=H).json()
+    assert out["copied"]["copied"] == 2
+    names = {c["full_name"] for c in api.get("/api/contacts").json()["contacts"]}
+    assert {"Lou Example", "Mo Example"} <= names
+    assert local_count(s) == 0  # the folder is kept, renamed, as a backup

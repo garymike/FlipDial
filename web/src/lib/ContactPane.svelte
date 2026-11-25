@@ -240,13 +240,40 @@
     }
   }
 
+  // Shown at once; quick clicks only change what to save next (see Wall).
+  let starWanted: boolean | null = null
   async function toggleStar() {
     if (!contact) return
+    const next = !contact.starred
+    contact = { ...contact, starred: next }
+    onchange?.(contact)
+    const running = starWanted !== null
+    starWanted = next
+    if (running) return
+    let sent: boolean | null = null
+    const uid = contact.uid
     try {
-      contact = await api.update(contact.uid, { starred: !contact.starred })
-      onchange?.(contact)
+      while (starWanted !== sent) {
+        sent = starWanted
+        const saved = await api.update(uid, { starred: sent as boolean })
+        if (starWanted === sent && contact?.uid === uid) {
+          contact = saved
+          onchange?.(saved)
+        }
+      }
     } catch (e) {
       error = describe(e)
+      try {
+        const fresh = await api.contact(uid) // show what is really saved
+        if (contact?.uid === uid) {
+          contact = fresh
+          onchange?.(fresh)
+        }
+      } catch {
+        /* the error above says enough */
+      }
+    } finally {
+      starWanted = null
     }
   }
 

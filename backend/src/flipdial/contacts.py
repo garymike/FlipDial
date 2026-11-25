@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -134,8 +135,26 @@ def store(settings: Settings, card: VCard, href: str, etag: str | None) -> None:
         )
 
 
-def sync(settings: Settings, client: CardDAVClient) -> dict[str, int]:
-    """Bring the local copy in line with the server. Returns counts only."""
+DROP_HOLD_MIN = 5  # removing at least this many...
+DROP_HOLD_SHARE = 0.5  # ...and more than this share of all contacts at once needs a yes
+
+
+def held_drop(settings: Settings) -> int:
+    """How many contacts the last sync held back instead of removing (0 if none)."""
+    from flipdial import phone_rules
+
+    v = phone_rules.get_setting(settings, "sync_held")
+    return int(v) if v.isdigit() else 0
+
+
+def sync(settings: Settings, client: CardDAVClient, allow_drop: bool = False) -> dict[str, int]:
+    """Bring the local copy in line with the server. Returns counts only.
+
+    If the server suddenly lacks most contacts (a different or empty address book, a server
+    just switched on), FlipDial keeps its copies and asks first (Setup), instead of
+    emptying itself."""
+    from flipdial import phone_rules
+
     remotes = {r.href: r.etag for r in client.list()}
     with db.session(settings.db_path) as conn:
         local = {r["href"]: r["etag"] for r in conn.execute("SELECT href, etag FROM contacts")}
@@ -157,9 +176,20 @@ def sync(settings: Settings, client: CardDAVClient) -> dict[str, int]:
         else:
             added += 1
     gone = [h for h in local if h not in remotes]
+    held = 0
+    if not allow_drop and len(gone) >= DROP_HOLD_MIN and len(gone) > DROP_HOLD_SHARE * len(local):
+        held, gone = len(gone), []
+        log.warning("contacts sync held back removals", extra={"n_held": held})
+    phone_rules.put_setting(settings, "sync_held", str(held) if held else "")
     with db.session(settings.db_path) as conn:
         conn.executemany("DELETE FROM contacts WHERE href = ?", [(h,) for h in gone])
-    counts = {"added": added, "updated": updated, "removed": len(gone), "skipped": skipped}
+    counts = {
+        "added": added,
+        "updated": updated,
+        "removed": len(gone),
+        "skipped": skipped,
+        "held": held,
+    }
     log.info("contacts synced", extra=counts)
     return counts
 
@@ -296,10 +326,28 @@ NAME_KEYS = {"given_name", "middle_name", "family_name", "prefix", "suffix"}
 KEEP_IF_SAME = NAME_KEYS | {"nickname", "department", "birthday"}
 
 
+_edit_locks: dict[str, threading.Lock] = {}
+_edit_locks_guard = threading.Lock()
+
+
+def _edit_lock(uid: str) -> threading.Lock:
+    with _edit_locks_guard:
+        return _edit_locks.setdefault(uid, threading.Lock())
+
+
 def update_contact(
     settings: Settings, client: CardDAVClient, uid: str, changes: dict[str, Any]
 ) -> ContactView:
-    """Apply changes and write them back using the cached ETag (refuses if changed elsewhere)."""
+    """Apply changes and write them back using the cached ETag (refuses if changed elsewhere).
+    Edits to one contact from this FlipDial run one after another, so quick clicks (star,
+    unstar) don't trip over each other's ETag."""
+    with _edit_lock(uid):
+        return _update_contact(settings, client, uid, changes)
+
+
+def _update_contact(
+    settings: Settings, client: CardDAVClient, uid: str, changes: dict[str, Any]
+) -> ContactView:
     found = get_contact(settings, uid)
     if found is None:
         raise KeyError(uid)

@@ -161,7 +161,17 @@ def main(argv: list[str] | None = None) -> None:
                     sys.exit(f"No contacts server in {folder}. Run: flipdial contacts-server init")
                 sys.exit(
                     subprocess.call(  # noqa: S603  (fixed arguments)
-                        [sys.executable, "-m", "radicale", "--config", str(folder / "config")]
+                        [
+                            sys.executable,
+                            "-m",
+                            "radicale",
+                            "--config",
+                            str(folder / "config"),
+                            "--auth-cache-logins",
+                            "True",
+                            "--auth-cache-successful-logins-expiry",
+                            "60",
+                        ]
                     )
                 )
         except cs.ServerSetupError as exc:

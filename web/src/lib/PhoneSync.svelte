@@ -187,8 +187,8 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-top: 12px;
-    padding: 18px 20px;
+    margin-top: 0;
+    padding: 14px 16px;
     border-radius: 12px;
     border: 1px solid #2c2f36;
     background: var(--panel);

@@ -60,15 +60,28 @@
     }
   }
 
+  // While a star is being saved, more clicks only change what to save next, so quick clicks
+  // end in the state you last chose instead of racing each other.
+  const starWanted = new Map<string, boolean>()
   async function toggleStar(c: Contact) {
     const next = !c.starred
     c.starred = next
+    if (data) data.starred += next ? 1 : -1
+    const running = starWanted.has(c.uid)
+    starWanted.set(c.uid, next)
+    if (running) return
+    let sent: boolean | undefined
     try {
-      await api.update(c.uid, { starred: next })
-      if (starredOnly && !next) await load()
+      while (starWanted.get(c.uid) !== sent) {
+        sent = starWanted.get(c.uid)
+        await api.update(c.uid, { starred: sent })
+      }
+      if (starredOnly && !sent) await load()
     } catch (e) {
-      c.starred = !next
       error = describe(e)
+      await load() // show what is really saved
+    } finally {
+      starWanted.delete(c.uid)
     }
   }
 
@@ -104,7 +117,9 @@
   function changed(c: Contact) {
     if (!data) return
     const i = data.contacts.findIndex((x) => x.uid === c.uid)
-    if (i >= 0) data.contacts[i] = c
+    if (i < 0) return
+    if (data.contacts[i].starred !== c.starred) data.starred += c.starred ? 1 : -1
+    data.contacts[i] = c
   }
 
   async function forgotten(uid: string) {

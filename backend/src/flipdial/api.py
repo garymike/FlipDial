@@ -392,7 +392,26 @@ def builtin_on(body: BuiltinOnIn, s: SettingsDep, actor: ActorDep) -> dict:
     except contacts_server.ServerSetupError as exc:
         raise HTTPException(409, str(exc)) from exc
     audit.record(s, actor, "contacts_server.on", body.host)
-    return builtin_server.status(s)
+    out = builtin_server.status(s)
+    # Contacts saved on this computer before there was a server move onto it now, so
+    # FlipDial doesn't look empty after switching it on.
+    from flipdial.carddav.local import local_count, push_to_server
+
+    if local_count(s):
+        server = CardDAVClient(s)
+        for _ in range(40):
+            try:
+                server.address_book()
+                break
+            except CardDAVError:
+                time.sleep(0.5)
+        try:
+            out["copied"] = push_to_server(s, server)
+            contacts.sync(s, server)
+            audit.record(s, actor, "contacts.copy_to_server", **out["copied"])
+        except CardDAVError as exc:
+            out["copy_error"] = exc.code
+    return out
 
 
 @router.post("/contacts-server/off")
@@ -689,9 +708,11 @@ def push_local(s: SettingsDep, actor: ActorDep) -> dict:
 
 
 @router.post("/sync")
-def sync(s: SettingsDep, client: ClientDep, actor: ActorDep) -> dict:
+def sync(s: SettingsDep, client: ClientDep, actor: ActorDep, allow_drop: bool = False) -> dict:
+    """Read the contacts server again. `allow_drop`: yes, remove the contacts the server no
+    longer has, even though it's most of them (see contacts.sync)."""
     try:
-        counts = contacts.sync(s, client)
+        counts = contacts.sync(s, client, allow_drop=allow_drop)
         audit.record(s, actor, "contacts.sync", **counts)
         return counts
     except CardDAVError as exc:

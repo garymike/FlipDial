@@ -72,3 +72,5 @@ Reviewed for v1 (milestones 0 to 8, November 2026). Review again whenever a mile
 ## Out of scope for v1
 
 Multi-user permissions, hostile administrators, a compromised host OS.
+
+**Built-in contacts server sign-in cache.** Passwords are bcrypt hashes, which take a moment to check, and every CardDAV request signs in. The server remembers a correct sign-in for 60 seconds (in memory only). FlipDial restarts the server when it changes a phone's password or removes a phone account, so an old password stops working at once. The separately run server (`contacts-server run`) has the same cache; restart it after changing a password there.
