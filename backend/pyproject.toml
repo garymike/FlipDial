@@ -1,6 +1,6 @@
 [project]
 name = "flipdial"
-version = "0.15.1"
+version = "0.16.0"
 description = "Self-hosted, visual contact manager for the business cards you collect"
 license = "MIT"
 requires-python = ">=3.12"
