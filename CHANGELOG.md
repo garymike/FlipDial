@@ -9,8 +9,8 @@
   waited forever. It now starts with a hidden console; a check on Windows in CI makes sure
   it really runs. The updater also writes `logs\update.log` from its very first step.
 - If an update doesn't start, the page now says so (with where to look) instead of waiting.
-- The check for whether this computer has its home network address no longer opens a
-  socket to do it.
+- The check for whether this computer has its home network address no longer binds a
+  network socket (flagged by code scanning); it asks the system which address it would use.
 
 ## 0.14.0
 
