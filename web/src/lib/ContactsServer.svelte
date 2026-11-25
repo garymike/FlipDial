@@ -9,6 +9,7 @@
   let error = $state('')
   let confirmOff = $state(false)
   let changing = $state(false)
+  let removing = $state('')
 
   async function load() {
     try {
@@ -32,6 +33,7 @@
       error = ''
       confirmOff = false
       changing = false
+      removing = ''
       window.dispatchEvent(new CustomEvent('flipdial:server-changed'))
     } catch (e) {
       error = describe(e)
@@ -128,6 +130,22 @@
             {#if st.problem}<span class="warn">{PROBLEMS[st.problem] ?? st.problem}</span>{/if}
           </p>
           <p class="hint">Next: set up your phone under Phone below.</p>
+          {#if st.unused_accounts?.length}
+            <p class="hint">
+              Sign-ins no phone uses now (from setting a phone up again):
+              {#each st.unused_accounts as name (name)}
+                <span class="unused">
+                  <code>{name}</code>
+                  {#if removing === name}
+                    <button type="button" class="link" disabled={busy} onclick={() => run(() => api.removeServerAccount(name))}>Yes, remove</button>
+                    <button type="button" class="link" onclick={() => (removing = '')}>Keep</button>
+                  {:else}
+                    <button type="button" class="link" onclick={() => (removing = name)}>Remove</button>
+                  {/if}
+                </span>
+              {/each}
+            </p>
+          {/if}
         </div>
         {#if !changing && !confirmOff}
           <div class="stack">
@@ -254,6 +272,20 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+  }
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--amber);
+    font: inherit;
+    cursor: pointer;
+  }
+  .unused {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
   }
   .split {
     display: flex;

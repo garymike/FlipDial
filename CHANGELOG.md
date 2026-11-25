@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **FlipDial remembers which address book it keeps your contacts in.** If that address
+  book disappears, it says so in Setup instead of quietly using another one (which would
+  look like every contact was gone). Setup can let it pick again when that's what you want.
+- **Old phone sign-ins can be removed.** Setting a phone up again could leave earlier
+  sign-ins on the built-in contacts server. Setup lists them under Contacts server, each
+  with a Remove button.
+
 ## 0.14.1
 
 ### Fixes

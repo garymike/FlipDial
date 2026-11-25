@@ -71,6 +71,20 @@
     }
   }
 
+  async function repick() {
+    pushing = true
+    try {
+      await api.repickMainBook()
+      const r = await api.sync()
+      pushed = `FlipDial picked its address book again and found ${r.added ?? 0} new contacts.`
+      await run()
+    } catch (e) {
+      error = describe(e)
+    } finally {
+      pushing = false
+    }
+  }
+
   let pushing = $state(false)
   let pushed = $state('')
   async function pushLocal() {
@@ -124,6 +138,8 @@
                 <button type="button" class="secondary act" onclick={pushLocal} disabled={pushing}>
                   {pushing ? 'Copying…' : item.action_label}
                 </button>
+              {:else if item.action === 'repick_book'}
+                <button type="button" class="secondary act" onclick={repick} disabled={pushing}>{item.action_label}</button>
               {:else if item.action === 'allow_drop'}
                 <button type="button" class="secondary act" onclick={allowDrop} disabled={pushing}>
                   {dropAsk ? `Yes, ${item.action_label?.toLowerCase()}` : item.action_label}

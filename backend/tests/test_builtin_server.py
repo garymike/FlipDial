@@ -234,3 +234,40 @@ def test_own_server_is_reached_over_ipv4(builtin):
     t = time.monotonic()
     CardDAVClient(s).address_book()
     assert time.monotonic() - t < 1.5
+
+
+def test_main_book_is_remembered(builtin):
+    """Once chosen, FlipDial's main address book is used or none: never quietly another."""
+    s = builtin
+    builtin_server.turn_on(s, HOME)
+    main = _wait_up(s)
+    other = CardDAVClient(s).create_book("Another")
+    assert CardDAVClient(s).address_book().url == main.url
+    # The main book disappears: FlipDial says so instead of using "Another".
+    c = CardDAVClient(s)
+    assert c.http.request("DELETE", main.url).status_code in (200, 204)
+    with pytest.raises(CardDAVError) as err:
+        CardDAVClient(s).address_book()
+    assert err.value.code == "main_book_missing"
+    api = TestClient(create_app(s, lambda: CardDAVClient(s)))
+    item = next(i for i in api.get("/api/status").json()["items"] if i["id"] == "contacts_server")
+    assert item["action"] == "repick_book"
+    # Asked to pick again, it does.
+    api.post("/api/contacts/main-book/repick", headers=H)
+    assert CardDAVClient(s).address_book().url == other.url
+
+
+def test_unused_phone_sign_ins_can_be_removed(builtin):
+    s = builtin
+    builtin_server.turn_on(s, HOME)
+    _wait_up(s)
+    phone_setup.create_phone_account(s, CardDAVClient(s), "First try")
+    folder = builtin_server.folder(s)
+    cs.add_user(folder, "phone")  # left over from an earlier setup
+    api = TestClient(create_app(s, lambda: CardDAVClient(s)))
+    st = api.get("/api/contacts-server").json()
+    assert st["unused_accounts"] == ["phone"]  # not flipdial, not the phone in use
+    assert api.delete("/api/contacts-server/accounts/first-try", headers=H).status_code == 409
+    assert api.delete("/api/contacts-server/accounts/flipdial", headers=H).status_code == 409
+    st = api.delete("/api/contacts-server/accounts/phone", headers=H).json()
+    assert st["unused_accounts"] == [] and "phone" not in cs.users(folder)

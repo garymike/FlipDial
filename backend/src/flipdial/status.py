@@ -266,15 +266,30 @@ def check(
                 )
         except Exception as exc:  # noqa: BLE001  (any failure here is reported, not raised)
             code = getattr(exc, "code", "unreachable")
-            items.append(
-                _item(
-                    "contacts_server",
-                    "Contacts server",
-                    "fail",
-                    f"Couldn't connect ({code}).",
-                    "Check the address, user name and app password in backend\\.env.",
+            if code == "main_book_missing":
+                items.append(
+                    _item(
+                        "contacts_server",
+                        "Contacts server",
+                        "fail",
+                        "The address book FlipDial keeps your contacts in isn't on the "
+                        "contacts server any more.",
+                        "FlipDial won't switch to another address book by itself, so nothing "
+                        "looks lost by mistake. If it was renamed or moved, or you mean to "
+                        "use another one now, let FlipDial pick again.",
+                    )
+                    | {"action": "repick_book", "action_label": "Pick the address book again"}
                 )
-            )
+            else:
+                items.append(
+                    _item(
+                        "contacts_server",
+                        "Contacts server",
+                        "fail",
+                        f"Couldn't connect ({code}).",
+                        "Check the address, user name and app password in backend\\.env.",
+                    )
+                )
 
     with db.session(s.db_path) as conn:
         counts = dict(
