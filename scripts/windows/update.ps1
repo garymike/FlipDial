@@ -9,17 +9,26 @@
 param([string]$Tag, [switch]$Main, [switch]$NoStart, [switch]$FromApp, [switch]$Detached)
 . (Join-Path $PSScriptRoot 'common.ps1')
 
+$UpdateLog = Join-Path $LogDir 'update.log'
 if ($FromApp -and -not $Detached) {
     # Started by the app: relaunch outside the app's process tree so stopping the app
-    # doesn't stop this updater too.
-    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Tag', $Tag, '-FromApp', '-Detached'
-    )
+    # doesn't stop this updater too. Logged from the first step, so a failure here shows.
+    New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+    "$(Get-Date -Format o) Update to $Tag requested from the app." | Set-Content $UpdateLog
+    try {
+        Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Tag', $Tag, '-FromApp', '-Detached'
+        )
+        "$(Get-Date -Format o) Updater started." | Add-Content $UpdateLog
+    } catch {
+        "$(Get-Date -Format o) Couldn't start the updater: $_" | Add-Content $UpdateLog
+        exit 1
+    }
     exit 0
 }
 
 New-Item -ItemType Directory -Force -Path $LogDir, $RunDir | Out-Null
-if ($FromApp) { Start-Transcript -Path (Join-Path $LogDir 'update.log') -Force | Out-Null }
+if ($FromApp) { Start-Transcript -Path $UpdateLog -Append | Out-Null }
 $lock = Join-Path $RunDir 'update.lock'
 if ((Test-Path $lock) -and ((Get-Item $lock).LastWriteTime -gt (Get-Date).AddMinutes(-15))) {
     Stop-WithError 'An update is already running.'

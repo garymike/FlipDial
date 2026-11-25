@@ -147,6 +147,25 @@ jobs:
           uv run pytest -q tests/test_builtin_server.py
           if ($LASTEXITCODE) { exit 1 }
           Pop-Location
+      - name: Updater starts when the app asks (diagnostic)
+        shell: powershell
+        continue-on-error: true
+        run: |
+          "FLIPDIAL_DATA_DIR=$env:RUNNER_TEMP\upd-data" | Set-Content backend\.env
+          $env:FLIPDIAL_INSTALL = 'windows-scripts'
+          $env:FLIPDIAL_UPDATER = "$pwd\scripts\windows\update.ps1"
+          Push-Location backend; uv sync
+          # Exactly how the app launches it (updates.start), from Python under uv.
+          uv run python -c "import os, subprocess; subprocess.Popen(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',os.environ['FLIPDIAL_UPDATER'],'-Tag','v0.14.0','-FromApp'], creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)"
+          Pop-Location
+          Start-Sleep 90
+          $log = "$env:RUNNER_TEMP\upd-data\logs\update.log"
+          if (Test-Path $log) { Get-Content $log -Tail 60 } else { 'no update.log' }
+          Get-ChildItem "$env:RUNNER_TEMP\upd-data" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200
+          & (Join-Path $pwd 'scripts\windows\stop.ps1') -Quiet
+          git checkout -q $env:GITHUB_SHA
+          Remove-Item backend\.env -ErrorAction SilentlyContinue
+          exit 0
       - name: Start, check, stop
         shell: powershell
         run: |
