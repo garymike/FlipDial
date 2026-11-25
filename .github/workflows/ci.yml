@@ -147,33 +147,19 @@ jobs:
           uv run pytest -q tests/test_builtin_server.py
           if ($LASTEXITCODE) { exit 1 }
           Pop-Location
-      - name: How Python can start PowerShell in the background (diagnostic)
+      - name: Update now can start the updater
+        # The app starts update.ps1 in the background (updates.launch). Windows PowerShell
+        # started the wrong way exits without running anything, so check it really runs.
         shell: powershell
-        continue-on-error: true
         run: |
           $t = $env:RUNNER_TEMP
-          Set-Content "$t\probe.ps1" 'param([string]$Out) "ran $(Get-Date -Format o)" | Set-Content $Out'
-          $py = @"
-          import subprocess, sys
-          t = sys.argv[1]
-          base = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', t + r'\probe.ps1', '-Out']
-          ways = {
-              'detached': subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
-              'no-window': subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
-              'plain': 0,
-          }
-          for name, flags in ways.items():
-              for close in (True, False):
-                  out = t + rf'\probe-{name}-{close}.txt'
-                  subprocess.Popen(base + [out], creationflags=flags, stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=close)
-          "@
-          Set-Content "$t\probe.py" $py
-          Push-Location backend; uv sync; uv run python "$t\probe.py" $t; Pop-Location
+          Set-Content "$t\probe.ps1" 'param([string]$Out) "ran" | Set-Content $Out'
+          Push-Location backend; uv sync
+          uv run python -c "import sys; from flipdial.updates import launch; launch(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',sys.argv[1],'-Out',sys.argv[2]])" "$t\probe.ps1" "$t\probe.txt"
+          Pop-Location
           Start-Sleep 15
-          Get-ChildItem "$t\probe-*.txt" | ForEach-Object { "$($_.Name): $(Get-Content $_)" }
-          'done'
-          exit 0
+          if (-not (Test-Path "$t\probe.txt")) { 'the updater did not run'; exit 1 }
+          'the updater ran'
       - name: Start, check, stop
         shell: powershell
         run: |

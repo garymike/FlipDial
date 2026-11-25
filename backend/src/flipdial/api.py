@@ -804,6 +804,11 @@ def update_check(s: SettingsDep) -> dict:
     return updates.summary(s, force=True)
 
 
+@router.get("/update/running")
+def update_running(s: SettingsDep) -> dict:
+    return {"running": updates.running(s)}
+
+
 @router.post("/update/start")
 def update_start(s: SettingsDep, actor: ActorDep) -> dict:
     try:

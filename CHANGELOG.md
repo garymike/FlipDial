@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **Update now works on Windows.** The app started the updater in a way that gives Windows
+  PowerShell no console at all, and it quietly exits before doing anything, so the page
+  waited forever. It now starts with a hidden console; a check on Windows in CI makes sure
+  it really runs. The updater also writes `logs\update.log` from its very first step.
+- If an update doesn't start, the page now says so (with where to look) instead of waiting.
+
 ## 0.14.0
 
 ### New
