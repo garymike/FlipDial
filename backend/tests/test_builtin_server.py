@@ -271,3 +271,26 @@ def test_unused_phone_sign_ins_can_be_removed(builtin):
     assert api.delete("/api/contacts-server/accounts/flipdial", headers=H).status_code == 409
     st = api.delete("/api/contacts-server/accounts/phone", headers=H).json()
     assert st["unused_accounts"] == [] and "phone" not in cs.users(folder)
+
+
+def test_failed_sign_ins_show_in_setup(builtin):
+    s = builtin
+    builtin_server.turn_on(s, HOME)
+    _wait_up(s)
+    import httpx
+
+    ca = str(builtin_server.folder(s) / "ca.pem")
+    for _ in range(2):
+        httpx.request(
+            "PROPFIND", f"https://127.0.0.1:{cs.PORT}/x/", auth=("mallory", "nope"), verify=ca
+        )
+    time.sleep(1.5)  # the server writes its log
+    tried = builtin_server.failed_sign_ins(s)
+    assert tried["count"] == 2 and tried["from"][0] == {
+        "host": "127.0.0.1",
+        "user": "mallory",
+        "count": 2,
+    }
+    api = TestClient(create_app(s, lambda: CardDAVClient(s)))
+    item = next(i for i in api.get("/api/status").json()["items"] if i["id"] == "failed_sign_ins")
+    assert "2 failed sign-ins" in item["detail"] and "mallory" in item["detail"]

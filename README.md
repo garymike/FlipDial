@@ -69,6 +69,7 @@ The Docker image serves the built web app and the API together.
 - **Local first.** No cloud services, no tracking, no outside downloads.
 - **Your data stays yours.** Standard vCard and CardDAV, plus full export of contacts and original scans.
 - **Card text is untrusted input.** See [docs/threat-model.md](docs/threat-model.md).
+- **Your data folder isn't encrypted by FlipDial.** Contacts, card scans and backups are stored as ordinary files, readable by anyone with access to that folder. Turn on full-disk encryption on the computer that runs FlipDial (BitLocker on Windows, FileVault on macOS, LUKS on Linux), and treat backup files like the contacts they hold.
 
 ## Documentation
 

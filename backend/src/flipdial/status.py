@@ -235,7 +235,26 @@ def check(
                     f"Connected to {book.name or 'your address book'}.",
                 )
             )
+            from flipdial import builtin_server
             from flipdial.contacts import held_drop
+
+            if builtin_server.is_on(s) and (tried := builtin_server.failed_sign_ins(s))["count"]:
+                top = tried["from"][0]
+                n = tried["count"]
+                items.append(
+                    _item(
+                        "failed_sign_ins",
+                        "Failed sign-ins",
+                        "warn",
+                        f"{n} failed {'sign-in' if n == 1 else 'sign-ins'} to the contacts "
+                        f"server in the last {tried['days']} days, most from {top['host']} "
+                        f"as '{top['user']}'.",
+                        "Often a phone or tablet still using an old password: update it there. "
+                        "If you don't recognize the address or the name, make a new phone "
+                        "password under Phone, and check which devices are on your Wi-Fi. "
+                        "Details are in the contacts server's server.log.",
+                    )
+                )
 
             if held := held_drop(s):
                 items.append(
